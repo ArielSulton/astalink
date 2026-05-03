@@ -1,4 +1,4 @@
-.PHONY: dev prod down down-prod frontend-install backend-install test-backend logs clean
+.PHONY: dev prod down down-prod frontend-install backend-install test-backend logs logs-prod clean
 
 dev:
 	docker compose -f docker-compose.yml up --build
@@ -24,6 +24,10 @@ test-backend:
 logs:
 	docker compose logs -f
 
+logs-prod:
+	docker compose -f docker-compose.prod.yml logs -f
+
 clean:
 	docker compose down -v
-	docker system prune -f
+	docker compose -f docker-compose.prod.yml down -v
+	docker system prune -f --filter "label=com.docker.compose.project=astalink"

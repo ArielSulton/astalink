@@ -6,7 +6,7 @@ A production-ready monorepo template for building AI-powered web applications.
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 15+ (App Router) + Shadcn UI + Tailwind CSS |
+| Frontend | Next.js 16+ (App Router) + Shadcn UI + Tailwind CSS |
 | Backend | FastAPI + LangGraph |
 | Database & Auth | Supabase |
 | Infrastructure | Docker Compose (dev + prod) + Nginx |
