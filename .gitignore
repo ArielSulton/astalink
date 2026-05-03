@@ -10,3 +10,7 @@ dist/
 *.egg-info/
 .uv/
 uv.lock
+
+# Auto-generated agent files
+frontend/AGENTS.md
+frontend/CLAUDE.md
