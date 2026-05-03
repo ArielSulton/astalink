@@ -10,16 +10,15 @@ class ChatState(TypedDict):
     messages: list[BaseMessage]
 
 
-def _create_llm() -> ChatOpenAI:
-    return ChatOpenAI(
-        model="gpt-4o-mini",
-        api_key=settings.OPENAI_API_KEY,
-    )
+# Singleton LLM instance
+_llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    api_key=settings.OPENAI_API_KEY,
+)
 
 
 def chat_node(state: ChatState) -> ChatState:
-    llm = _create_llm()
-    response = llm.invoke(state["messages"])
+    response = _llm.invoke(state["messages"])
     return {"messages": state["messages"] + [response]}
 
 
