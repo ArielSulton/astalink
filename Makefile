@@ -19,7 +19,7 @@ backend-install:
 	cd backend && uv sync
 
 test-backend:
-	cd backend && uv run pytest tests/ -v
+	cd backend && PYTHONPATH="" uv run python -m pytest tests/ -v
 
 logs:
 	docker compose logs -f
