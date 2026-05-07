@@ -18,9 +18,13 @@ def test_pyproject_declares_phase0_dependencies() -> None:
     assert "langchain-openai" not in deps_str, "OpenAI dep must be removed"
 
     # RAG stack
-    assert "pinecone" in deps_str
     assert "rank-bm25" in deps_str
     assert "langchain-pinecone" in deps_str
+    # Separate check: bare pinecone SDK must be present (not just as a substring of langchain-pinecone).
+    assert any(
+        d.lower().split("[")[0].split(">=")[0].strip() == "pinecone"
+        for d in deps
+    ), "bare pinecone SDK (>=5.0.0) must be declared separately from langchain-pinecone"
 
     # Quantitative libs
     for lib in ("scipy", "numpy", "cvxpy", "yfinance", "pandas"):
