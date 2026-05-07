@@ -10,15 +10,23 @@ class ChatState(TypedDict):
     messages: list[BaseMessage]
 
 
-# Singleton LLM instance
-_llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    api_key=settings.OPENAI_API_KEY,
-)
+# Lazy singleton — not instantiated at import time so the app boots even when
+# OPENAI_API_KEY is absent (T10 will migrate this to Gemini).
+_llm: ChatOpenAI | None = None
+
+
+def _get_llm() -> ChatOpenAI:
+    global _llm
+    if _llm is None:
+        _llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=settings.OPENAI_API_KEY,  # type: ignore[arg-type]
+        )
+    return _llm
 
 
 def chat_node(state: ChatState) -> ChatState:
-    response = _llm.invoke(state["messages"])
+    response = _get_llm().invoke(state["messages"])
     return {"messages": state["messages"] + [response]}
 
 
