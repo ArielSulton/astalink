@@ -81,3 +81,9 @@ def test_migration_0007_rls_policies_exists() -> None:
             f"RLS not enabled on {table}"
     assert sql.count("create policy") >= 6, "expected ≥6 policies"
     assert "owner_user_id = auth.uid()" in sql or "auth.uid() = owner_user_id" in sql
+
+
+def test_migration_0008_langgraph_checkpoints_exists() -> None:
+    sql = _read("0008_langgraph_checkpoints.sql")
+    assert "checkpoints" in sql
+    assert "checkpoint_writes" in sql or "checkpoint_blobs" in sql
