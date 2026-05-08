@@ -82,3 +82,35 @@ class DenseRetriever:
                 )
             )
         return out
+
+
+class HybridRetriever:
+    """Reciprocal Rank Fusion of dense + sparse retrievers.
+
+    RRF score for a chunk c: Σ over each retriever 1 / (k_rrf + rank(c)).
+    Canonical k_rrf = 60. Chunks in both rankings get added scores; chunks
+    in only one still contribute a single term."""
+
+    K_RRF = 60
+
+    def __init__(
+        self,
+        bm25: BM25Retriever | None,
+        dense: DenseRetriever,
+    ) -> None:
+        self._bm25 = bm25
+        self._dense = dense
+
+    def retrieve(self, query: str, k: int = 10) -> list[Chunk]:
+        dense_hits = self._dense.retrieve(query, k=k * 2)
+        sparse_hits = self._bm25.retrieve(query, k=k * 2) if self._bm25 else []
+
+        fused: dict[str, tuple[float, Chunk]] = {}
+        for rank, chunk in enumerate(dense_hits):
+            fused[chunk.chunk_id] = (1.0 / (self.K_RRF + rank + 1), chunk)
+        for rank, chunk in enumerate(sparse_hits):
+            score, c = fused.get(chunk.chunk_id, (0.0, chunk))
+            fused[chunk.chunk_id] = (score + 1.0 / (self.K_RRF + rank + 1), c)
+
+        ranked = sorted(fused.values(), key=lambda pair: pair[0], reverse=True)[:k]
+        return [c.model_copy(update={"score": s}) for s, c in ranked]

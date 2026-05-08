@@ -72,3 +72,52 @@ def test_dense_retriever_calls_pinecone_with_query_embedding(sample_chunks: list
     fake_index.query.assert_called_once()
     assert hits[0].chunk_id == "OJK-3-1-_-0"
     assert hits[0].score == 0.92
+
+
+def test_rrf_boosts_chunks_present_in_both_retrievers(sample_chunks: list[Chunk]) -> None:
+    """A chunk in both rankings must outrank a chunk in only one."""
+    from app.agents.legal.retriever import HybridRetriever
+
+    # Construct two retrievers that return overlapping but not identical rankings.
+    bm25_hits = [sample_chunks[1], sample_chunks[0]]      # OJK-3-1, UUPM-1
+    dense_hits = [sample_chunks[1], sample_chunks[2]]     # OJK-3-1, OJK-5
+
+    fake_bm25 = MagicMock()
+    fake_bm25.retrieve.return_value = bm25_hits
+    fake_dense = MagicMock()
+    fake_dense.retrieve.return_value = dense_hits
+
+    hybrid = HybridRetriever(bm25=fake_bm25, dense=fake_dense)
+    fused = hybrid.retrieve("rokok pasal 3", k=3)
+
+    # OJK-3-1 appears in both, should rank #1
+    assert fused[0].chunk_id == "OJK-3-1-_-0"
+
+
+def test_rrf_handles_completely_disjoint_rankings(sample_chunks: list[Chunk]) -> None:
+    from app.agents.legal.retriever import HybridRetriever
+
+    fake_bm25 = MagicMock()
+    fake_bm25.retrieve.return_value = [sample_chunks[0]]
+    fake_dense = MagicMock()
+    fake_dense.retrieve.return_value = [sample_chunks[2]]
+
+    hybrid = HybridRetriever(bm25=fake_bm25, dense=fake_dense)
+    fused = hybrid.retrieve("anything", k=5)
+
+    # Both chunks should appear, in some order, with no duplicates
+    ids = {c.chunk_id for c in fused}
+    assert ids == {"UUPM-1-_-_-0", "OJK-5-_-_-0"}
+
+
+def test_hybrid_falls_back_to_dense_only_if_bm25_missing(sample_chunks: list[Chunk]) -> None:
+    """If the BM25 pickle isn't on disk yet, the retriever still works
+    (degraded) using dense alone — better than crashing on the first deploy."""
+    from app.agents.legal.retriever import HybridRetriever
+
+    fake_dense = MagicMock()
+    fake_dense.retrieve.return_value = sample_chunks[:2]
+    hybrid = HybridRetriever(bm25=None, dense=fake_dense)
+
+    fused = hybrid.retrieve("anything", k=2)
+    assert len(fused) == 2
