@@ -15,6 +15,7 @@ from app.agents.intent.schemas import IntentDecision
 from app.agents.intents import Intent
 from app.agents.state import AgentState
 from app.core.gemini import get_chat_model
+from app.core.metrics import track_node_duration
 from app.core.supabase_admin import get_admin_client
 
 log = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ def _record_audit(state: AgentState, decision: IntentDecision) -> None:
         log.error("intent_node: audit_log upsert failed: %s", exc)
 
 
+@track_node_duration("n1_intent")
 def intent_node(state: AgentState) -> AgentState:
     user_text = _last_user_text(state)
     if not user_text:

@@ -20,6 +20,7 @@ from app.agents.optimizer.schemas import (
 )
 from app.agents.state import AgentState
 from app.core.gemini import get_chat_model
+from app.core.metrics import record_revision_count, track_node_duration
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
     )
 
 
+@track_node_duration("n5_optimizer")
 def optimizer_node(state: AgentState) -> AgentState:
     inputs = _build_inputs(state)
     if not inputs.tickers:
@@ -88,6 +90,7 @@ def optimizer_node(state: AgentState) -> AgentState:
         relaxations_applied=relaxations,
     )
 
+    record_revision_count(state.get("revision_count", 0) + 1)
     return {
         "allocation_plan": plan.model_dump(),
         "revision_count": state.get("revision_count", 0) + 1,

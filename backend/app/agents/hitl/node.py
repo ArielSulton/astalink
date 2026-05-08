@@ -15,11 +15,13 @@ import logging
 from langgraph.types import interrupt
 
 from app.agents.state import AgentState, LegalStatus, UserApproval
+from app.core.metrics import track_node_duration
 from app.core.supabase_admin import get_admin_client
 
 log = logging.getLogger(__name__)
 
 
+@track_node_duration("n6_hitl")
 def hitl_node(state: AgentState) -> AgentState:
     plan = state.get("allocation_plan") or {}
     legal_status = state.get("legal_status")

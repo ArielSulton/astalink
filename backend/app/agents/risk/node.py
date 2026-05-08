@@ -12,6 +12,7 @@ from app.agents.risk.schemas import RiskAssessment, RiskMetrics
 from app.agents.risk.var import historical_var
 from app.agents.state import AgentState
 from app.core.gemini import get_chat_model
+from app.core.metrics import track_node_duration
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ def _returns(closes: np.ndarray) -> np.ndarray:
     return np.diff(np.log(closes))
 
 
+@track_node_duration("n2c_risk")
 def risk_node(state: AgentState) -> AgentState:
     tickers = state.get("entities", {}).get("tickers") or []
     if not tickers:

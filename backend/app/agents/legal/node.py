@@ -22,6 +22,7 @@ from app.agents.legal.retriever import (
 from app.agents.legal.schemas import Chunk, LegalDecision, LegalStatus
 from app.agents.state import AgentState
 from app.core.gemini import get_chat_model
+from app.core.metrics import record_legal_status, track_node_duration
 from app.core.supabase_admin import get_admin_client
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,7 @@ def _persist(audit_id: str, plan: dict[str, Any], decision: LegalDecision) -> No
         logger.error("legal: failed to persist decision: %s", exc)
 
 
+@track_node_duration("n3_legal")
 def legal_node(state: AgentState) -> AgentState:
     """LangGraph node entry point. Returns a partial AgentState update."""
     plan = state.get("allocation_plan") or {}
@@ -133,6 +135,7 @@ def legal_node(state: AgentState) -> AgentState:
 
         decision = _generate_decision(plan, chunks)
         decision = grade_decision(decision, chunks)
+        record_legal_status(decision.status.value)
         _persist(audit_id, plan, decision)
 
         return {

@@ -10,6 +10,7 @@ from app.agents.business.erp_connector import CSVConnector
 from app.agents.business.schemas import BusinessValuation
 from app.agents.state import AgentState
 from app.core.gemini import get_chat_model
+from app.core.metrics import track_node_duration
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ DCF along with the underlying cashflows, write ONE short paragraph (≤80 words)
 summarizing the result. Do NOT introduce new numbers."""
 
 
+@track_node_duration("n2b_business")
 def business_node(state: AgentState) -> AgentState:
     csv_path = state.get("entities", {}).get("financials_csv")
     if not csv_path:

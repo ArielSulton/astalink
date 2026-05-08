@@ -10,6 +10,7 @@ from typing import Any
 
 from app.agents.execution.schemas import BrokerOrder, OrderSide
 from app.agents.state import AgentState
+from app.core.metrics import record_execution, track_node_duration
 from app.core.supabase_admin import get_admin_client
 from app.integrations.broker import BrokerAdapter, SandboxBroker
 
@@ -38,6 +39,7 @@ def _last_close(state: AgentState, ticker: str) -> float | None:
     return None
 
 
+@track_node_duration("n7_execute")
 def execution_node(state: AgentState) -> AgentState:
     plan = state.get("allocation_plan") or {}
     weights = plan.get("weights") or []
@@ -110,5 +112,6 @@ def execution_node(state: AgentState) -> AgentState:
             "ticker": ticker, "side": side.value, "quantity": qty,
             "status": order.status, "broker_ref": order.broker_ref,
         })
+        record_execution(order.status)
 
     return {"transactions": transactions}

@@ -13,6 +13,7 @@ from app.agents.market.schemas import MarketSnapshot, TickerSnapshot
 from app.agents.market.yfinance_client import fetch_close_prices
 from app.agents.state import AgentState
 from app.core.gemini import get_chat_model
+from app.core.metrics import track_node_duration
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ def _narrate(snapshots: list[TickerSnapshot]) -> str:
     return getattr(resp, "content", "") or ""
 
 
+@track_node_duration("n2a_market")
 def market_node(state: AgentState) -> AgentState:
     tickers = state.get("entities", {}).get("tickers") or []
     snapshots = [_build_ticker_snapshot(t) for t in tickers]
