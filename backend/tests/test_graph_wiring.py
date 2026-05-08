@@ -22,7 +22,8 @@ def _patch_externals():
          patch("app.agents.market.node.get_chat_model"), \
          patch("app.agents.risk.node.fetch_close_prices", return_value=np.linspace(100, 110, 252)), \
          patch("app.agents.risk.node.get_chat_model"), \
-         patch("app.agents.business.node.get_chat_model"):
+         patch("app.agents.business.node.get_chat_model"), \
+         patch("app.agents.optimizer.node.get_chat_model"):
         yield
 
 
