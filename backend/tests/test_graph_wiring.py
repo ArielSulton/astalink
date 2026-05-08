@@ -3,11 +3,12 @@ import pytest
 # Skip locally if talib isn't installed — graph.py now imports market_node which imports talib.
 pytest.importorskip("talib")
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import numpy as np
 
 from langchain_core.messages import HumanMessage
 
+from app.agents.execution.schemas import BrokerOrder, OrderSide
 from app.agents.intents import Intent
 from app.agents.state import LegalStatus, UserApproval
 
@@ -17,6 +18,16 @@ def _patch_externals():
     """For graph-wiring tests we don't care about analyzer internals — mock the
     expensive parts so the test stays fast and offline."""
     fake_closes = np.linspace(100, 110, 60)
+
+    fake_broker = MagicMock()
+    fake_broker.place_order.side_effect = lambda **kw: BrokerOrder(
+        ticker=kw["ticker"], qty=kw["qty"], side=kw["side"],
+        broker_ref="test-ref", status="filled",
+    )
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+    fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[{"id": "x"}])
+
     with patch("app.agents.market.node.fetch_close_prices", return_value=fake_closes), \
          patch("app.agents.market.node.fetch_news", return_value=[]), \
          patch("app.agents.market.node.get_chat_model"), \
@@ -25,7 +36,9 @@ def _patch_externals():
          patch("app.agents.business.node.get_chat_model"), \
          patch("app.agents.optimizer.node.get_chat_model"), \
          patch("app.agents.hitl.node.interrupt", return_value={"approval": UserApproval.APPROVED.value}), \
-         patch("app.agents.hitl.node.get_admin_client"):
+         patch("app.agents.hitl.node.get_admin_client"), \
+         patch("app.agents.execution.node.get_broker", return_value=fake_broker), \
+         patch("app.agents.execution.node.get_admin_client", return_value=fake_admin):
         yield
 
 
