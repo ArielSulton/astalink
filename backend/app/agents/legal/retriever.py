@@ -12,6 +12,8 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi
 
 from app.agents.legal.schemas import Chunk
+from app.core.gemini import get_embedding_model
+from app.core.pinecone import get_index
 
 
 def _tokenize(text: str) -> list[str]:
@@ -51,3 +53,32 @@ class BM25Retriever:
             data = pickle.load(f)
         chunks = [Chunk(**c) for c in data["chunks"]]
         return cls(chunks, data["bm25"])
+
+
+class DenseRetriever:
+    """Pinecone-backed dense retrieval. The chunk text is stored in metadata
+    at ingest time so we can rebuild Chunks from query results without a
+    second round-trip to Postgres."""
+
+    def retrieve(self, query: str, k: int = 10) -> list[Chunk]:
+        embed = get_embedding_model()
+        vec = embed.embed_query(query)
+        index = get_index()
+        result = index.query(vector=vec, top_k=k, include_metadata=True)
+
+        out: list[Chunk] = []
+        for match in result.get("matches", []):
+            md = match.get("metadata", {})
+            out.append(
+                Chunk(
+                    text=md.get("text", ""),
+                    source=md.get("source", "unknown"),
+                    pasal=md.get("pasal"),
+                    ayat=md.get("ayat"),
+                    page=md.get("page"),
+                    doc_hash=md.get("doc_hash", ""),
+                    chunk_id=match["id"],
+                    score=float(match.get("score", 0.0)),
+                )
+            )
+        return out
