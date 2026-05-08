@@ -23,7 +23,9 @@ def _patch_externals():
          patch("app.agents.risk.node.fetch_close_prices", return_value=np.linspace(100, 110, 252)), \
          patch("app.agents.risk.node.get_chat_model"), \
          patch("app.agents.business.node.get_chat_model"), \
-         patch("app.agents.optimizer.node.get_chat_model"):
+         patch("app.agents.optimizer.node.get_chat_model"), \
+         patch("app.agents.hitl.node.interrupt", return_value={"approval": UserApproval.APPROVED.value}), \
+         patch("app.agents.hitl.node.get_admin_client"):
         yield
 
 

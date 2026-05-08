@@ -18,7 +18,8 @@ from app.agents.business.node import business_node
 from app.agents.market.node import market_node
 from app.agents.risk.node import risk_node
 from app.agents.optimizer.node import optimizer_node
-from app.agents.stubs import execution_stub, hitl_stub
+from app.agents.hitl.node import hitl_node
+from app.agents.stubs import execution_stub
 from app.core.checkpointer import get_checkpointer
 
 log = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ def build_graph():
     g.add_node("n2c_risk", risk_node)
     g.add_node("n5_optimizer", optimizer_node)
     g.add_node("n3_legal", legal_node)
-    g.add_node("n6_hitl", hitl_stub)
+    g.add_node("n6_hitl", hitl_node)
     g.add_node("n7_execute", execution_stub)
     g.add_node("rejection_handler", rejection_handler)
 
