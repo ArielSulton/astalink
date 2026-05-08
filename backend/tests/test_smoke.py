@@ -27,8 +27,6 @@ def test_all_phase0_modules_import() -> None:
     import app.core.supabase_admin  # noqa: F401
     import app.agents.state  # noqa: F401
     import app.agents.chat_agent  # noqa: F401
-    # app.main → router → agent → graph → market_node → talib (C library)
-    pytest.importorskip("talib")
     import app.main  # noqa: F401
 
 
@@ -77,8 +75,6 @@ def test_clients_construct_without_error() -> None:
 def test_fastapi_app_constructs_and_health_works() -> None:
     """If the app can't construct, /health is unreachable. Catches
     regressions in main.py wiring."""
-    # app.main -> router -> graph -> market_node -> talib (C library)
-    pytest.importorskip("talib")
     from fastapi.testclient import TestClient
     from app.main import app
 
