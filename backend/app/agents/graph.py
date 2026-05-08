@@ -1,8 +1,7 @@
-"""AstaLink LangGraph wiring (Phase 2 skeleton).
+"""AstaLink LangGraph wiring (Phase 3).
 
-Real nodes from Phase 1: legal_node.
-Stubs replaced in later phases: intent_node (here, real Gemini-backed),
-market_stub/business_stub/risk_stub (Phase 3), optimizer_stub (Phase 4),
+Real nodes: intent_node, legal_node, market_node, business_node, risk_node.
+Remaining stubs (replaced in later phases): optimizer_stub (Phase 4),
 hitl_stub (Phase 5), execution_stub (Phase 6)."""
 from __future__ import annotations
 
@@ -15,14 +14,10 @@ from app.agents.intent.node import intent_node
 from app.agents.legal.node import legal_node
 from app.agents.rejection import rejection_handler
 from app.agents.state import AgentState, LegalStatus, UserApproval
-from app.agents.stubs import (
-    business_stub,
-    execution_stub,
-    hitl_stub,
-    market_stub,
-    optimizer_stub,
-    risk_stub,
-)
+from app.agents.business.node import business_node
+from app.agents.market.node import market_node
+from app.agents.risk.node import risk_node
+from app.agents.stubs import execution_stub, hitl_stub, optimizer_stub
 from app.core.checkpointer import get_checkpointer
 
 log = logging.getLogger(__name__)
@@ -54,9 +49,9 @@ def build_graph():
     g = StateGraph(AgentState)
 
     g.add_node("n1_intent", intent_node)
-    g.add_node("n2a_market", market_stub)
-    g.add_node("n2b_business", business_stub)
-    g.add_node("n2c_risk", risk_stub)
+    g.add_node("n2a_market", market_node)
+    g.add_node("n2b_business", business_node)
+    g.add_node("n2c_risk", risk_node)
     g.add_node("n5_optimizer", optimizer_stub)
     g.add_node("n3_legal", legal_node)
     g.add_node("n6_hitl", hitl_stub)

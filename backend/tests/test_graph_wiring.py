@@ -1,9 +1,29 @@
+import pytest
+
+# Skip locally if talib isn't installed — graph.py now imports market_node which imports talib.
+pytest.importorskip("talib")
+
 from unittest.mock import patch
+import numpy as np
 
 from langchain_core.messages import HumanMessage
 
 from app.agents.intents import Intent
 from app.agents.state import LegalStatus, UserApproval
+
+
+@pytest.fixture(autouse=True)
+def _patch_externals():
+    """For graph-wiring tests we don't care about analyzer internals — mock the
+    expensive parts so the test stays fast and offline."""
+    fake_closes = np.linspace(100, 110, 60)
+    with patch("app.agents.market.node.fetch_close_prices", return_value=fake_closes), \
+         patch("app.agents.market.node.fetch_news", return_value=[]), \
+         patch("app.agents.market.node.get_chat_model"), \
+         patch("app.agents.risk.node.fetch_close_prices", return_value=np.linspace(100, 110, 252)), \
+         patch("app.agents.risk.node.get_chat_model"), \
+         patch("app.agents.business.node.get_chat_model"):
+        yield
 
 
 def test_graph_runs_happy_path_to_execution() -> None:
@@ -51,7 +71,6 @@ def test_graph_rejection_path_skips_execution() -> None:
     assert result["legal_status"] in (LegalStatus.REJECTED,
                                        LegalStatus.REJECTED_AFTER_MAX_REVISIONS)
     assert not result["transactions"], "rejected plans must not execute"
-    # Rejection handler appended an AI message with alternatives
     assert any("tidak dapat" in m.content.lower() for m in result["messages"]
                if hasattr(m, "content"))
 
@@ -76,7 +95,6 @@ def test_graph_revision_loop_caps_at_three() -> None:
             config={"configurable": {"thread_id": "t3"}, "recursion_limit": 50},
         )
 
-    # The optimizer ran exactly 3 times before termination
     assert result["revision_count"] == 3
     assert result["legal_status"] in (
         LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS,

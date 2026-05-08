@@ -1,3 +1,8 @@
+import pytest
+
+# Skip locally if talib isn't installed — graph.py now imports market_node which imports talib.
+pytest.importorskip("talib")
+
 import uuid
 from unittest.mock import patch
 
