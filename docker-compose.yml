@@ -37,6 +37,8 @@ services:
       # Pinecone
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-astalink-regulations}
+      # Supabase Postgres (LangGraph checkpointer)
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL}
       # Backend
       - BACKEND_CORS_ORIGINS=["http://localhost:${FRONTEND_PORT:-3000}"]
       - DEBUG=true

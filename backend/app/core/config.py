@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     PINECONE_API_KEY: str = ""
     PINECONE_INDEX_NAME: str = "astalink-regulations"
 
+    # Supabase Postgres connection string for LangGraph PostgresSaver.
+    # Format: postgresql://postgres.<ref>:<password>@<host>:<port>/postgres
+    SUPABASE_DB_URL: str = ""
+
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
