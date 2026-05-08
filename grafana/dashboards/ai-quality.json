@@ -1,0 +1,31 @@
+{
+  "title": "AstaLink AI Quality",
+  "uid": "astalink-ai-quality",
+  "tags": ["astalink"],
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Legal decisions by status (rate / 5m)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{
+        "expr": "sum by (status) (rate(astalink_legal_status_total[5m]))",
+        "legendFormat": "{{status}}",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "Revision count distribution",
+      "type": "histogram",
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{
+        "expr": "sum by (le) (rate(astalink_revision_count_bucket[5m]))",
+        "refId": "A"
+      }]
+    }
+  ]
+}

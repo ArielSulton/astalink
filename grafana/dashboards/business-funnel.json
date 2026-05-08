@@ -1,0 +1,32 @@
+{
+  "title": "AstaLink Business Funnel",
+  "uid": "astalink-funnel",
+  "tags": ["astalink"],
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Approvals (cumulative)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{
+        "expr": "sum(astalink_legal_status_total{status=\"approved\"})",
+        "legendFormat": "approved",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "Executions (cumulative by status)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{
+        "expr": "sum by (status) (astalink_executions_total)",
+        "legendFormat": "{{status}}",
+        "refId": "A"
+      }]
+    }
+  ]
+}
