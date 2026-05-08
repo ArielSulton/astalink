@@ -41,6 +41,12 @@ services:
       - NEWS_API_KEY=${NEWS_API_KEY}
       # Supabase Postgres (LangGraph checkpointer)
       - SUPABASE_DB_URL=${SUPABASE_DB_URL}
+      # WhatsApp Business API (Meta Cloud API)
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN}
+      - WHATSAPP_APP_SECRET=${WHATSAPP_APP_SECRET}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
       # Backend
       - BACKEND_CORS_ORIGINS=["http://localhost:${FRONTEND_PORT:-3000}"]
       - DEBUG=true

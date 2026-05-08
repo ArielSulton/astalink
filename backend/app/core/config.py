@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # News API (optional — N2a runs without it)
     NEWS_API_KEY: str = ""
 
+    # WhatsApp Business API (Meta Cloud API)
+    WHATSAPP_VERIFY_TOKEN: str = ""        # used during webhook subscription
+    WHATSAPP_APP_SECRET: str = ""          # for signature verification
+    WHATSAPP_ACCESS_TOKEN: str = ""        # for outbound messages
+    WHATSAPP_PHONE_NUMBER_ID: str = ""     # for outbound messages
+    APP_BASE_URL: str = "http://localhost:3000"  # for deep links
+
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
