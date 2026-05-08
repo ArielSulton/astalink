@@ -87,3 +87,10 @@ def test_migration_0008_langgraph_checkpoints_exists() -> None:
     sql = _read("0008_langgraph_checkpoints.sql")
     assert "checkpoints" in sql
     assert "checkpoint_writes" in sql or "checkpoint_blobs" in sql
+
+
+def test_migration_0009_whatsapp_exists() -> None:
+    sql = _read("0009_whatsapp.sql")
+    for table in ("whatsapp_bindings", "whatsapp_messages_seen", "whatsapp_pending_codes"):
+        assert table in sql
+    assert "phone_e164" in sql
