@@ -42,6 +42,9 @@ dependencies = [
     # Observability + quality
     "prometheus-fastapi-instrumentator>=7.0.0",
     "deepeval>=1.0.0",
+
+    # Security
+    "argon2-cffi>=23.0.0",
 ]
 
 [project.optional-dependencies]
