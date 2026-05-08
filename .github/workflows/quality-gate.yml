@@ -1,0 +1,42 @@
+name: AI Quality Gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/agents/legal/**"
+      - "backend/app/agents/market/**"
+      - "backend/app/agents/business/**"
+      - "backend/app/agents/risk/**"
+      - "backend/tests/test_legal_hallucination.py"
+      - "backend/tests/data/eval_prompts.json"
+
+jobs:
+  deepeval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install system deps (TA-Lib)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential wget
+          wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+          tar -xzf ta-lib-0.4.0-src.tar.gz
+          cd ta-lib && ./configure --prefix=/usr && sudo make && sudo make install
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          uv sync --extra dev
+          uv pip install ta-lib
+      - name: Run DeepEval slow suite
+        working-directory: backend
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          uv run python -m pytest tests/test_legal_hallucination.py -v -m slow
