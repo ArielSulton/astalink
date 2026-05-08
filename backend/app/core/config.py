@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Format: postgresql://postgres.<ref>:<password>@<host>:<port>/postgres
     SUPABASE_DB_URL: str = ""
 
+    # News API (optional — N2a runs without it)
+    NEWS_API_KEY: str = ""
+
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
