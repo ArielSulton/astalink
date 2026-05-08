@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: AstaLink
+    folder: AstaLink
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

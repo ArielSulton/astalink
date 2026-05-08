@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
+from prometheus_fastapi_instrumentator import Instrumentator
+
 from app.api.v1.router import api_router
+from app.core.config import settings
+import app.core.metrics  # noqa: F401  — registers collectors
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -19,6 +22,9 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+# Mount /metrics
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 
 @app.get("/")

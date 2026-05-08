@@ -13,16 +13,17 @@ def test_chat_endpoint_without_auth_returns_401(client: TestClient) -> None:
 
 
 def test_chat_endpoint_with_mocked_auth_and_agent(client: TestClient) -> None:
+    """Exercises the chat endpoint end-to-end with mocked auth + Gemini.
+
+    The chat_node should call `app.core.gemini.get_chat_model()` and use
+    the returned (mocked) model — this verifies the Gemini wiring."""
     mock_user = {"sub": str(uuid.uuid4()), "email": "test@example.com"}
 
-    mock_result = {
-        "messages": [
-            MagicMock(spec=AIMessage, content="Hello from AI!")
-        ]
-    }
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="Hello from Gemini!")
 
     with patch("app.api.deps.verify_token", return_value=mock_user), \
-         patch("app.agents.chat_agent.chat_graph.invoke", return_value=mock_result):
+         patch("app.agents.chat_agent.get_chat_model", return_value=fake_llm):
 
         response = client.post(
             "/api/v1/chat/",
@@ -32,6 +33,6 @@ def test_chat_endpoint_with_mocked_auth_and_agent(client: TestClient) -> None:
 
     assert response.status_code == 200
     data = response.json()
-    assert "message" in data
+    assert data["message"] == "Hello from Gemini!"
     assert "thread_id" in data
-    assert data["message"] == "Hello from AI!"
+    fake_llm.invoke.assert_called_once()
