@@ -1,5 +1,4 @@
 node_modules/
-
 .env
 .env.local
 __pycache__/
@@ -11,10 +10,6 @@ dist/
 *.egg-info/
 .uv/
 uv.lock
-
-legal docs analyzer/node_modules/
-legal docs analyzer/.next/
-legal docs analyzer/.env.local
 
 # Auto-generated agent files
 frontend/AGENTS.md
