@@ -2,10 +2,30 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install TA-Lib C library (required by the ta-lib Python wrapper).
+# We compile from source because Debian's libta-lib0 package lags upstream.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        wget \
+        ca-certificates \
+    && wget -q http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz \
+    && tar -xzf ta-lib-0.4.0-src.tar.gz \
+    && cd ta-lib \
+    && ./configure --prefix=/usr \
+    && make \
+    && make install \
+    && cd .. \
+    && rm -rf ta-lib ta-lib-0.4.0-src.tar.gz \
+    && apt-get purge -y --auto-remove wget \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install uv
 
 COPY pyproject.toml ./
 RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
+
+# Install ta-lib Python wrapper separately — it needs the C lib at /usr.
+RUN uv pip install ta-lib
 
 COPY . .
 

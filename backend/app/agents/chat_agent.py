@@ -1,24 +1,19 @@
 from typing import TypedDict
-from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, END, START
+
+from langchain_core.messages import BaseMessage
 from langgraph.checkpoint.memory import MemorySaver
-from app.core.config import settings
+from langgraph.graph import END, START, StateGraph
+
+from app.core.gemini import get_chat_model
 
 
 class ChatState(TypedDict):
     messages: list[BaseMessage]
 
 
-# Singleton LLM instance
-_llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    api_key=settings.OPENAI_API_KEY,
-)
-
-
 def chat_node(state: ChatState) -> ChatState:
-    response = _llm.invoke(state["messages"])
+    llm = get_chat_model()
+    response = llm.invoke(state["messages"])
     return {"messages": state["messages"] + [response]}
 
 
@@ -30,5 +25,5 @@ def build_chat_graph():
     return graph.compile(checkpointer=MemorySaver())
 
 
-# Singleton graph instance
+# Singleton graph instance — graph compilation is cheap; the LLM is lazy.
 chat_graph = build_chat_graph()

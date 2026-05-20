@@ -1,20 +1,50 @@
 [project]
 name = "astalink-backend"
 version = "0.1.0"
-description = "FastAPI + LangGraph backend for Astalink template"
+description = "AstaLink AI-CIO backend (FastAPI + LangGraph + Gemini + RAG)"
 requires-python = ">=3.12"
 dependencies = [
+    # Web framework
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.8.0",
     "pydantic-settings>=2.4.0",
+    "python-multipart>=0.0.9",
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.27.0",
+
+    # AI orchestration
     "langgraph>=0.2.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
     "langchain-core>=0.3.0",
-    "langchain-openai>=0.2.0",
+    "langchain-google-genai>=2.0.0",
+
+    # RAG
+    "pinecone>=5.0.0",
+    "langchain-pinecone>=0.2.0",
+    "rank-bm25>=0.2.2",
+    "pypdf>=4.0.0",
+
+    # Database
     "supabase>=2.7.0",
-    "python-multipart>=0.0.9",
+
+    # Quantitative
+    "scipy>=1.13.0",
+    "numpy>=1.26.0",
+    "cvxpy>=1.5.0",
+    "yfinance>=0.2.40",
+    "pandas>=2.2.0",
+    # Note: TA-Lib is intentionally NOT listed here — the Python wrapper requires
+    # the libta-lib C library. It is installed via `pip install ta-lib` in the
+    # Dockerfile after apt-get installing the system lib. Adding it to
+    # pyproject.toml would break `uv sync` on machines without libta-lib.
+
+    # Observability + quality
+    "prometheus-fastapi-instrumentator>=7.0.0",
+    "deepeval>=1.0.0",
+
+    # Security
+    "argon2-cffi>=23.0.0",
 ]
 
 [project.optional-dependencies]
