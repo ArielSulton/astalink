@@ -117,8 +117,8 @@ def main() -> int:
         elif re.match(r"^[-*] ", line):
             add_para(doc, line[2:], size=11, space_after=3, style="List Bullet")
         elif re.match(r"^\d+\. ", line):
-            add_para(doc, re.sub(r"^\d+\.\s*", "", line), size=11, space_after=3,
-                     style="List Number")
+            p = add_para(doc, line, size=11, space_after=3)
+            p.paragraph_format.left_indent = Inches(0.25)
         else:
             add_para(doc, line, size=11)
         i += 1
