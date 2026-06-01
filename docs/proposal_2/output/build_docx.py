@@ -15,13 +15,22 @@ OUT = HERE / "AstaLink_Proposal_2.docx"
 ACCENT = RGBColor(0x1F, 0x4E, 0x79)  # dark blue, matches proposal 1
 
 
-def strip_inline(text: str) -> list[tuple[str, bool]]:
-    """Split text into (chunk, is_bold) runs, honoring **bold** markup."""
-    runs: list[tuple[str, bool]] = []
+def strip_inline(text: str) -> list[tuple[str, bool, bool]]:
+    """Split text into (chunk, is_bold, is_italic) runs, honoring **bold** and *italic*."""
+    runs: list[tuple[str, bool, bool]] = []
     for i, part in enumerate(re.split(r"\*\*(.+?)\*\*", text)):
-        if part:
-            runs.append((part, i % 2 == 1))
-    return runs or [(text, False)]
+        if not part:
+            continue
+        if i % 2 == 1:  # captured **bold** group
+            runs.append((part, True, False))
+            continue
+        # non-bold segment: split on single-asterisk *italic*
+        for j, sub in enumerate(
+            re.split(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", part)
+        ):
+            if sub:
+                runs.append((sub, False, j % 2 == 1))
+    return runs or [(text, False, False)]
 
 
 def add_para(doc, text, *, size=11, bold=False, color=None, space_after=6,
@@ -31,11 +40,12 @@ def add_para(doc, text, *, size=11, bold=False, color=None, space_after=6,
         p.alignment = align
     p.paragraph_format.space_after = Pt(space_after)
     p.paragraph_format.line_spacing = 1.15
-    for chunk, chunk_bold in strip_inline(text):
+    for chunk, chunk_bold, chunk_italic in strip_inline(text):
         run = p.add_run(chunk)
         run.font.size = Pt(size)
         run.font.name = "Calibri"
         run.bold = bold or chunk_bold
+        run.italic = chunk_italic
         if color is not None:
             run.font.color.rgb = color
     return p
@@ -84,11 +94,12 @@ def main() -> int:
                         cell = table.cell(r, c)
                         cell.text = ""
                         para = cell.paragraphs[0]
-                        for chunk, chunk_bold in strip_inline(cell_text):
+                        for chunk, chunk_bold, chunk_italic in strip_inline(cell_text):
                             run = para.add_run(chunk)
                             run.font.size = Pt(9.5)
                             run.font.name = "Calibri"
                             run.bold = chunk_bold or (r == 0)
+                            run.italic = chunk_italic
                 doc.add_paragraph().paragraph_format.space_after = Pt(6)
             continue
 
