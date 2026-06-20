@@ -82,6 +82,14 @@ export interface NewsResponse {
   articles: NewsArticle[];
 }
 
+export interface RegulationDoc {
+  id: string;
+  source: string;
+  title: string;
+  version: string | null;
+  indexed_at: string;
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     ...init,
@@ -142,4 +150,26 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),
+
+  listLegalDocs: (): Promise<RegulationDoc[]> =>
+    jsonFetch<RegulationDoc[]>("/api/v1/legal/documents", { method: "GET" }),
+
+  uploadLegalDoc: async (
+    file: File,
+    source: string,
+    title: string,
+    token: string,
+  ): Promise<RegulationDoc> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("source", source);
+    form.append("title", title);
+    const res = await fetch(`${BACKEND}/api/v1/legal/documents/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    return res.json() as Promise<RegulationDoc>;
+  },
 };
