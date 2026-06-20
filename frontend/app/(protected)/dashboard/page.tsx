@@ -39,7 +39,7 @@ export default function DashboardPage() {
         session.access_token,
       );
       setResult(res);
-      if (res.user_approval === null && res.legal_status !== "rejected") {
+      if (res.user_approval === null && !["rejected", "rejected_after_max_revisions"].includes(res.legal_status ?? "")) {
         toast.info("Menunggu approval Anda di halaman Approvals.");
       } else if (res.transactions.length > 0) {
         toast.success("Eksekusi selesai. Lihat Transaksi untuk detail.");
@@ -132,7 +132,7 @@ export default function DashboardPage() {
               </>
             )}
 
-            {(result.user_approval === null && result.legal_status !== "rejected") && (
+            {(result.user_approval === null && !["rejected", "rejected_after_max_revisions"].includes(result.legal_status ?? "")) && (
               <>
                 <Separator />
                 <Button

@@ -71,13 +71,18 @@ const STATUS_COLOR: Record<string, string> = {
 export default function AuditPage() {
   const { auditId } = useParams<{ auditId: string }>();
   const [row, setRow] = useState<AuditRow | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     const sb = createClient();
     sb.from("audit_log").select("*").eq("audit_id", auditId).single()
-      .then(({ data }) => setRow(data as AuditRow | null));
+      .then(({ data, error }) => {
+        if (error) { setFetchError(error.message); return; }
+        setRow(data as AuditRow | null);
+      });
   }, [auditId]);
 
+  if (fetchError) return <p className="p-6 text-destructive">Gagal memuat: {fetchError}</p>;
   if (!row) return <p className="p-6 text-muted-foreground">Memuat…</p>;
 
   return (
