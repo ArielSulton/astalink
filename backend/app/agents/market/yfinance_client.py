@@ -26,9 +26,6 @@ class _CacheEntry:
 _cache: dict[str, _CacheEntry] = {}
 
 
-import datetime
-
-
 def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
     """Return `window` trading days of OHLCV + precomputed indicators.
 
