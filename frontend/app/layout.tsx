@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="id" className={cn("font-sans", geist.variable)}>
       <body className={inter.className}>
         {children}
         <Toaster />
