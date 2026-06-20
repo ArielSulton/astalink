@@ -9,26 +9,33 @@ interface TimelineEvent {
 
 export function AuditTimeline({ events }: { events: TimelineEvent[] }) {
   const dotColor: Record<string, string> = {
-    default: "bg-blue-500",
-    success: "bg-green-500",
-    error: "bg-red-500",
+    default: "bg-primary ring-4 ring-primary/20",
+    success: "bg-emerald-500 ring-4 ring-emerald-500/20",
+    error: "bg-rose-500 ring-4 ring-rose-500/20",
   };
 
   return (
-    <ol className="border-l-2 border-gray-200 pl-4 space-y-4">
+    <ol className="border-l-2 border-border pl-6 space-y-6 relative ml-2">
       {events.map((e, i) => (
         <li key={i} className="relative">
           <span
             className={cn(
-              "absolute -left-[9px] top-1 w-3 h-3 rounded-full",
+              "absolute -left-[31px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-background z-10 transition-all duration-300",
               dotColor[e.variant ?? "default"],
             )}
           />
-          <div className="text-xs text-muted-foreground">
-            {new Date(e.ts).toLocaleString("id-ID")}
+          <div className="text-[10px] text-muted-foreground font-mono font-medium">
+            {new Date(e.ts).toLocaleString("id-ID", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
           </div>
-          <div className="font-medium text-sm">{e.node}</div>
-          <div className="text-sm text-muted-foreground">{e.status}</div>
+          <div className="font-bold text-foreground text-sm mt-0.5 tracking-tight">{e.node}</div>
+          <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{e.status}</div>
         </li>
       ))}
     </ol>

@@ -1,0 +1,8 @@
+ID Tim: 
+Nama Tim: MUMET
+Proposal Title: "AstaLink: AI Chief Investment Officer"
+Team Composition:
+  - Sabrina Humaira (Team Leader, Project Lead & AI Strategy)
+  - Bistiana Syafina Ridho (Frontend & Product Designer)​
+  - Kriza Fauzi Nafi'ubadah (AI and Data Engineer)​
+  - Mohammad Ariel Sulton (Backend Engineer)​

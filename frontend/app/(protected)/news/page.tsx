@@ -12,9 +12,9 @@ const SENTIMENT_ICON: Record<NewsArticle["sentiment"], React.ReactNode> = {
 };
 
 const SENTIMENT_CLASS: Record<NewsArticle["sentiment"], string> = {
-  positive: "text-[#05b169] bg-[#05b16915] border-[#05b16930]",
-  neutral: "text-[#a8acb3] bg-[#a8acb315] border-[#a8acb330]",
-  negative: "text-[#cf202f] bg-[#cf202f15] border-[#cf202f30]",
+  positive: "text-emerald-400 bg-emerald-500/10 border-emerald-500/15 uppercase tracking-wider text-[9px] font-bold",
+  neutral: "text-muted-foreground bg-secondary border-border uppercase tracking-wider text-[9px] font-bold",
+  negative: "text-rose-400 bg-rose-500/10 border-rose-500/15 uppercase tracking-wider text-[9px] font-bold",
 };
 
 export default function NewsPage() {
@@ -33,19 +33,22 @@ export default function NewsPage() {
   }, [selectedTicker]);
 
   return (
-    <div className="p-6 space-y-5 max-w-3xl">
+    <div className="p-8 space-y-6 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
       {/* Header + ticker pills */}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold text-white flex-1">External News</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-4 justify-between border-b border-border pb-5">
+        <div>
+          <p className="text-muted-foreground text-[10px] font-black font-mono uppercase tracking-[0.2em] mb-1">Market Sentiment</p>
+          <h1 className="text-foreground text-2xl font-bold tracking-tight">Market News</h1>
+        </div>
+        <div className="flex gap-1.5 bg-secondary p-1 border border-border rounded-xl">
           {TICKERS.map((t) => (
             <button
               key={t}
               onClick={() => setSelectedTicker(t)}
-              className={`px-3 py-1 text-xs rounded-full font-mono transition-colors ${
+              className={`px-3 py-1.5 text-xs rounded-lg font-mono font-bold transition-all duration-200 ${
                 selectedTicker === t
-                  ? "bg-[#0052ff] text-white"
-                  : "bg-[#16181c] text-[#a8acb3] border border-[#2a2d36] hover:text-white"
+                  ? "bg-primary text-primary-foreground shadow-[0_4px_12px_rgba(37,99,235,0.2)]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-card"
               }`}
             >
               {t.replace(".JK", "")}
@@ -54,50 +57,49 @@ export default function NewsPage() {
         </div>
       </div>
 
-      {/* Skeletons */}
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-[88px] rounded-xl bg-[#16181c] animate-pulse border border-[#2a2d36]" />
+            <div key={i} className="h-24 rounded-2xl bg-card animate-pulse border border-border" />
           ))}
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && news && news.articles.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-[#5b616e]">
-          <Newspaper className="h-9 w-9" />
-          <p className="text-sm text-center">
-            Tidak ada berita untuk {selectedTicker.replace(".JK", "")}.
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground bg-card border border-border rounded-2xl p-6">
+          <Newspaper className="h-10 w-10 text-primary/75" />
+          <p className="text-sm text-center leading-relaxed max-w-sm">
+            Tidak ada berita untuk <span className="font-bold text-foreground">{selectedTicker.replace(".JK", "")}</span>.
             <br />
-            Pastikan <code className="font-mono">NEWS_API_KEY</code> sudah dikonfigurasi di backend.
+            <span className="text-xs text-muted-foreground/60 mt-1 block">
+              Pastikan <code className="font-mono bg-secondary px-1.5 py-0.5 rounded text-[11px] text-foreground">NEWS_API_KEY</code> sudah dikonfigurasi di backend.
+            </span>
           </p>
         </div>
       )}
 
-      {/* Article cards */}
       {!loading && news && news.articles.length > 0 && (
         <div className="space-y-3">
           {news.articles.map((article, i) => (
             <article
               key={i}
-              className="rounded-xl border border-[#2a2d36] bg-[#16181c] p-4 space-y-2"
+              className="rounded-2xl border border-border bg-card hover:border-border/60 hover:bg-secondary/30 p-5 space-y-3 transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between"
             >
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm text-white font-medium leading-snug flex-1">
+              <div className="flex items-start justify-between gap-4">
+                <p className="text-sm text-foreground font-bold leading-normal flex-1">
                   {article.title}
                 </p>
                 <span
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${SENTIMENT_CLASS[article.sentiment]}`}
+                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border shrink-0 ${SENTIMENT_CLASS[article.sentiment]}`}
                 >
                   {SENTIMENT_ICON[article.sentiment]}
-                  {article.sentiment}
+                  <span className="font-bold font-mono">{article.sentiment}</span>
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-[#5b616e]">
-                <span>{article.source}</span>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
+                <span className="bg-secondary px-2 py-0.5 rounded text-[9px] font-bold text-foreground uppercase tracking-wider border border-border">{article.source}</span>
                 <span>·</span>
-                <span>
+                <span className="font-mono">
                   {new Date(article.published_at).toLocaleDateString("id-ID", {
                     day: "numeric",
                     month: "short",

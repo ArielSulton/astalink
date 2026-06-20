@@ -14,27 +14,24 @@ import { api, type AgentRunResponse, type TickerChartData } from "@/lib/api-clie
 const DEFAULT_WATCHLIST = ["BBCA.JK", "TLKM.JK", "ASII.JK", "BBRI.JK"];
 
 const legalColor: Record<string, string> = {
-  approved: "bg-green-100 text-green-800",
-  partial: "bg-yellow-100 text-yellow-800",
-  rejected: "bg-red-100 text-red-800",
-  rejected_after_max_revisions: "bg-red-100 text-red-800",
+  approved: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/15",
+  partial: "bg-amber-500/10 text-amber-400 border border-amber-500/15",
+  rejected: "bg-rose-500/10 text-rose-400 border border-rose-500/15",
+  rejected_after_max_revisions: "bg-rose-500/10 text-rose-400 border border-rose-500/15",
 };
 
 export default function DashboardPage() {
   const router = useRouter();
 
-  // Market state
   const [watchlist, setWatchlist] = useState<TickerChartData[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string>(DEFAULT_WATCHLIST[0]);
   const [marketLoading, setMarketLoading] = useState(true);
 
-  // Agent state
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AgentRunResponse | null>(null);
 
-  // Fetch watchlist on mount — public endpoint, no token needed
   useEffect(() => {
     api
       .getWatchlist(DEFAULT_WATCHLIST)
@@ -85,23 +82,22 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0a0b0d] flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* ── Market Watch Header ── */}
-      <div className="border-b border-[#1e2028] px-6 py-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="border-b border-border px-6 py-5 bg-card/40">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <p className="text-[#a8acb3] text-[10px] font-mono uppercase tracking-widest">
+            <p className="text-muted-foreground text-[10px] font-black font-mono uppercase tracking-[0.2em]">
               Market Watch
             </p>
-            <h1 className="text-white text-lg font-semibold leading-tight mt-0.5">
+            <h1 className="text-foreground text-xl font-bold leading-tight mt-0.5 tracking-tight">
               IDX Blue Chips
             </h1>
           </div>
           <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
         </div>
 
-        {/* Ticker grid */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {DEFAULT_WATCHLIST.map((ticker) => {
             const data = watchlist.find((t) => t.ticker === ticker);
             return (
@@ -120,9 +116,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Chart Area ── */}
-      <div className="px-6 py-5 border-b border-[#1e2028]">
+      <div className="px-6 py-5 border-b border-border">
         {marketLoading ? (
-          <div className="h-64 flex items-center justify-center text-[#a8acb3] text-sm font-mono">
+          <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono tracking-wider">
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping mr-2.5" />
             Memuat data pasar…
           </div>
         ) : selectedData && selectedData.price_series.length > 0 ? (
@@ -135,31 +132,31 @@ export default function DashboardPage() {
             bbLower={selectedData.bb_lower}
           />
         ) : (
-          <div className="h-64 flex items-center justify-center text-[#a8acb3] text-sm font-mono">
+          <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono">
             Data tidak tersedia untuk {selectedTicker}
           </div>
         )}
       </div>
 
       {/* ── AI Agent Section ── */}
-      <div className="px-6 py-6 flex-1">
-        <div className="bg-white rounded-2xl p-6">
-          <h2 className="text-[#0a0b0d] font-semibold text-base mb-1">Perintah AI</h2>
-          <p className="text-[#5b616e] text-sm mb-4">
-            Deskripsikan tujuan investasi Anda. AI akan menganalisis pasar, bisnis, risiko, dan legalitas.
+      <div className="px-6 py-6 flex-1 max-w-4xl w-full mx-auto space-y-4">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+          <h2 className="text-foreground font-bold text-base mb-1 tracking-tight">Perintah AI</h2>
+          <p className="text-muted-foreground text-xs mb-4">
+            Deskripsikan tujuan investasi Anda. AI akan menganalisis pasar, bisnis, risiko, dan legalitas secara otomatis.
           </p>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Contoh: Analisis dan optimalkan portofolio saya dengan fokus BBCA dan TLKM, toleransi risiko sedang."
-            className="w-full rounded-xl border border-[#dee1e6] px-4 py-3 text-[#0a0b0d] text-sm resize-none focus:outline-none focus:border-[#0052ff] focus:ring-1 focus:ring-[#0052ff] transition-colors"
+            className="w-full rounded-xl border border-border bg-secondary px-4 py-3 text-foreground text-sm resize-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all duration-200 placeholder:text-muted-foreground/50"
             rows={3}
           />
-          <div className="flex justify-end mt-3">
+          <div className="flex justify-end mt-4">
             <button
               onClick={handleRun}
               disabled={loading || !message.trim()}
-              className="px-6 py-2.5 rounded-full bg-[#0052ff] text-white text-sm font-semibold hover:bg-[#003ecc] disabled:bg-[#a8b8cc] disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 hover:shadow-[0_0_16px_rgba(37,99,235,0.35)] disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
             >
               {loading ? "Menganalisis…" : "Jalankan"}
             </button>
@@ -168,18 +165,17 @@ export default function DashboardPage() {
 
         {/* ── Agent Result ── */}
         {result && (
-          <div className="mt-4 bg-white rounded-2xl p-6 space-y-4">
-            {/* Header row */}
+          <div className="bg-card border border-border rounded-2xl p-6 space-y-5 shadow-xl animate-fade-in">
             <div className="flex items-center gap-3 flex-wrap">
               {result.intent && (
-                <Badge variant="outline" className="font-mono text-xs">
+                <Badge variant="outline" className="font-mono text-xs text-muted-foreground bg-secondary border-border">
                   {result.intent}
                 </Badge>
               )}
               {result.legal_status && (
                 <span
-                  className={`rounded-full px-3 py-0.5 text-xs font-semibold ${
-                    legalColor[result.legal_status] ?? "bg-gray-100 text-gray-800"
+                  className={`rounded-full px-3 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider ${
+                    legalColor[result.legal_status] ?? "bg-secondary text-muted-foreground"
                   }`}
                 >
                   {result.legal_status}
@@ -187,15 +183,14 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Allocation chart */}
             {result.allocation_plan && (
               <>
-                <Separator />
-                <div>
-                  <p className="text-xs font-medium text-[#5b616e] mb-3">Alokasi Portofolio</p>
+                <Separator className="bg-border" />
+                <div className="space-y-4">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">Alokasi Portofolio</p>
                   <AllocationChart weights={result.allocation_plan.weights} />
                   {result.allocation_plan.narration && (
-                    <p className="text-sm text-[#5b616e] mt-3 leading-relaxed">
+                    <p className="text-sm text-muted-foreground mt-4 leading-relaxed bg-secondary border border-border rounded-xl p-4">
                       {result.allocation_plan.narration}
                     </p>
                   )}
@@ -203,28 +198,29 @@ export default function DashboardPage() {
               </>
             )}
 
-            {/* Errors */}
             {result.errors.length > 0 && (
               <>
-                <Separator />
-                <div className="space-y-1">
-                  {result.errors.map((e, i) => (
-                    <p key={i} className="text-xs text-red-600 font-mono">
-                      [{e.node}] {e.reason}
-                    </p>
-                  ))}
+                <Separator className="bg-border" />
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-rose-400 uppercase tracking-wider font-mono">Error Log</p>
+                  <div className="space-y-1 bg-rose-500/5 border border-rose-500/10 rounded-xl p-4">
+                    {result.errors.map((e, i) => (
+                      <p key={i} className="text-xs text-rose-400 font-mono">
+                        [{e.node}] {e.reason}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               </>
             )}
 
-            {/* Approve button */}
             {!isRejected && result.user_approval === null && (
               <>
-                <Separator />
+                <Separator className="bg-border" />
                 <div className="flex justify-end">
                   <button
                     onClick={handleApprove}
-                    className="px-6 py-2.5 rounded-full bg-[#0052ff] text-white text-sm font-semibold hover:bg-[#003ecc] transition-colors"
+                    className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 hover:shadow-[0_0_16px_rgba(37,99,235,0.35)] transition-all duration-200"
                   >
                     Tinjau & Setujui
                   </button>

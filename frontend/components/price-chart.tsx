@@ -23,11 +23,13 @@ interface PriceChartProps {
 }
 
 const TOOLTIP_STYLE = {
-  background: "#16181c",
-  border: "1px solid #2a2d36",
-  color: "#ffffff",
-  borderRadius: "8px",
-  fontSize: "12px",
+  background: "rgba(8, 13, 30, 0.97)",
+  border: "1px solid rgba(255, 255, 255, 0.08)",
+  color: "#edf1ff",
+  borderRadius: "12px",
+  fontSize: "11px",
+  boxShadow: "0 10px 30px -10px rgba(0, 0, 0, 0.6)",
+  backdropFilter: "blur(8px)",
 };
 
 function formatIDR(v: number): string {
@@ -43,7 +45,6 @@ export function PriceChart({
   bbLower,
 }: PriceChartProps) {
   const isUp = (priceChangePct ?? 0) >= 0;
-  const changeColor = isUp ? "#05b169" : "#cf202f";
 
   const priceData = data.map((d) => ({
     date: d.date.slice(5), // "MM-DD"
@@ -60,19 +61,27 @@ export function PriceChart({
   return (
     <div>
       {/* Price header */}
-      <div className="flex items-baseline gap-3 mb-3">
-        <span className="text-[#a8acb3] text-xs font-mono">{ticker.replace(".JK", "")}</span>
-        <span className="font-mono text-2xl font-medium text-white">
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <span className="px-2 py-0.5 rounded bg-secondary border border-border text-muted-foreground text-[10px] font-bold font-mono tracking-wider uppercase">
+          {ticker.replace(".JK", "")}
+        </span>
+        <span className="font-mono text-3xl font-bold text-foreground tracking-tight">
           {lastClose != null ? formatIDR(lastClose) : "—"}
         </span>
-        <span className="font-mono text-sm" style={{ color: changeColor }}>
-          {priceChangePct != null
-            ? `${priceChangePct >= 0 ? "+" : ""}${priceChangePct.toFixed(2)}%`
-            : ""}
-        </span>
+        {priceChangePct != null && (
+          <span
+            className={`font-mono text-xs font-semibold px-2 py-0.5 rounded-lg border ${
+              isUp
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15"
+                : "bg-red-500/10 text-red-400 border-red-500/15"
+            }`}
+          >
+            {priceChangePct >= 0 ? "▲" : "▼"} {Math.abs(priceChangePct).toFixed(2)}%
+          </span>
+        )}
         {bbUpper != null && bbLower != null && (
-          <span className="text-[#a8acb3] text-xs font-mono">
-            BB {formatIDR(bbLower)}–{formatIDR(bbUpper)}
+          <span className="text-muted-foreground text-xs font-mono bg-secondary border border-border px-2.5 py-0.5 rounded-lg">
+            BB: {formatIDR(bbLower)} – {formatIDR(bbUpper)}
           </span>
         )}
       </div>
@@ -82,20 +91,20 @@ export function PriceChart({
         <ComposedChart data={priceData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#0052ff" stopOpacity={0.25} />
-              <stop offset="95%" stopColor="#0052ff" stopOpacity={0} />
+              <stop offset="5%" stopColor="#2563eb" stopOpacity={0.22} />
+              <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: "#a8acb3", fontSize: 10 }}
+            tick={{ fill: "#7585a3", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
             interval="preserveStartEnd"
           />
           <YAxis
-            tick={{ fill: "#a8acb3", fontSize: 10 }}
+            tick={{ fill: "#7585a3", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
             tickFormatter={(v: number) => v.toLocaleString("id-ID")}
@@ -111,11 +120,11 @@ export function PriceChart({
           <Area
             type="monotone"
             dataKey="close"
-            stroke="#0052ff"
+            stroke="#2563eb"
             strokeWidth={2}
             fill="url(#priceGrad)"
             dot={false}
-            activeDot={{ r: 4, fill: "#0052ff" }}
+            activeDot={{ r: 4, fill: "#2563eb" }}
           />
           <Line
             type="monotone"
@@ -129,7 +138,7 @@ export function PriceChart({
           <Line
             type="monotone"
             dataKey="ema50"
-            stroke="#a8acb3"
+            stroke="#7585a3"
             strokeWidth={1.5}
             dot={false}
             strokeDasharray="4 2"
@@ -139,17 +148,17 @@ export function PriceChart({
       </ResponsiveContainer>
 
       {/* RSI subplot label */}
-      <div className="text-[#a8acb3] text-[10px] font-mono mt-2 mb-1">RSI 14</div>
+      <div className="text-muted-foreground text-[10px] font-mono mt-2 mb-1">RSI 14</div>
 
       {/* RSI chart */}
       <ResponsiveContainer width="100%" height={72}>
         <LineChart data={rsiData} margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
           <XAxis dataKey="date" hide />
           <YAxis
             domain={[0, 100]}
             ticks={[30, 50, 70]}
-            tick={{ fill: "#a8acb3", fontSize: 10 }}
+            tick={{ fill: "#7585a3", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
             width={76}
@@ -163,7 +172,7 @@ export function PriceChart({
           <Line
             type="monotone"
             dataKey="rsi14"
-            stroke="#a8acb3"
+            stroke="#7585a3"
             strokeWidth={1.5}
             dot={false}
             connectNulls
@@ -172,10 +181,10 @@ export function PriceChart({
       </ResponsiveContainer>
 
       {/* Legend */}
-      <div className="flex gap-4 mt-2 text-[10px] font-mono text-[#a8acb3]">
-        <span><span className="inline-block w-3 h-0.5 bg-[#0052ff] mr-1 align-middle" />Harga</span>
-        <span><span className="inline-block w-3 h-0.5 bg-[#f4b000] mr-1 align-middle" style={{ borderTop: "1.5px dashed #f4b000" }} />SMA20</span>
-        <span><span className="inline-block w-3 h-0.5 bg-[#a8acb3] mr-1 align-middle" style={{ borderTop: "1.5px dashed #a8acb3" }} />EMA50</span>
+      <div className="flex gap-4 mt-2 text-[10px] font-mono text-muted-foreground">
+        <span><span className="inline-block w-3 h-0.5 bg-[#2563eb] mr-1 align-middle" />Harga</span>
+        <span><span className="inline-block w-3 h-0.5 mr-1 align-middle" style={{ borderTop: "1.5px dashed #f4b000" }} />SMA20</span>
+        <span><span className="inline-block w-3 h-0.5 mr-1 align-middle" style={{ borderTop: "1.5px dashed #7585a3" }} />EMA50</span>
       </div>
     </div>
   );

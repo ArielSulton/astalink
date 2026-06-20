@@ -30,7 +30,14 @@ def get_checkpointer():
 
     if settings.SUPABASE_DB_URL and PostgresSaver is not None:
         log.info("checkpointer: using PostgresSaver against Supabase")
-        _saver = PostgresSaver.from_conn_string(settings.SUPABASE_DB_URL)
+        try:
+            # from_conn_string returns a context manager in langgraph-checkpoint-postgres >= 2.x
+            # Enter it to get the actual saver; the connection lives for the app lifetime.
+            cm = PostgresSaver.from_conn_string(settings.SUPABASE_DB_URL)
+            _saver = cm.__enter__()
+        except Exception as exc:
+            log.warning("checkpointer: PostgresSaver init failed (%s); falling back to MemorySaver", exc)
+            _saver = MemorySaver()
     else:
         log.warning(
             "checkpointer: SUPABASE_DB_URL unset or langgraph-checkpoint-postgres "

@@ -1,21 +1,29 @@
 import Link from "next/link";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { KeyRound } from "lucide-react";
+import { KeyRound, ArrowRight } from "lucide-react";
 
 export default function SettingsPage() {
   return (
-    <div className="p-6 max-w-lg mx-auto space-y-4">
-      <h1 className="text-2xl font-semibold">Pengaturan</h1>
+    <div className="p-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground space-y-6">
+      <div>
+        <p className="text-muted-foreground text-[10px] font-black font-mono uppercase tracking-[0.2em] mb-1">
+          Preferences
+        </p>
+        <h1 className="text-foreground text-2xl font-bold tracking-tight">Settings</h1>
+      </div>
+
       <Link href="/settings/pin">
-        <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-          <CardHeader className="flex flex-row items-center gap-3 space-y-0">
-            <KeyRound className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle className="text-base">PIN Persetujuan</CardTitle>
-              <CardDescription>Atur PIN untuk mengkonfirmasi transaksi</CardDescription>
+        <div className="bg-card hover:bg-secondary border border-border hover:border-border/60 rounded-2xl p-5 flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 group-hover:scale-105 transition-all">
+              <KeyRound className="h-5 w-5" />
             </div>
-          </CardHeader>
-        </Card>
+            <div className="min-w-0">
+              <h2 className="text-foreground font-bold text-sm tracking-tight">PIN Persetujuan</h2>
+              <p className="text-muted-foreground text-xs mt-0.5">Atur PIN untuk mengkonfirmasi otorisasi transaksi portofolio</p>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
+        </div>
       </Link>
     </div>
   );

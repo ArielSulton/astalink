@@ -22,37 +22,49 @@ export function TickerCard({
   const rsiLabel =
     rsi14 != null ? (rsi14 > 70 ? "OB" : rsi14 < 30 ? "OS" : null) : null;
 
+  const badgeClass =
+    rsiLabel === "OB"
+      ? "text-red-400 bg-red-500/10 border border-red-500/15"
+      : rsiLabel === "OS"
+      ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/15"
+      : "text-muted-foreground bg-secondary border border-border";
+
   return (
     <button
       onClick={onClick}
       type="button"
-      className={`rounded-xl p-4 text-left w-full transition-all border ${
+      className={`rounded-2xl p-4 text-left w-full transition-all duration-200 border ${
         selected
-          ? "border-[#0052ff] bg-[#0a1a3a]"
-          : "border-[#2a2d36] bg-[#16181c] hover:border-[#0052ff]/50 hover:bg-[#1a1c22]"
+          ? "border-primary/60 bg-primary/[0.08] shadow-[0_8px_24px_-6px_rgba(37,99,235,0.2)] ring-1 ring-primary/20"
+          : "border-border bg-card hover:border-border/80 hover:bg-secondary/40"
       }`}
     >
-      <div className="font-mono font-semibold text-white text-sm">{symbol}</div>
-      <div className="mt-1 font-mono text-base text-white leading-none">
+      <div className="flex items-center justify-between">
+        <span className="font-mono font-bold text-foreground text-xs tracking-wide uppercase">{symbol}</span>
+        {rsiLabel && (
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${badgeClass}`}>
+            {rsiLabel}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 font-mono text-lg font-semibold text-foreground leading-none tracking-tight">
         {lastClose != null ? (
           `Rp ${lastClose.toLocaleString("id-ID")}`
         ) : (
-          <span className="text-[#a8acb3]">—</span>
+          <span className="text-muted-foreground font-normal">—</span>
         )}
       </div>
       <div
-        className="font-mono text-xs mt-1"
-        style={{ color: isUp ? "#05b169" : "#cf202f" }}
+        className="font-mono text-xs mt-1.5 flex items-center gap-1 font-medium"
+        style={{ color: isUp ? "#10b981" : "#ef4444" }}
       >
-        {priceChangePct != null
-          ? `${isUp ? "+" : ""}${priceChangePct.toFixed(2)}%`
-          : "—"}
-      </div>
-      {rsiLabel && (
-        <span className="mt-1.5 inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#2a2d36] text-[#a8acb3]">
-          {rsiLabel}
+        <span>{isUp ? "▲" : "▼"}</span>
+        <span>
+          {priceChangePct != null
+            ? `${isUp ? "+" : ""}${priceChangePct.toFixed(2)}%`
+            : "—"}
         </span>
-      )}
+      </div>
     </button>
   );
 }
