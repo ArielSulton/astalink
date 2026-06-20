@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuditTimeline } from "@/components/audit-timeline";
-import { Badge } from "@/components/ui/badge";
 
 interface AuditRow {
   audit_id: string;
