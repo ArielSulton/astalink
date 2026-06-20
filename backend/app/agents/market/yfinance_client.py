@@ -26,6 +26,15 @@ class _CacheEntry:
 _cache: dict[str, _CacheEntry] = {}
 
 
+@dataclass
+class _SeriesCacheEntry:
+    data: dict
+    fetched_at: float
+
+
+_series_cache: dict[str, _SeriesCacheEntry] = {}
+
+
 def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
     """Return `window` trading days of OHLCV + precomputed indicators.
 
@@ -33,6 +42,11 @@ def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
     Returns a dict with keys: series, last_close, prev_close, rsi14, sma20, macd,
     bb_upper, bb_lower.  Any uncomputable value is None.
     """
+    cache_key = f"series:{ticker}"
+    now = time.time()
+    if (entry := _series_cache.get(cache_key)) and now - entry.fetched_at < _CACHE_TTL:
+        return entry.data
+
     from app.agents.market.indicators import compute_indicators  # lazy: avoids TA-Lib at import time
 
     try:
@@ -76,7 +90,7 @@ def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
     def _last(key: str) -> "float | None":
         return _float_or_none(ind.get(key), -1) if ind else None
 
-    return {
+    result = {
         "series": series,
         "last_close": float(closes[-1]),
         "prev_close": float(closes[-2]),
@@ -86,6 +100,8 @@ def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
         "bb_upper": _last("bb_upper"),
         "bb_lower": _last("bb_lower"),
     }
+    _series_cache[cache_key] = _SeriesCacheEntry(data=result, fetched_at=time.time())
+    return result
 
 
 def fetch_close_prices(ticker: str, period: str = "1y") -> np.ndarray:

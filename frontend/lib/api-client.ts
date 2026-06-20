@@ -111,10 +111,12 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),
-  async getWatchlist(tickers: string[]): Promise<TickerChartData[]> {
+  getWatchlist(tickers: string[], token?: string): Promise<TickerChartData[]> {
     const params = new URLSearchParams({ tickers: tickers.join(",") });
-    const res = await fetch(`${BACKEND}/api/v1/market/watchlist?${params}`);
-    if (!res.ok) throw new Error(`market/watchlist: ${res.status}`);
-    return res.json() as Promise<TickerChartData[]>;
+    return jsonFetch<TickerChartData[]>(
+      `/api/v1/market/watchlist?${params}`,
+      { method: "GET" },
+      token,
+    );
   },
 };

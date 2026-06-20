@@ -17,13 +17,17 @@ FAKE_TICKER_DATA = {
     "bb_lower": 9000.0,
 }
 
+FAKE_USER = {"sub": "test-user-id"}
+AUTH_HEADERS = {"Authorization": "Bearer test-token"}
+
 
 def test_watchlist_returns_list(client: TestClient) -> None:
-    with patch(
-        "app.api.v1.market.fetch_price_series_with_indicators",
-        return_value=FAKE_TICKER_DATA,
-    ):
-        response = client.get("/api/v1/market/watchlist?tickers=BBCA.JK")
+    with patch("app.api.deps.verify_token", return_value=FAKE_USER), \
+         patch(
+             "app.api.v1.market.fetch_price_series_with_indicators",
+             return_value=FAKE_TICKER_DATA,
+         ):
+        response = client.get("/api/v1/market/watchlist?tickers=BBCA.JK", headers=AUTH_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
@@ -37,10 +41,11 @@ def test_watchlist_returns_list(client: TestClient) -> None:
 
 
 def test_watchlist_default_tickers(client: TestClient) -> None:
-    with patch(
-        "app.api.v1.market.fetch_price_series_with_indicators",
-        return_value=FAKE_TICKER_DATA,
-    ):
-        response = client.get("/api/v1/market/watchlist")
+    with patch("app.api.deps.verify_token", return_value=FAKE_USER), \
+         patch(
+             "app.api.v1.market.fetch_price_series_with_indicators",
+             return_value=FAKE_TICKER_DATA,
+         ):
+        response = client.get("/api/v1/market/watchlist", headers=AUTH_HEADERS)
     assert response.status_code == 200
     assert len(response.json()) == 4  # default: BBCA.JK, TLKM.JK, ASII.JK, BBRI.JK

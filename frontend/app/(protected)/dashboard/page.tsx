@@ -36,11 +36,14 @@ export default function DashboardPage() {
 
   // Fetch watchlist on mount
   useEffect(() => {
-    api
-      .getWatchlist(DEFAULT_WATCHLIST)
-      .then((data) => setWatchlist(data))
-      .catch(() => {}) // network or backend unavailable — silent; skeleton shows
-      .finally(() => setMarketLoading(false));
+    const sb = createClient();
+    sb.auth.getSession().then(({ data: { session } }) => {
+      api
+        .getWatchlist(DEFAULT_WATCHLIST, session?.access_token)
+        .then((data) => setWatchlist(data))
+        .catch(() => {}) // network or backend unavailable — silent; skeleton shows
+        .finally(() => setMarketLoading(false));
+    });
   }, []);
 
   const selectedData = watchlist.find((t) => t.ticker === selectedTicker) ?? null;
@@ -61,10 +64,12 @@ export default function DashboardPage() {
       );
       setResult(res);
       const ls = res.legal_status ?? "";
-      if (!["rejected", "rejected_after_max_revisions"].includes(ls)) {
-        toast.success("Analisis selesai — silakan tinjau alokasi di bawah.");
-      } else {
+      if (["rejected", "rejected_after_max_revisions"].includes(ls)) {
         toast.error(`Ditolak secara legal: ${ls}`);
+      } else if (res.user_approval === null) {
+        toast.info("Menunggu approval Anda — periksa halaman Approvals atau gunakan tombol Tinjau & Setujui di bawah.");
+      } else {
+        toast.success("Analisis selesai — silakan tinjau alokasi di bawah.");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menghubungi agen.");
@@ -216,7 +221,7 @@ export default function DashboardPage() {
             )}
 
             {/* Approve button */}
-            {!isRejected && result.user_approval === "pending" && (
+            {!isRejected && result.user_approval === null && (
               <>
                 <Separator />
                 <div className="flex justify-end">

@@ -1,10 +1,11 @@
 """Market watchlist endpoint — returns price series + indicators for a set of tickers."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app.agents.market.yfinance_client import fetch_price_series_with_indicators
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
@@ -35,8 +36,9 @@ class TickerChartData(BaseModel):
 @router.get("/watchlist", response_model=list[TickerChartData])
 async def get_watchlist(
     tickers: str = Query(default=DEFAULT_TICKERS, description="Comma-separated ticker symbols"),
+    user: dict = Depends(get_current_user),
 ) -> list[TickerChartData]:
-    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()][:10]
     result: list[TickerChartData] = []
 
     for ticker in ticker_list:
