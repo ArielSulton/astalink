@@ -1,15 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { AllocationChart } from "@/components/allocation-chart";
+import { PriceChart } from "@/components/price-chart";
+import { TickerCard } from "@/components/ticker-card";
 import { createClient } from "@/lib/supabase/client";
-import { api, type AgentRunResponse } from "@/lib/api-client";
+import { api, type AgentRunResponse, type TickerChartData } from "@/lib/api-client";
+
+const DEFAULT_WATCHLIST = ["BBCA.JK", "TLKM.JK", "ASII.JK", "BBRI.JK"];
 
 const legalColor: Record<string, string> = {
   approved: "bg-green-100 text-green-800",
@@ -20,17 +22,36 @@ const legalColor: Record<string, string> = {
 
 export default function DashboardPage() {
   const router = useRouter();
+
+  // Market state
+  const [watchlist, setWatchlist] = useState<TickerChartData[]>([]);
+  const [selectedTicker, setSelectedTicker] = useState<string>(DEFAULT_WATCHLIST[0]);
+  const [marketLoading, setMarketLoading] = useState(true);
+
+  // Agent state
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AgentRunResponse | null>(null);
 
-  const handleRun = async () => {
+  // Fetch watchlist on mount
+  useEffect(() => {
+    api
+      .getWatchlist(DEFAULT_WATCHLIST)
+      .then((data) => setWatchlist(data))
+      .catch(() => {}) // network or backend unavailable — silent; skeleton shows
+      .finally(() => setMarketLoading(false));
+  }, []);
+
+  const selectedData = watchlist.find((t) => t.ticker === selectedTicker) ?? null;
+
+  async function handleRun() {
     if (!workspaceId) { toast.error("Pilih workspace terlebih dahulu."); return; }
     if (!message.trim()) { toast.error("Masukkan perintah."); return; }
     const sb = createClient();
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { router.push("/login"); return; }
+
     setLoading(true);
     setResult(null);
     try {
@@ -39,78 +60,140 @@ export default function DashboardPage() {
         session.access_token,
       );
       setResult(res);
-      if (res.user_approval === null && !["rejected", "rejected_after_max_revisions"].includes(res.legal_status ?? "")) {
-        toast.info("Menunggu approval Anda di halaman Approvals.");
-      } else if (res.transactions.length > 0) {
-        toast.success("Eksekusi selesai. Lihat Transaksi untuk detail.");
+      const ls = res.legal_status ?? "";
+      if (!["rejected", "rejected_after_max_revisions"].includes(ls)) {
+        toast.success("Analisis selesai — silakan tinjau alokasi di bawah.");
+      } else {
+        toast.error(`Ditolak secara legal: ${ls}`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Terjadi kesalahan.");
+      toast.error(err instanceof Error ? err.message : "Gagal menghubungi agen.");
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  async function handleApprove() {
+    if (!result) return;
+    router.push(`/approvals/${result.audit_id}`);
+  }
+
+  const isRejected = ["rejected", "rejected_after_max_revisions"].includes(
+    result?.legal_status ?? ""
+  );
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
+    <div className="min-h-screen bg-[#0a0b0d] flex flex-col">
+      {/* ── Market Watch Header ── */}
+      <div className="border-b border-[#1e2028] px-6 py-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-[#a8acb3] text-[10px] font-mono uppercase tracking-widest">
+              Market Watch
+            </p>
+            <h1 className="text-white text-lg font-semibold leading-tight mt-0.5">
+              IDX Blue Chips
+            </h1>
+          </div>
+          <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
+        </div>
+
+        {/* Ticker grid */}
+        <div className="grid grid-cols-4 gap-3">
+          {DEFAULT_WATCHLIST.map((ticker) => {
+            const data = watchlist.find((t) => t.ticker === ticker);
+            return (
+              <TickerCard
+                key={ticker}
+                ticker={ticker}
+                lastClose={marketLoading ? null : (data?.last_close ?? null)}
+                priceChangePct={marketLoading ? null : (data?.price_change_pct ?? null)}
+                rsi14={marketLoading ? null : (data?.rsi14 ?? null)}
+                selected={selectedTicker === ticker}
+                onClick={() => setSelectedTicker(ticker)}
+              />
+            );
+          })}
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Kirim Perintah ke AI</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      {/* ── Chart Area ── */}
+      <div className="px-6 py-5 border-b border-[#1e2028]">
+        {marketLoading ? (
+          <div className="h-64 flex items-center justify-center text-[#a8acb3] text-sm font-mono">
+            Memuat data pasar…
+          </div>
+        ) : selectedData && selectedData.price_series.length > 0 ? (
+          <PriceChart
+            ticker={selectedData.ticker}
+            data={selectedData.price_series}
+            lastClose={selectedData.last_close}
+            priceChangePct={selectedData.price_change_pct}
+            bbUpper={selectedData.bb_upper}
+            bbLower={selectedData.bb_lower}
+          />
+        ) : (
+          <div className="h-64 flex items-center justify-center text-[#a8acb3] text-sm font-mono">
+            Data tidak tersedia untuk {selectedTicker}
+          </div>
+        )}
+      </div>
+
+      {/* ── AI Agent Section ── */}
+      <div className="px-6 py-6 flex-1">
+        <div className="bg-white rounded-2xl p-6">
+          <h2 className="text-[#0a0b0d] font-semibold text-base mb-1">Perintah AI</h2>
+          <p className="text-[#5b616e] text-sm mb-4">
+            Deskripsikan tujuan investasi Anda. AI akan menganalisis pasar, bisnis, risiko, dan legalitas.
+          </p>
           <textarea
-            className="w-full border rounded-md px-3 py-2 text-sm min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="Contoh: Alokasikan 50 juta ke saham BBCA.JK, TLKM.JK, dan ASII.JK dengan profil risiko moderat"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            disabled={loading}
+            placeholder="Contoh: Analisis dan optimalkan portofolio saya dengan fokus BBCA dan TLKM, toleransi risiko sedang."
+            className="w-full rounded-xl border border-[#dee1e6] px-4 py-3 text-[#0a0b0d] text-sm resize-none focus:outline-none focus:border-[#0052ff] focus:ring-1 focus:ring-[#0052ff] transition-colors"
+            rows={3}
           />
-          <Button onClick={handleRun} disabled={loading || !workspaceId} className="w-full">
-            {loading ? "Menganalisis…" : "Jalankan Analisis"}
-          </Button>
-        </CardContent>
-      </Card>
+          <div className="flex justify-end mt-3">
+            <button
+              onClick={handleRun}
+              disabled={loading || !message.trim()}
+              className="px-6 py-2.5 rounded-full bg-[#0052ff] text-white text-sm font-semibold hover:bg-[#003ecc] disabled:bg-[#a8b8cc] disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? "Menganalisis…" : "Jalankan"}
+            </button>
+          </div>
+        </div>
 
-      {result && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              Hasil Analisis
-              <Badge variant="outline" className="font-mono text-xs">
-                {result.audit_id.slice(0, 8)}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 text-sm">
-              <span className="text-muted-foreground">Intent:</span>
-              <span className="font-medium">{result.intent ?? "—"}</span>
+        {/* ── Agent Result ── */}
+        {result && (
+          <div className="mt-4 bg-white rounded-2xl p-6 space-y-4">
+            {/* Header row */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {result.intent && (
+                <Badge variant="outline" className="font-mono text-xs">
+                  {result.intent}
+                </Badge>
+              )}
               {result.legal_status && (
-                <>
-                  <Separator orientation="vertical" className="h-4 self-center" />
-                  <span className="text-muted-foreground">Legal:</span>
-                  <span
-                    className={`rounded px-2 py-0.5 text-xs font-medium ${legalColor[result.legal_status] ?? "bg-muted"}`}
-                  >
-                    {result.legal_status}
-                  </span>
-                </>
+                <span
+                  className={`rounded-full px-3 py-0.5 text-xs font-semibold ${
+                    legalColor[result.legal_status] ?? "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {result.legal_status}
+                </span>
               )}
             </div>
 
+            {/* Allocation chart */}
             {result.allocation_plan && (
               <>
                 <Separator />
                 <div>
-                  <p className="text-sm font-medium mb-2">Alokasi yang Diusulkan</p>
+                  <p className="text-xs font-medium text-[#5b616e] mb-3">Alokasi Portofolio</p>
                   <AllocationChart weights={result.allocation_plan.weights} />
                   {result.allocation_plan.narration && (
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="text-sm text-[#5b616e] mt-3 leading-relaxed">
                       {result.allocation_plan.narration}
                     </p>
                   )}
@@ -118,35 +201,37 @@ export default function DashboardPage() {
               </>
             )}
 
+            {/* Errors */}
             {result.errors.length > 0 && (
               <>
                 <Separator />
-                <div>
-                  <p className="text-sm font-medium text-destructive mb-1">Errors</p>
-                  <ul className="text-xs text-destructive space-y-0.5">
-                    {result.errors.map((e, i) => (
-                      <li key={i}>{e.node}: {e.reason}</li>
-                    ))}
-                  </ul>
+                <div className="space-y-1">
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-600 font-mono">
+                      [{e.node}] {e.reason}
+                    </p>
+                  ))}
                 </div>
               </>
             )}
 
-            {(result.user_approval === null && !["rejected", "rejected_after_max_revisions"].includes(result.legal_status ?? "")) && (
+            {/* Approve button */}
+            {!isRejected && result.user_approval === "pending" && (
               <>
                 <Separator />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/approvals/${result.audit_id}`)}
-                >
-                  Review & Approve →
-                </Button>
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleApprove}
+                    className="px-6 py-2.5 rounded-full bg-[#0052ff] text-white text-sm font-semibold hover:bg-[#003ecc] transition-colors"
+                  >
+                    Tinjau & Setujui
+                  </button>
+                </div>
               </>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
