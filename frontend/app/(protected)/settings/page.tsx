@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KeyRound } from "lucide-react";
 
 export default function SettingsPage() {
