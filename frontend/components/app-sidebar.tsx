@@ -2,16 +2,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ArrowLeftRight,
-  CheckSquare,
+  Bot,
+  Briefcase,
   LayoutDashboard,
+  Newspaper,
+  Scale,
   Settings,
 } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/approvals", label: "Approvals", icon: CheckSquare },
-  { href: "/transactions", label: "Transaksi", icon: ArrowLeftRight },
+  { href: "/chatbot", label: "Chatbot", icon: Bot },
+  { href: "/assets", label: "Asset View", icon: Briefcase },
+  { href: "/legal-docs", label: "Legal Document", icon: Scale },
+  { href: "/news", label: "External News", icon: Newspaper },
   { href: "/settings", label: "Pengaturan", icon: Settings },
 ];
 
