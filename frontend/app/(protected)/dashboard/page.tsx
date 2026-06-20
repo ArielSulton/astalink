@@ -11,6 +11,13 @@ import { AllocationChart } from "@/components/allocation-chart";
 import { createClient } from "@/lib/supabase/client";
 import { api, type AgentRunResponse } from "@/lib/api-client";
 
+const legalColor: Record<string, string> = {
+  approved: "bg-green-100 text-green-800",
+  partial: "bg-yellow-100 text-yellow-800",
+  rejected: "bg-red-100 text-red-800",
+  rejected_after_max_revisions: "bg-red-100 text-red-800",
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -21,12 +28,12 @@ export default function DashboardPage() {
   const handleRun = async () => {
     if (!workspaceId) { toast.error("Pilih workspace terlebih dahulu."); return; }
     if (!message.trim()) { toast.error("Masukkan perintah."); return; }
+    const sb = createClient();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { router.push("/login"); return; }
     setLoading(true);
     setResult(null);
     try {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) { router.push("/login"); return; }
       const res = await api.runAgent(
         { message: message.trim(), workspace_id: workspaceId },
         session.access_token,
@@ -42,13 +49,6 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const legalColor: Record<string, string> = {
-    approved: "bg-green-100 text-green-800",
-    partial: "bg-yellow-100 text-yellow-800",
-    rejected: "bg-red-100 text-red-800",
-    rejected_after_max_revisions: "bg-red-100 text-red-800",
   };
 
   return (
