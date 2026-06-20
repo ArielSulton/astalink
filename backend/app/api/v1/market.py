@@ -1,9 +1,13 @@
 """Market watchlist endpoint — returns price series + indicators for a set of tickers."""
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
+from app.agents.market.news_client import fetch_news
+from app.agents.market.schemas import NewsItem
 from app.agents.market.yfinance_client import fetch_price_series_with_indicators
 
 router = APIRouter()
@@ -30,6 +34,11 @@ class TickerChartData(BaseModel):
     bb_upper: float | None = None
     bb_lower: float | None = None
     price_series: list[PricePoint] = []
+
+
+class NewsResponse(BaseModel):
+    ticker: str
+    articles: list[NewsItem]
 
 
 @router.get("/watchlist", response_model=list[TickerChartData])
@@ -64,3 +73,12 @@ async def get_watchlist(
         )
 
     return result
+
+
+@router.get("/news", response_model=NewsResponse)
+async def get_ticker_news(
+    ticker: str = Query(default="BBCA.JK", description="Single IDX ticker symbol"),
+) -> NewsResponse:
+    # fetch_news is sync (uses httpx.get + Gemini) — run in thread pool
+    articles = await asyncio.to_thread(fetch_news, ticker, 5)
+    return NewsResponse(ticker=ticker, articles=articles)
