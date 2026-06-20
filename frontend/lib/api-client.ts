@@ -133,4 +133,13 @@ export const api = {
       `/api/v1/market/news?ticker=${ticker}`,
       { method: "GET" },
     ),
+  chat: (
+    body: { message: string; thread_id?: string },
+    token: string,
+  ): Promise<{ message: string; thread_id: string }> =>
+    jsonFetch<{ message: string; thread_id: string }>(
+      "/api/v1/chat/",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
 };
