@@ -63,7 +63,10 @@ async def upload_document(
     if not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted.")
 
+    MAX_PDF_BYTES = 10 * 1024 * 1024  # 10 MB
     content = await file.read()
+    if len(content) > MAX_PDF_BYTES:
+        raise HTTPException(status_code=413, detail="PDF must be ≤ 10 MB.")
     doc_hash = hashlib.sha256(content).hexdigest()
 
     # Extract text from PDF
@@ -99,6 +102,8 @@ async def upload_document(
         })
         .execute()
     )
+    if not row.data:
+        raise HTTPException(status_code=409, detail="Document already indexed.")
     inserted = row.data[0]
     return RegulationDocumentOut(**inserted)
 

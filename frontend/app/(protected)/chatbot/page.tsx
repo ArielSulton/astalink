@@ -66,7 +66,7 @@ export default function ChatbotPage() {
   }
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 0px)" }}>
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2028] shrink-0">
         <div className="flex items-center gap-2">

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 export default function LegalDocsPage() {
   const [docs, setDocs] = useState<RegulationDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(true);
+  const [docsError, setDocsError] = useState<boolean>(false);
 
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadSource, setUploadSource] = useState("");
@@ -22,7 +23,7 @@ export default function LegalDocsPage() {
     api
       .listLegalDocs()
       .then(setDocs)
-      .catch(() => {})
+      .catch(() => { setDocsError(true); })
       .finally(() => setDocsLoading(false));
   }, []);
 
@@ -81,7 +82,13 @@ export default function LegalDocsPage() {
           </div>
         )}
 
-        {!docsLoading && docs.length === 0 && (
+        {!docsLoading && docsError && (
+          <p className="text-xs text-[#cf202f] p-3 rounded-xl border border-[#cf202f30] bg-[#cf202f08]">
+            Gagal memuat daftar dokumen. Coba muat ulang halaman.
+          </p>
+        )}
+
+        {!docsLoading && !docsError && docs.length === 0 && (
           <div className="flex items-center gap-3 p-4 rounded-xl border border-[#2a2d36] bg-[#16181c] text-[#5b616e]">
             <Scale className="h-5 w-5 shrink-0" />
             <p className="text-sm">
