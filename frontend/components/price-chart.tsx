@@ -61,6 +61,7 @@ export function PriceChart({
     <div>
       {/* Price header */}
       <div className="flex items-baseline gap-3 mb-3">
+        <span className="text-[#a8acb3] text-xs font-mono">{ticker.replace(".JK", "")}</span>
         <span className="font-mono text-2xl font-medium text-white">
           {lastClose != null ? formatIDR(lastClose) : "—"}
         </span>
