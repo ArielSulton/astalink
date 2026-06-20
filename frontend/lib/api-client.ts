@@ -70,6 +70,18 @@ export interface TickerChartData {
   price_series: PricePoint[];
 }
 
+export interface NewsArticle {
+  title: string;
+  source: string;
+  published_at: string;
+  sentiment: "positive" | "neutral" | "negative";
+}
+
+export interface NewsResponse {
+  ticker: string;
+  articles: NewsArticle[];
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     ...init,
@@ -114,6 +126,11 @@ export const api = {
   getWatchlist: (tickers: string[]): Promise<TickerChartData[]> =>
     jsonFetch<TickerChartData[]>(
       `/api/v1/market/watchlist?tickers=${tickers.join(",")}`,
+      { method: "GET" },
+    ),
+  getNews: (ticker: string): Promise<NewsResponse> =>
+    jsonFetch<NewsResponse>(
+      `/api/v1/market/news?ticker=${ticker}`,
       { method: "GET" },
     ),
 };
