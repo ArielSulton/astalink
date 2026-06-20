@@ -44,7 +44,9 @@ uv.lock
 # debug
 /logs
 /data
-/docs
+docs/superpowers/
+docs/proposal_2/
+docs/deploy/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
