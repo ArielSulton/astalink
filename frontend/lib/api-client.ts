@@ -24,6 +24,31 @@ export interface ApprovalDetail {
   legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
 }
 
+export interface AgentRunRequest {
+  message: string;
+  workspace_id: string;
+  thread_id?: string;
+}
+
+export interface AgentRunResponse {
+  audit_id: string;
+  thread_id: string;
+  intent: string | null;
+  legal_status: string | null;
+  user_approval: string | null;
+  allocation_plan: {
+    weights: { ticker: string; weight: number }[];
+    cash: number;
+    cash_buffer: number;
+    narration: string;
+    relaxations_applied: string[];
+  } | null;
+  transactions: Record<string, unknown>[];
+  revision_count: number;
+  messages: { type: string; content: string }[];
+  errors: { node: string; reason: string }[];
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     ...init,
@@ -59,4 +84,10 @@ export const api = {
   setPin: (pin: string, token: string) =>
     jsonFetch<void>(`/api/v1/users/me/pin`,
       { method: "POST", body: JSON.stringify({ pin }) }, token),
+  runAgent: (body: AgentRunRequest, token: string) =>
+    jsonFetch<AgentRunResponse>(
+      "/api/v1/agent/run",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
 };
