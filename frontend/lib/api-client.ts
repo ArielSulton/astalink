@@ -49,6 +49,27 @@ export interface AgentRunResponse {
   errors: { node: string; reason: string }[];
 }
 
+export interface PricePoint {
+  date: string;
+  close: number;
+  sma20: number | null;
+  ema50: number | null;
+  rsi14: number | null;
+}
+
+export interface TickerChartData {
+  ticker: string;
+  last_close: number | null;
+  prev_close: number | null;
+  price_change_pct: number | null;
+  rsi14: number | null;
+  sma20: number | null;
+  macd: number | null;
+  bb_upper: number | null;
+  bb_lower: number | null;
+  price_series: PricePoint[];
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     ...init,
@@ -90,4 +111,10 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),
+  async getWatchlist(tickers: string[]): Promise<TickerChartData[]> {
+    const params = new URLSearchParams({ tickers: tickers.join(",") });
+    const res = await fetch(`${BACKEND}/api/v1/market/watchlist?${params}`);
+    if (!res.ok) throw new Error(`market/watchlist: ${res.status}`);
+    return res.json() as Promise<TickerChartData[]>;
+  },
 };
