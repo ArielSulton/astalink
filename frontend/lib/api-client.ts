@@ -111,10 +111,9 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),
-  getWatchlist: (tickers: string[], token?: string): Promise<TickerChartData[]> =>
+  getWatchlist: (tickers: string[]): Promise<TickerChartData[]> =>
     jsonFetch<TickerChartData[]>(
       `/api/v1/market/watchlist?tickers=${tickers.join(",")}`,
       { method: "GET" },
-      token,
     ),
 };

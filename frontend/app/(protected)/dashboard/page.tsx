@@ -34,16 +34,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AgentRunResponse | null>(null);
 
-  // Fetch watchlist on mount
+  // Fetch watchlist on mount — public endpoint, no token needed
   useEffect(() => {
-    const sb = createClient();
-    sb.auth.getSession().then(({ data: { session } }) => {
-      api
-        .getWatchlist(DEFAULT_WATCHLIST, session?.access_token)
-        .then((data) => setWatchlist(data))
-        .catch(() => {}) // network or backend unavailable — silent; skeleton shows
-        .finally(() => setMarketLoading(false));
-    });
+    api
+      .getWatchlist(DEFAULT_WATCHLIST)
+      .then((data) => setWatchlist(data))
+      .catch(() => {})
+      .finally(() => setMarketLoading(false));
   }, []);
 
   const selectedData = watchlist.find((t) => t.ticker === selectedTicker) ?? null;
