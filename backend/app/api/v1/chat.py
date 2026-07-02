@@ -13,7 +13,10 @@ async def chat(
     request: ChatRequest,
     current_user: dict = Depends(get_current_user),
 ) -> ChatResponse:
-    thread_id = request.thread_id or str(uuid.uuid4())
+    # Scope thread_id to the authenticated user to prevent cross-user access
+    user_sub = current_user["sub"]
+    raw_thread = request.thread_id or str(uuid.uuid4())
+    thread_id = f"{user_sub}:{raw_thread}"
 
     result = chat_graph.invoke(
         {"messages": [HumanMessage(content=request.message)]},
@@ -27,4 +30,4 @@ async def chat(
         )
 
     last_message = result["messages"][-1]
-    return ChatResponse(message=last_message.content, thread_id=thread_id)
+    return ChatResponse(message=last_message.content, thread_id=raw_thread)

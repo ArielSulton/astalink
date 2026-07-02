@@ -24,6 +24,72 @@ export interface ApprovalDetail {
   legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
 }
 
+export interface AgentRunRequest {
+  message: string;
+  workspace_id: string;
+  thread_id?: string;
+}
+
+export interface AgentRunResponse {
+  audit_id: string;
+  thread_id: string;
+  intent: string | null;
+  legal_status: string | null;
+  user_approval: string | null;
+  allocation_plan: {
+    weights: { ticker: string; weight: number }[];
+    cash: number;
+    cash_buffer: number;
+    narration: string;
+    relaxations_applied: string[];
+  } | null;
+  transactions: Record<string, unknown>[];
+  revision_count: number;
+  messages: { type: string; content: string }[];
+  errors: { node: string; reason: string }[];
+}
+
+export interface PricePoint {
+  date: string;
+  close: number;
+  sma20: number | null;
+  ema50: number | null;
+  rsi14: number | null;
+}
+
+export interface TickerChartData {
+  ticker: string;
+  last_close: number | null;
+  prev_close: number | null;
+  price_change_pct: number | null;
+  rsi14: number | null;
+  sma20: number | null;
+  macd: number | null;
+  bb_upper: number | null;
+  bb_lower: number | null;
+  price_series: PricePoint[];
+}
+
+export interface NewsArticle {
+  title: string;
+  source: string;
+  published_at: string;
+  sentiment: "positive" | "neutral" | "negative";
+}
+
+export interface NewsResponse {
+  ticker: string;
+  articles: NewsArticle[];
+}
+
+export interface RegulationDoc {
+  id: string;
+  source: string;
+  title: string;
+  version: string | null;
+  indexed_at: string;
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {
     ...init,
@@ -59,4 +125,51 @@ export const api = {
   setPin: (pin: string, token: string) =>
     jsonFetch<void>(`/api/v1/users/me/pin`,
       { method: "POST", body: JSON.stringify({ pin }) }, token),
+  runAgent: (body: AgentRunRequest, token: string) =>
+    jsonFetch<AgentRunResponse>(
+      "/api/v1/agent/run",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
+  getWatchlist: (tickers: string[]): Promise<TickerChartData[]> =>
+    jsonFetch<TickerChartData[]>(
+      `/api/v1/market/watchlist?tickers=${tickers.join(",")}`,
+      { method: "GET" },
+    ),
+  getNews: (ticker: string): Promise<NewsResponse> =>
+    jsonFetch<NewsResponse>(
+      `/api/v1/market/news?ticker=${ticker}`,
+      { method: "GET" },
+    ),
+  chat: (
+    body: { message: string; thread_id?: string },
+    token: string,
+  ): Promise<{ message: string; thread_id: string }> =>
+    jsonFetch<{ message: string; thread_id: string }>(
+      "/api/v1/chat/",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
+
+  listLegalDocs: (): Promise<RegulationDoc[]> =>
+    jsonFetch<RegulationDoc[]>("/api/v1/legal/documents", { method: "GET" }),
+
+  uploadLegalDoc: async (
+    file: File,
+    source: string,
+    title: string,
+    token: string,
+  ): Promise<RegulationDoc> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("source", source);
+    form.append("title", title);
+    const res = await fetch(`${BACKEND}/api/v1/legal/documents/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    return res.json() as Promise<RegulationDoc>;
+  },
 };
