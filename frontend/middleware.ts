@@ -30,7 +30,17 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Redirect unauthenticated users away from protected routes
-  const PROTECTED_PREFIXES = ["/dashboard", "/audit", "/approvals", "/transactions", "/settings"];
+  const PROTECTED_PREFIXES = [
+    "/dashboard",
+    "/audit",
+    "/approvals",
+    "/transactions",
+    "/settings",
+    "/assets",
+    "/chatbot",
+    "/legal-docs",
+    "/news",
+  ];
   if (!user && PROTECTED_PREFIXES.some((p) => request.nextUrl.pathname.startsWith(p))) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
