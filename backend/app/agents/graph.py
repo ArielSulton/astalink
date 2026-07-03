@@ -1,8 +1,7 @@
-"""AstaLink LangGraph wiring (Phase 3).
+"""AstaLink LangGraph wiring.
 
-Real nodes: intent_node, legal_node, market_node, business_node, risk_node.
-Remaining stubs (replaced in later phases): optimizer_stub (Phase 4),
-hitl_stub (Phase 5), execution_stub (Phase 6)."""
+All nodes are real: intent, market, business, risk, optimizer, legal,
+hitl (real interrupt-based pause), and execution."""
 from __future__ import annotations
 
 import logging
