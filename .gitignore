@@ -66,10 +66,6 @@ __pycache__/
 /reference/
 /*.js
 
-legal docs analyzer/node_modules/
-legal docs analyzer/.next/
-legal docs analyzer/.env.local
-
 # Auto-generated agent files
 frontend/AGENTS.md
 frontend/CLAUDE.md
