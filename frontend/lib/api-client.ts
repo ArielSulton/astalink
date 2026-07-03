@@ -24,6 +24,39 @@ export interface ApprovalDetail {
   legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
 }
 
+export interface AuditSummary {
+  audit_id: string;
+  intent: string | null;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface AuditDetail {
+  audit_id: string;
+  status: string;
+  intent: string | null;
+  workspace_id: string;
+  created_at: string;
+  completed_at: string | null;
+  allocation_plan: {
+    weights: { ticker: string; weight: number }[];
+    cash: number;
+    cash_buffer: number;
+    narration: string;
+    relaxations_applied: string[];
+  } | null;
+  legal_status: string | null;
+  legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
+  transactions: {
+    ticker: string;
+    side: string;
+    quantity: number;
+    status: string;
+    broker_ref: string | null;
+  }[];
+}
+
 export interface AgentRunRequest {
   message: string;
   workspace_id: string;
@@ -122,6 +155,12 @@ export const api = {
       { method: "POST", body: JSON.stringify({ reason }) },
       token,
     ),
+  listAudit: (workspaceId: string, token: string) =>
+    jsonFetch<{ audits: AuditSummary[] }>(
+      `/api/v1/audit?workspace_id=${workspaceId}`, { method: "GET" }, token,
+    ),
+  getAudit: (auditId: string, token: string) =>
+    jsonFetch<AuditDetail>(`/api/v1/audit/${auditId}`, { method: "GET" }, token),
   setPin: (pin: string, token: string) =>
     jsonFetch<void>(`/api/v1/users/me/pin`,
       { method: "POST", body: JSON.stringify({ pin }) }, token),
