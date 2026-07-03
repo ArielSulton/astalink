@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from postgrest.exceptions import APIError
@@ -15,6 +16,13 @@ router = APIRouter()
 async def list_audit(
     workspace_id: str, user: dict = Depends(get_current_user)
 ) -> AuditListResponse:
+    # audit_log.workspace_id is a uuid column; a malformed value would make
+    # PostgREST raise APIError and surface as a 500 instead of a client error.
+    try:
+        uuid.UUID(workspace_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="workspace_id must be a UUID")
+
     res = (
         get_admin_client().table("audit_log")
         .select("audit_id, intent, status, created_at, completed_at, workspace_id, user_id")
@@ -56,18 +64,22 @@ async def get_audit(
 ) -> AuditDetail:
     audit = _load_audit(audit_id, user["sub"])
 
-    # Runs that stop before the optimizer have no allocation_plans row;
-    # .single() raises in that case and the detail must still render.
-    try:
-        plan_row = (
-            get_admin_client().table("allocation_plans").select("*")
-            .eq("audit_id", audit_id).single().execute()
-        ).data or {}
-    except APIError:
-        plan_row = {}
+    # The legal node inserts a NEW allocation_plans row on every evaluation,
+    # so a run that went through the revision loop has several rows for one
+    # audit_id (and a run that stopped before the optimizer has none).
+    # Take the latest; .single() would raise on both of those cases.
+    plan_res = (
+        get_admin_client().table("allocation_plans").select("*")
+        .eq("audit_id", audit_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    plan_row = plan_res.data[0] if plan_res.data else {}
 
     tx_res = (
-        get_admin_client().table("transactions").select("*")
+        get_admin_client().table("transactions")
+        .select("ticker, side, quantity, status, broker_ref, executed_at")
         .eq("audit_id", audit_id).execute()
     )
 

@@ -11,22 +11,37 @@ const STATUS_STYLE: Record<string, string> = {
   rejected: "text-rose-400 bg-rose-500/10 border-rose-500/15",
   rejected_after_max_revisions: "text-rose-400 bg-rose-500/10 border-rose-500/15",
   awaiting_approval: "text-amber-400 bg-amber-500/10 border-amber-500/15",
+  in_progress: "text-primary bg-primary/10 border-primary/15",
 };
 
 export default function AuditTrail() {
   const [items, setItems] = useState<AuditSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!workspaceId) return;
+    // Guard against out-of-order responses when switching workspaces fast.
+    let stale = false;
+    setItems([]);
+    setLoading(true);
+    setFetchError(null);
     const fetchData = async () => {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-      const res = await api.listAudit(workspaceId, session.access_token);
-      setItems(res.audits);
+      try {
+        const sb = createClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session || stale) return;
+        const res = await api.listAudit(workspaceId, session.access_token);
+        if (!stale) setItems(res.audits);
+      } catch (e) {
+        if (!stale) setFetchError(e instanceof Error ? e.message : "Gagal memuat");
+      } finally {
+        if (!stale) setLoading(false);
+      }
     };
     fetchData();
+    return () => { stale = true; };
   }, [workspaceId]);
 
   return (
@@ -49,7 +64,20 @@ export default function AuditTrail() {
         </div>
       )}
 
-      {workspaceId && items.length === 0 && (
+      {workspaceId && fetchError && (
+        <div className="bg-card border border-rose-500/20 rounded-2xl p-8 text-center text-rose-400 text-sm">
+          Gagal memuat jejak audit: {fetchError}
+        </div>
+      )}
+
+      {workspaceId && !fetchError && loading && (
+        <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground text-sm">
+          <span className="inline-block w-2 h-2 rounded-full bg-primary animate-ping mr-2.5" />
+          Memuat…
+        </div>
+      )}
+
+      {workspaceId && !fetchError && !loading && items.length === 0 && (
         <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground text-sm">
           Belum ada keputusan tercatat untuk workspace ini.
         </div>
