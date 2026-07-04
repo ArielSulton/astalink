@@ -4,14 +4,14 @@ import { Briefcase, PiggyBank, TrendingUp, Wallet } from "lucide-react";
 import { api, ApprovalDetail } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { AllocationChart } from "@/components/allocation-chart";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { useWorkspace } from "@/components/workspace-context";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function AssetsPage() {
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { workspaceId } = useWorkspace();
   const [detail, setDetail] = useState<ApprovalDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +62,7 @@ export default function AssetsPage() {
         eyebrow="Portfolio Balance"
         title="Asset View"
         className="border-b border-border pb-5"
-      >
-        <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
-      </PageHeader>
+      />
 
       {!workspaceId && (
         <EmptyState icon={Briefcase} title="Pilih Workspace">

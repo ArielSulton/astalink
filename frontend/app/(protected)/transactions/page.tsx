@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Receipt } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { useWorkspace } from "@/components/workspace-context";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -19,7 +19,7 @@ interface Tx {
 }
 
 export default function TransactionsPage() {
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { workspaceId } = useWorkspace();
   const [items, setItems] = useState<Tx[]>([]);
 
   useEffect(() => {
@@ -35,9 +35,7 @@ export default function TransactionsPage() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Execution Ledger" title="Transactions" className="mb-8">
-        <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
-      </PageHeader>
+      <PageHeader eyebrow="Execution Ledger" title="Transactions" className="mb-8" />
 
       {!workspaceId && (
         <EmptyState icon={Receipt} title="Pilih Workspace">

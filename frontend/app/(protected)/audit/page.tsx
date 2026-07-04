@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type AuditSummary } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { useWorkspace } from "@/components/workspace-context";
 import { History, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function AuditTrail() {
   const [items, setItems] = useState<AuditSummary[]>([]);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { workspaceId } = useWorkspace();
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -27,9 +27,7 @@ export default function AuditTrail() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Decision Ledger" title="Jejak Audit" className="mb-8">
-        <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
-      </PageHeader>
+      <PageHeader eyebrow="Decision Ledger" title="Jejak Audit" className="mb-8" />
 
       {!workspaceId && (
         <EmptyState icon={History} title="Pilih Workspace">

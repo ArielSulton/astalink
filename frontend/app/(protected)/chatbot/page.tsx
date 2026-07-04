@@ -4,7 +4,7 @@ import { Bot, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { useWorkspace } from "@/components/workspace-context";
 
 interface Message {
   role: "user" | "assistant";
@@ -18,7 +18,7 @@ export default function ChatbotPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { workspaceId } = useWorkspace();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,7 +85,6 @@ export default function ChatbotPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
           <button
             onClick={clearThread}
             className="text-xs text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 font-medium py-1 px-2.5 rounded-lg hover:bg-secondary"

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { NavUser } from "@/components/nav-user";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -54,6 +55,15 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: "Compliance",
+    items: [
+      { href: "/legal-docs", label: "Legal Docs", icon: Scale },
+      { href: "/approvals", label: "Approvals", icon: ClipboardCheck },
+      { href: "/audit", label: "Audit Trail", icon: History },
+      { href: "/news", label: "Market News", icon: Newspaper },
+    ],
+  },
+  {
     label: "Business",
     items: [
       {
@@ -67,16 +77,7 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: "Compliance",
-    items: [
-      { href: "/legal-docs", label: "Legal Docs", icon: Scale },
-      { href: "/approvals", label: "Approvals", icon: ClipboardCheck },
-      { href: "/audit", label: "Audit Trail", icon: History },
-      { href: "/news", label: "Market News", icon: Newspaper },
-    ],
-  },
-  {
-    label: "Sistem",
+    label: "System",
     items: [{ href: "/settings", label: "Settings", icon: Settings }],
   },
 ];
@@ -108,6 +109,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <WorkspaceSwitcher />
       </SidebarHeader>
 
       <SidebarContent>

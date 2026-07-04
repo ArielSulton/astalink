@@ -80,5 +80,5 @@ async def get_ticker_news(
     ticker: str = Query(default="BBCA.JK", description="Single IDX ticker symbol"),
 ) -> NewsResponse:
     # fetch_news is sync (uses httpx.get + Gemini) — run in thread pool
-    articles = await asyncio.to_thread(fetch_news, ticker, 5)
+    articles = await asyncio.to_thread(fetch_news, ticker, 12)
     return NewsResponse(ticker=ticker, articles=articles)

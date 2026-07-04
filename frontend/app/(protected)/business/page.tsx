@@ -5,12 +5,12 @@ import { Building2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { useWorkspace } from "@/components/workspace-context";
 import { api, type Business } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 
 export default function BusinessListPage() {
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { workspaceId } = useWorkspace();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -67,9 +67,7 @@ export default function BusinessListPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Bisnis Saya" title="List Bisnis">
-        <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
-      </PageHeader>
+      <PageHeader eyebrow="Bisnis Saya" title="List Bisnis" />
 
       <section className="space-y-3">
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">

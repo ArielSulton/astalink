@@ -3,14 +3,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type ApprovalSummary } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { useWorkspace } from "@/components/workspace-context";
 import { FileCheck2, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export default function ApprovalsInbox() {
   const [items, setItems] = useState<ApprovalSummary[]>([]);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const { workspaceId } = useWorkspace();
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -28,9 +28,7 @@ export default function ApprovalsInbox() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Verification Inbox" title="Pending Approvals" className="mb-8">
-        <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
-      </PageHeader>
+      <PageHeader eyebrow="Verification Inbox" title="Pending Approvals" className="mb-8" />
 
       {!workspaceId && (
         <EmptyState icon={FileCheck2} title="Pilih Workspace">

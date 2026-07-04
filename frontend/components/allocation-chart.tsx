@@ -18,7 +18,13 @@ function colorFor(ticker: string, index: number) {
   return TICKER_COLORS[ticker] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 }
 
-export function AllocationChart({ weights }: { weights: { ticker: string; weight: number }[] }) {
+export function AllocationChart({
+  weights,
+  compact = false,
+}: {
+  weights: { ticker: string; weight: number }[];
+  compact?: boolean;
+}) {
   const investedPct = Math.min(
     100,
     weights.reduce((sum, w) => sum + w.weight * 100, 0),
@@ -34,7 +40,7 @@ export function AllocationChart({ weights }: { weights: { ticker: string; weight
   });
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-6">
+    <div className={`flex items-center gap-6 ${compact ? "flex-col" : "flex-col sm:flex-row"}`}>
       {/* Donut */}
       <div className="relative shrink-0 w-32 h-32">
         <svg viewBox="0 0 36 36" className="w-full h-full">

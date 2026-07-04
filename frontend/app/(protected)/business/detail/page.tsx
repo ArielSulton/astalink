@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { api, LAST_BUSINESS_KEY } from "@/lib/api-client";
-import { LAST_WORKSPACE_KEY } from "@/components/workspace-switcher";
+import { LAST_WORKSPACE_KEY } from "@/components/workspace-context";
 import { createClient } from "@/lib/supabase/client";
 
 export default function BusinessDetailShortcutPage() {

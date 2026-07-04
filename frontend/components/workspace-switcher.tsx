@@ -1,46 +1,28 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { ChevronRight, Layers, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api-client";
+import { useWorkspace } from "@/components/workspace-context";
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from "@/components/ui/sidebar";
 
-interface Workspace { id: string; name: string; type: "personal" | "business"; cash_balance: number; }
-
-const CREATE_VALUE = "__create__";
-export const LAST_WORKSPACE_KEY = "astalink_last_workspace_id";
-
-export function WorkspaceSwitcher({
-  current,
-  onChange,
-}: { current: string | null; onChange: (id: string) => void }) {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+export function WorkspaceSwitcher() {
+  const { workspaceId, setWorkspaceId, workspaces, refreshWorkspaces } = useWorkspace();
+  const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<"personal" | "business">("personal");
   const [submitting, setSubmitting] = useState(false);
 
-  function select(id: string) {
-    onChange(id);
-    localStorage.setItem(LAST_WORKSPACE_KEY, id);
-  }
-
-  function refresh(autoSelect: boolean) {
-    const sb = createClient();
-    sb.from("workspaces").select("id,name,type,cash_balance").then(({ data }) => {
-      const list = (data as Workspace[]) || [];
-      setWorkspaces(list);
-      // Don't make the user pick when there's nothing to choose between (or
-      // a remembered choice already answers it) — only surface the dropdown
-      // as a real decision when there's more than one workspace and no prior
-      // selection cached from a previous visit.
-      if (autoSelect && !current && list.length > 0) {
-        const remembered = list.find((w) => w.id === localStorage.getItem(LAST_WORKSPACE_KEY));
-        select(remembered ? remembered.id : list[0].id);
-      }
-    });
-  }
-
-  useEffect(() => { refresh(true); }, []);
+  const current = workspaces.find((w) => w.id === workspaceId);
 
   async function handleCreate() {
     if (!name.trim()) { toast.error("Nama workspace wajib diisi."); return; }
@@ -58,8 +40,8 @@ export function WorkspaceSwitcher({
       setName("");
       setType("personal");
       setCreating(false);
-      refresh(false);
-      select(workspace.id);
+      refreshWorkspaces(false);
+      setWorkspaceId(workspace.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal membuat workspace.");
     } finally {
@@ -67,43 +49,44 @@ export function WorkspaceSwitcher({
     }
   }
 
-  const currentWorkspace = workspaces.find((w) => w.id === current);
-
   return (
-    <div className="relative inline-block">
-      <div className="flex items-center gap-2">
-        <div className="relative inline-block">
-          <select
-            className="appearance-none bg-secondary hover:bg-secondary/80 border border-border hover:border-border/60 text-foreground rounded-xl px-4 py-2 pr-9 text-xs font-semibold tracking-wide focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200 cursor-pointer"
-            value={current ?? ""}
-            onChange={(e) => {
-              if (e.target.value === CREATE_VALUE) { setCreating(true); return; }
-              select(e.target.value);
-            }}
-          >
-            <option value="" disabled className="bg-card text-muted-foreground">Select workspace…</option>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton tooltip="Workspace" onClick={() => setOpen((v) => !v)}>
+          <Layers />
+          <span>{current ? current.name : "Pilih Workspace"}</span>
+          <ChevronRight
+            className={`ml-auto size-4 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          />
+        </SidebarMenuButton>
+        {open && (
+          <SidebarMenuSub>
             {workspaces.map((w) => (
-              <option key={w.id} value={w.id} className="bg-card text-foreground">
-                {w.name} ({w.type === "personal" ? "Personal" : "Business"})
-              </option>
+              <SidebarMenuSubItem key={w.id}>
+                <SidebarMenuSubButton
+                  isActive={w.id === workspaceId}
+                  render={<button type="button" />}
+                  onClick={() => { setWorkspaceId(w.id); setOpen(false); }}
+                >
+                  <span>{w.name} ({w.type === "personal" ? "Personal" : "Business"})</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
             ))}
-            <option value={CREATE_VALUE} className="bg-card text-chart-2">+ Buat workspace baru</option>
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
-            <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
-            </svg>
-          </div>
-        </div>
-        {currentWorkspace && (
-          <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-            Rp {currentWorkspace.cash_balance.toLocaleString("id-ID")}
-          </span>
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton
+                render={<button type="button" />}
+                onClick={() => { setCreating(true); setOpen(false); }}
+              >
+                <Plus />
+                <span>Buat workspace baru</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          </SidebarMenuSub>
         )}
-      </div>
+      </SidebarMenuItem>
 
       {creating && (
-        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-border bg-card p-4 shadow-xl z-20 space-y-3">
+        <div className="mx-2 mt-2 rounded-xl border border-border bg-card p-4 shadow-xl space-y-3">
           <p className="text-xs font-bold text-foreground uppercase tracking-wider">Workspace Baru</p>
           <input
             autoFocus
@@ -147,6 +130,6 @@ export function WorkspaceSwitcher({
           </div>
         </div>
       )}
-    </div>
+    </SidebarMenu>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Brain, ShieldCheck, UserCheck } from "lucide-react";
+import { ArrowRight, Brain, LayoutDashboard, ShieldCheck, UserCheck } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
 
 const IDX_TICKERS = [
   { sym: "BBCA", px: "9.875", ch: "+1.8%", up: true },
@@ -71,7 +72,11 @@ function Checkmark({ className }: { className?: string }) {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const isLoggedIn = session !== null;
+
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
 
@@ -106,19 +111,31 @@ export default function Home() {
 
           {/* Actions */}
           <div className="flex items-center gap-1">
-            <Link
-              href="/login"
-              className="hidden sm:block px-3.5 py-1.5 rounded-full text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150"
-            >
-              Login
-            </Link>
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all duration-200"
-            >
-              Mulai Gratis
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all duration-200"
+              >
+                Dashboard
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden sm:block px-3.5 py-1.5 rounded-full text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all duration-200"
+                >
+                  Mulai Gratis
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -164,19 +181,32 @@ export default function Home() {
 
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mb-10">
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all duration-300"
-                >
-                  Mulai Gratis
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center justify-center px-8 py-3.5 rounded-full border border-border bg-secondary text-foreground font-semibold text-sm hover:bg-accent hover:border-foreground/20 transition-all duration-200"
-                >
-                  Masuk ke Akun
-                </Link>
+                {isLoggedIn ? (
+                  <Link
+                    href="/dashboard"
+                    className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all duration-300"
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Buka Dashboard
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      href="/signup"
+                      className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all duration-300"
+                    >
+                      Mulai Gratis
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                    <Link
+                      href="/login"
+                      className="inline-flex items-center justify-center px-8 py-3.5 rounded-full border border-border bg-secondary text-foreground font-semibold text-sm hover:bg-accent hover:border-foreground/20 transition-all duration-200"
+                    >
+                      Masuk ke Akun
+                    </Link>
+                  </>
+                )}
               </div>
 
               {/* Trust chips */}
@@ -410,10 +440,10 @@ export default function Home() {
             Tidak perlu kartu kredit.
           </p>
           <Link
-            href="/signup"
+            href={isLoggedIn ? "/dashboard" : "/signup"}
             className="inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-full bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-all duration-300"
           >
-            Buat Akun Gratis
+            {isLoggedIn ? "Buka Dashboard" : "Buat Akun Gratis"}
             <ArrowRight className="w-5 h-5" />
           </Link>
           <p className="text-muted-foreground/60 text-xs mt-6 font-mono tracking-wide">

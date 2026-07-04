@@ -22,7 +22,11 @@ def build_chat_reply(state: AgentState) -> str:
 
     Priority mirrors what the user needs to see first:
     1. N1 couldn't classify the message — relay its clarification question.
-    2. EXPLAIN question — relay the Q&A node's direct answer as-is.
+    2. Informational intents (explain/evaluate_business/risk_review/
+       portfolio_status) — relay the QA/summary node's answer as-is. Checked
+       BEFORE the legal branches: on a continued thread, legal_status from an
+       earlier allocation run lingers in checkpointed state and must not
+       hijack the reply for a non-allocation question.
     3. Legal rejected the plan — explain that (pipeline stops here).
     4. Legal approved/partial but no human decision yet — point at Approvals.
     5. Execution already ran — summarize the resulting transactions.
@@ -35,7 +39,13 @@ def build_chat_reply(state: AgentState) -> str:
     if state.get("_needs_clarification") and messages:
         return _last_text(messages)
 
-    if state.get("intent") == Intent.EXPLAIN.value and messages:
+    informational = (
+        Intent.EXPLAIN.value,
+        Intent.EVALUATE_BUSINESS.value,
+        Intent.RISK_REVIEW.value,
+        Intent.PORTFOLIO_STATUS.value,
+    )
+    if state.get("intent") in informational and messages:
         return _last_text(messages)
 
     if legal_status in (LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS):

@@ -15,6 +15,7 @@ from app.agents.intents import Intent
 from app.agents.legal.node import legal_node
 from app.agents.qa import qa_node
 from app.agents.rejection import rejection_handler
+from app.agents.summary import summary_node
 from app.agents.state import AgentState, LegalStatus, UserApproval
 from app.agents.business.node import business_node
 from app.agents.market.node import market_node
@@ -38,12 +39,36 @@ def _route_after_intent(
     legal's empty_retrieval after burning a full revision loop.
 
     EXPLAIN is a pure informational question: route it to the direct Q&A
-    node — there is nothing to optimize, legally validate, or approve."""
+    node — there is nothing to optimize, legally validate, or approve.
+
+    EVALUATE_BUSINESS / RISK_REVIEW only need their own analyst; they end at
+    the summary node instead of falling through the optimizer/legal loop
+    (which used to produce a wrong "rejected legally" reply for them).
+    PORTFOLIO_STATUS has no pipeline yet — the summary node answers honestly."""
     if state.get("_needs_clarification"):
         return END
-    if state.get("intent") == Intent.EXPLAIN.value:
+    intent = state.get("intent")
+    if intent == Intent.EXPLAIN.value:
         return "n8_qa"
+    if intent == Intent.EVALUATE_BUSINESS.value:
+        return ["n2b_business"]
+    if intent == Intent.RISK_REVIEW.value:
+        return ["n2c_risk"]
+    if intent == Intent.PORTFOLIO_STATUS.value:
+        return "n9_summary"
     return ["n2a_market", "n2b_business", "n2c_risk"]
+
+
+def _route_after_business(state: AgentState) -> Literal["n9_summary", "n5_optimizer"]:
+    if state.get("intent") == Intent.EVALUATE_BUSINESS.value:
+        return "n9_summary"
+    return "n5_optimizer"
+
+
+def _route_after_risk(state: AgentState) -> Literal["n9_summary", "n5_optimizer"]:
+    if state.get("intent") == Intent.RISK_REVIEW.value:
+        return "n9_summary"
+    return "n5_optimizer"
 
 
 def _route_after_legal(
@@ -78,24 +103,38 @@ def build_graph():
     g.add_node("n6_hitl", hitl_node)
     g.add_node("n7_execute", execution_node)
     g.add_node("n8_qa", qa_node)
+    g.add_node("n9_summary", summary_node)
     g.add_node("rejection_handler", rejection_handler)
 
     # Linear entry
     g.add_edge(START, "n1_intent")
 
     # Fan-out to analysis layer — unless N1 couldn't classify the message
-    # (END with clarification question) or the message is a pure question
-    # (answer directly via n8_qa).
+    # (END with clarification question), the message is a pure question
+    # (answer directly via n8_qa), or it's an analysis-only intent that ends
+    # at the summary node.
     g.add_conditional_edges(
         "n1_intent",
         _route_after_intent,
-        ["n2a_market", "n2b_business", "n2c_risk", "n8_qa", END],
+        ["n2a_market", "n2b_business", "n2c_risk", "n8_qa", "n9_summary", END],
     )
     g.add_edge("n8_qa", END)
+    g.add_edge("n9_summary", END)
 
-    # Join: each analyst → optimizer (LangGraph implicitly waits for all preds)
-    for analyst in ("n2a_market", "n2b_business", "n2c_risk"):
-        g.add_edge(analyst, "n5_optimizer")
+    # Join: analysts → optimizer for the allocation flow (LangGraph implicitly
+    # waits for all activated preds). Business/risk detour to the summary node
+    # when they ARE the requested analysis rather than allocation inputs.
+    g.add_edge("n2a_market", "n5_optimizer")
+    g.add_conditional_edges(
+        "n2b_business",
+        _route_after_business,
+        {"n9_summary": "n9_summary", "n5_optimizer": "n5_optimizer"},
+    )
+    g.add_conditional_edges(
+        "n2c_risk",
+        _route_after_risk,
+        {"n9_summary": "n9_summary", "n5_optimizer": "n5_optimizer"},
+    )
 
     # Optimizer → Legal (the bottleneck)
     g.add_edge("n5_optimizer", "n3_legal")
