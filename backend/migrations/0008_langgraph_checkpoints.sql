@@ -1,7 +1,12 @@
 -- 0008_langgraph_checkpoints.sql
--- LangGraph PostgresSaver schema. The library auto-creates these on first
--- use IF the connection has DDL privileges, but we apply them explicitly so
--- the team has control. Schema reference:
+-- LangGraph PostgresSaver schema. In practice, app.core.checkpointer calls
+-- saver.setup() at runtime, which idempotently creates/migrates this same
+-- schema (tracked via a checkpoint_migrations table) — this file exists so
+-- the team can see the shape without spinning up the app, and so a fresh
+-- Supabase project has the tables before setup() ever runs. If
+-- langgraph-checkpoint-postgres adds columns/indexes in a future version,
+-- setup() applies them automatically even if this file drifts.
+-- Schema reference:
 -- https://github.com/langchain-ai/langgraph/blob/main/libs/checkpoint-postgres/
 
 create table if not exists public.checkpoints (
@@ -20,6 +25,7 @@ create table if not exists public.checkpoint_writes (
     checkpoint_ns text not null default '',
     checkpoint_id text not null,
     task_id text not null,
+    task_path text not null default '',
     idx int not null,
     channel text not null,
     type text,

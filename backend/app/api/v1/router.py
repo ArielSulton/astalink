@@ -4,6 +4,7 @@ from app.api.v1 import agent, audit, chat, health, legal, market
 from app.api.v1 import approvals as approvals_router
 from app.api.v1 import pin as pin_router
 from app.api.v1 import whatsapp as wa_router
+from app.api.v1 import workspaces as workspaces_router
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -15,3 +16,4 @@ api_router.include_router(pin_router.router, prefix="/users", tags=["pin"])
 api_router.include_router(approvals_router.router, prefix="/approvals", tags=["approvals"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(wa_router.router, prefix="/whatsapp", tags=["whatsapp"])
+api_router.include_router(workspaces_router.router, prefix="/workspaces", tags=["workspaces"])

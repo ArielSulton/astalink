@@ -21,7 +21,7 @@ from app.agents.legal.retriever import (
 )
 from app.agents.legal.schemas import Chunk, LegalDecision, LegalStatus
 from app.agents.state import AgentState
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import record_legal_status, track_node_duration
 from app.core.supabase_admin import get_admin_client
 
@@ -86,10 +86,11 @@ def _generate_decision(plan: dict[str, Any], chunks: list[Chunk]) -> LegalDecisi
         f"Decide and return JSON only."
     )
     resp = llm.invoke([SystemMessage(content=LEGAL_SYSTEM), HumanMessage(content=user)])
+    text = extract_text(resp.content)
     try:
-        data = json.loads(resp.content)
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Legal LLM returned non-JSON: {resp.content!r}") from exc
+        raise ValueError(f"Legal LLM returned non-JSON: {text!r}") from exc
     return LegalDecision.model_validate(data)
 
 

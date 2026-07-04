@@ -12,7 +12,7 @@ import logging
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.legal.schemas import Chunk, Citation, LegalDecision, LegalStatus
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,12 @@ def _is_grounded(chunk: Chunk, citation: Citation) -> bool:
         f"Is the claimed span grounded in the chunk text? Respond JSON only."
     )
     resp = llm.invoke([SystemMessage(content=GRADER_SYSTEM), HumanMessage(content=user)])
+    text = extract_text(resp.content)
     try:
-        data = json.loads(resp.content)
+        data = json.loads(text)
         return bool(data.get("grounded", False))
     except (json.JSONDecodeError, AttributeError) as exc:
-        logger.warning("grader: failed to parse LLM response %r: %s", resp.content, exc)
+        logger.warning("grader: failed to parse LLM response %r: %s", text, exc)
         return False
 
 

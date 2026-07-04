@@ -11,7 +11,7 @@ from app.agents.risk.mvo import mean_variance_optimize
 from app.agents.risk.schemas import RiskAssessment, RiskMetrics
 from app.agents.risk.var import historical_var
 from app.agents.state import AgentState
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import track_node_duration
 
 log = logging.getLogger(__name__)
@@ -64,8 +64,8 @@ def risk_node(state: AgentState) -> AgentState:
 
     llm = get_chat_model()
     body = f"VaR95={metrics.var_95:.4f}, VaR99={metrics.var_99:.4f}, Sharpe={metrics.sharpe}"
-    narration = llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
-                            HumanMessage(content=body)]).content or ""
+    narration = extract_text(llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
+                            HumanMessage(content=body)]).content)
 
     assessment = RiskAssessment(
         metrics=metrics,

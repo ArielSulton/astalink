@@ -17,13 +17,22 @@ def test_get_checkpointer_uses_postgres_url(monkeypatch) -> None:
     importlib.reload(cp)
     cp._saver = None
 
-    fake = MagicMock()
-    with patch("app.core.checkpointer.PostgresSaver.from_conn_string", return_value=fake) as f:
+    fake_pool = MagicMock()
+    fake_saver = MagicMock()
+    with patch("app.core.checkpointer.ConnectionPool", return_value=fake_pool) as pool_ctor, \
+         patch("app.core.checkpointer.PostgresSaver", return_value=fake_saver) as saver_ctor:
         first = cp.get_checkpointer()
         second = cp.get_checkpointer()
 
     assert first is second
-    f.assert_called_once_with("postgresql://u:p@h:5432/postgres")
+    pool_ctor.assert_called_once_with(
+        conninfo="postgresql://u:p@h:5432/postgres",
+        kwargs=cp._CONNECTION_KWARGS,
+        min_size=1,
+        max_size=5,
+        open=True,
+    )
+    saver_ctor.assert_called_once_with(fake_pool)
 
 
 def test_get_checkpointer_falls_back_to_memory_when_no_db_url(monkeypatch) -> None:

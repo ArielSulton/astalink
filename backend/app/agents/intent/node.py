@@ -74,7 +74,7 @@ def _record_audit(state: AgentState, decision: IntentDecision) -> None:
 def intent_node(state: AgentState) -> AgentState:
     user_text = _last_user_text(state)
     if not user_text:
-        return {"intent": Intent.UNKNOWN.value, "entities": {}}
+        return {"intent": Intent.UNKNOWN.value, "entities": {}, "_needs_clarification": True}
 
     chain = _build_chain()
     try:
@@ -87,18 +87,23 @@ def intent_node(state: AgentState) -> AgentState:
         return {
             "intent": Intent.UNKNOWN.value,
             "entities": {},
+            "_needs_clarification": True,
             "errors": [*state.get("errors", []),
                        {"node": "intent", "reason": str(exc)}],
         }
 
     _record_audit(state, decision)
 
+    needs_clarification = (
+        decision.confidence < CONFIDENCE_FLOOR or decision.intent == Intent.UNKNOWN
+    )
     update: dict[str, Any] = {
         "intent": decision.intent.value,
         "entities": decision.entities,
+        "_needs_clarification": needs_clarification,
     }
 
-    if decision.confidence < CONFIDENCE_FLOOR or decision.intent == Intent.UNKNOWN:
+    if needs_clarification:
         question = decision.clarification_question or \
             "Bisa dijelaskan lagi tujuan Anda? Misal: alokasi dana, valuasi bisnis, atau review risiko."
         update["messages"] = [*state.get("messages", []),

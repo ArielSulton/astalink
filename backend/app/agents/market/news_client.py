@@ -11,15 +11,36 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.market.schemas import NewsItem
 from app.core.config import settings
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 
 log = logging.getLogger(__name__)
 
 NEWS_API_URL = "https://newsapi.org/v2/everything"
 
+# NewsAPI's /everything does literal keyword matching against article text,
+# and real articles almost never spell out a raw ticker — searching "BBCA.JK"
+# returns 0 results, "BBCA" alone returns ~1-2, but the company name returns
+# hundreds. Cover the tickers AstaLink actually surfaces by default; anything
+# else falls back to the bare ticker code (suffix stripped).
+_IDX_COMPANY_NAMES: dict[str, str] = {
+    "BBCA": "Bank Central Asia",
+    "TLKM": "Telkom Indonesia",
+    "ASII": "Astra International",
+    "BBRI": "Bank Rakyat Indonesia",
+}
+
 SENTIMENT_SYSTEM = """\
 You categorize a financial news headline as positive, neutral, or negative for
 the named ticker. Respond with ONE word only: positive, neutral, or negative."""
+
+
+def _news_query(ticker: str) -> str:
+    code = ticker.split(".")[0].upper()
+    name = _IDX_COMPANY_NAMES.get(code)
+    # Quote multi-word company names for exact-phrase matching — unquoted,
+    # NewsAPI ORs the individual words and returns unrelated "Asia" / "Bank"
+    # noise instead of articles actually about the company.
+    return f'"{name}"' if name else code
 
 
 def _tag_sentiment(headline: str, ticker: str) -> str:
@@ -28,7 +49,8 @@ def _tag_sentiment(headline: str, ticker: str) -> str:
         SystemMessage(content=SENTIMENT_SYSTEM),
         HumanMessage(content=f"Ticker: {ticker}\nHeadline: {headline}"),
     ])
-    word = resp.content.strip().lower().split()[0] if resp.content else "neutral"
+    text = extract_text(resp.content)
+    word = text.strip().lower().split()[0] if text else "neutral"
     return word if word in ("positive", "neutral", "negative") else "neutral"
 
 
@@ -40,7 +62,7 @@ def fetch_news(ticker: str, max_items: int = 5) -> list[NewsItem]:
     try:
         resp = httpx.get(
             NEWS_API_URL,
-            params={"q": ticker, "pageSize": max_items, "language": "en",
+            params={"q": _news_query(ticker), "pageSize": max_items, "language": "en",
                     "sortBy": "publishedAt", "apiKey": settings.NEWS_API_KEY},
             timeout=10.0,
         )

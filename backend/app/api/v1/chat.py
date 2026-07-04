@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from langchain_core.messages import HumanMessage
 from app.agents.chat_agent import chat_graph
 from app.api.deps import get_current_user
+from app.core.gemini import extract_text
 from app.models.chat import ChatRequest, ChatResponse
 
 router = APIRouter()
@@ -30,4 +31,4 @@ async def chat(
         )
 
     last_message = result["messages"][-1]
-    return ChatResponse(message=last_message.content, thread_id=raw_thread)
+    return ChatResponse(message=extract_text(last_message.content), thread_id=raw_thread)

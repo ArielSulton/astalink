@@ -19,7 +19,7 @@ from app.agents.optimizer.schemas import (
     WeightLeg,
 )
 from app.agents.state import AgentState
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import record_revision_count, track_node_duration
 
 log = logging.getLogger(__name__)
@@ -79,8 +79,8 @@ def optimizer_node(state: AgentState) -> AgentState:
         f"Relaxations applied: {relaxations or 'none'}\n"
         f"Cash buffer: {cash_buffer:.3f}"
     )
-    narration = llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
-                            HumanMessage(content=body)]).content or ""
+    narration = extract_text(llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
+                            HumanMessage(content=body)]).content)
 
     plan = AllocationPlan(
         weights=legs,

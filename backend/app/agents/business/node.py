@@ -9,7 +9,7 @@ from app.agents.business.dcf import discounted_cash_flow
 from app.agents.business.erp_connector import CSVConnector
 from app.agents.business.schemas import BusinessValuation
 from app.agents.state import AgentState
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import track_node_duration
 
 log = logging.getLogger(__name__)
@@ -45,11 +45,11 @@ def business_node(state: AgentState) -> AgentState:
         }
 
     llm = get_chat_model()
-    narration = llm.invoke([
+    narration = extract_text(llm.invoke([
         SystemMessage(content=NARRATE_SYSTEM),
         HumanMessage(content=f"EV={ev:,.0f}, cashflows={cashflows}, "
                              f"r={DEFAULT_DISCOUNT}, g={DEFAULT_TERMINAL}"),
-    ]).content or ""
+    ]).content)
 
     val = BusinessValuation(
         enterprise_value=ev,

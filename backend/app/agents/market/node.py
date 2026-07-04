@@ -12,7 +12,7 @@ from app.agents.market.news_client import fetch_news
 from app.agents.market.schemas import MarketSnapshot, TickerSnapshot
 from app.agents.market.yfinance_client import fetch_close_prices
 from app.agents.state import AgentState
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import track_node_duration
 
 log = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ def _narrate(snapshots: list[TickerSnapshot]) -> str:
         SystemMessage(content=NARRATE_SYSTEM),
         HumanMessage(content=body),
     ])
-    return getattr(resp, "content", "") or ""
+    return extract_text(getattr(resp, "content", ""))
 
 
 @track_node_duration("n2a_market")

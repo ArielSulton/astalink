@@ -50,8 +50,8 @@ async def run_agent(
 
     initial = new_state()
     initial["messages"] = [HumanMessage(content=body.message)]
-    initial["_user_id"] = user["sub"]            # type: ignore[misc]
-    initial["_workspace_id"] = body.workspace_id  # type: ignore[misc]
+    initial["_user_id"] = user["sub"]
+    initial["_workspace_id"] = body.workspace_id
     initial["entities"] = {"workspace_id": body.workspace_id}
 
     final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})

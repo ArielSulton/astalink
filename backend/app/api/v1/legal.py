@@ -12,9 +12,14 @@ from app.agents.legal.node import legal_node
 from app.agents.legal.retriever import BM25Retriever
 from app.agents.state import AgentState
 from app.api.deps import get_current_user
+from app.core.pinecone import DEFAULT_NAMESPACE, get_index
 from app.core.supabase_admin import get_admin_client
 
 router = APIRouter()
+
+# Pinecone's integrated-embedding records API caps ~96 texts per upsert call
+# for hosted embedding models; batch defensively for large regulations.
+_PINECONE_UPSERT_BATCH = 90
 
 
 class LegalCheckRequest(BaseModel):
@@ -105,6 +110,27 @@ async def upload_document(
     if not row.data:
         raise HTTPException(status_code=409, detail="Document already indexed.")
     inserted = row.data[0]
+
+    # Dense index (Pinecone integrated embedding — text is embedded server-side).
+    index = get_index()
+    records = [
+        {
+            "_id": c.chunk_id,
+            "text": c.text,
+            "source": c.source,
+            "doc_hash": c.doc_hash,
+            **({"pasal": c.pasal} if c.pasal else {}),
+            **({"ayat": c.ayat} if c.ayat else {}),
+            **({"page": c.page} if c.page is not None else {}),
+        }
+        for c in chunks
+    ]
+    for i in range(0, len(records), _PINECONE_UPSERT_BATCH):
+        index.upsert_records(
+            namespace=DEFAULT_NAMESPACE,
+            records=records[i : i + _PINECONE_UPSERT_BATCH],
+        )
+
     return RegulationDocumentOut(**inserted)
 
 

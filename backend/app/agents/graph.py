@@ -5,7 +5,7 @@ hitl (real interrupt-based pause), and execution."""
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Literal, Sequence
 
 from langgraph.graph import END, START, StateGraph
 
@@ -24,6 +24,18 @@ from app.core.checkpointer import get_checkpointer
 log = logging.getLogger(__name__)
 
 MAX_REVISIONS = 3
+
+
+def _route_after_intent(
+    state: AgentState,
+) -> str | Sequence[str]:
+    """Skip the whole optimizer/legal pipeline when N1 couldn't confidently
+    classify the message — there are no entities to build an allocation
+    from, so proceeding always dead-ends in optimizer's no_tickers /
+    legal's empty_retrieval after burning a full revision loop."""
+    if state.get("_needs_clarification"):
+        return END
+    return ["n2a_market", "n2b_business", "n2c_risk"]
 
 
 def _route_after_legal(
@@ -62,9 +74,13 @@ def build_graph():
     # Linear entry
     g.add_edge(START, "n1_intent")
 
-    # Fan-out to analysis layer
-    for analyst in ("n2a_market", "n2b_business", "n2c_risk"):
-        g.add_edge("n1_intent", analyst)
+    # Fan-out to analysis layer — unless N1 couldn't classify the message,
+    # in which case skip straight to END with the clarification question.
+    g.add_conditional_edges(
+        "n1_intent",
+        _route_after_intent,
+        ["n2a_market", "n2b_business", "n2c_risk", END],
+    )
 
     # Join: each analyst → optimizer (LangGraph implicitly waits for all preds)
     for analyst in ("n2a_market", "n2b_business", "n2c_risk"):

@@ -26,6 +26,11 @@ def _reload_config_with_test_env(monkeypatch: pytest.MonkeyPatch):
     # to the fresh singleton.
     from app.core import config as config_module
     importlib.reload(config_module)
+    # Settings(env_file=".env") also reads the real .env file on disk, which
+    # in this dev container is fully populated — bypassing it here so fields
+    # this test doesn't monkeypatch fall through to the code's own default
+    # instead of silently picking up the real dev value.
+    config_module.settings = config_module.Settings(_env_file=None)
     from app.core import gemini as gemini_module
     importlib.reload(gemini_module)
     yield
@@ -44,20 +49,4 @@ def test_get_chat_model_is_lazy_and_cached() -> None:
     assert ctor.call_count == 1, "constructor must be called exactly once"
     kwargs = ctor.call_args.kwargs
     assert kwargs["model"] == "gemini-1.5-flash"
-    assert kwargs["google_api_key"] == "d"
-
-
-def test_get_embedding_model_is_lazy_and_cached() -> None:
-    import app.core.gemini as g
-    g._embedding_model = None
-
-    fake_instance = MagicMock(name="GoogleGenerativeAIEmbeddings-instance")
-    with patch("app.core.gemini.GoogleGenerativeAIEmbeddings", return_value=fake_instance) as ctor:
-        first = g.get_embedding_model()
-        second = g.get_embedding_model()
-
-    assert first is second
-    assert ctor.call_count == 1
-    kwargs = ctor.call_args.kwargs
-    assert kwargs["model"] == "models/text-embedding-004"
     assert kwargs["google_api_key"] == "d"

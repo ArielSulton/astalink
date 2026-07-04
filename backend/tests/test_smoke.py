@@ -55,18 +55,15 @@ def test_clients_construct_without_error() -> None:
     importlib.reload(sa)
 
     g._chat_model = None
-    g._embedding_model = None
     p._client = None
     p._index = None
     sa._client = None
 
     with patch("app.core.gemini.ChatGoogleGenerativeAI", return_value=MagicMock()), \
-         patch("app.core.gemini.GoogleGenerativeAIEmbeddings", return_value=MagicMock()), \
          patch("app.core.pinecone.Pinecone", return_value=MagicMock()), \
          patch("app.core.supabase_admin.create_client", return_value=MagicMock()):
 
         assert g.get_chat_model() is not None
-        assert g.get_embedding_model() is not None
         assert p.get_pinecone_client() is not None
         assert p.get_index() is not None
         assert sa.get_admin_client() is not None
