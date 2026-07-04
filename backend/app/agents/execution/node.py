@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from app.agents.execution.schemas import BrokerOrder, OrderSide
-from app.agents.state import AgentState
+from app.agents.state import AgentState, UserApproval
 from app.core.metrics import record_execution, track_node_duration
 from app.core.supabase_admin import get_admin_client
 from app.integrations.broker import BrokerAdapter, SandboxBroker
@@ -41,6 +41,17 @@ def _last_close(state: AgentState, ticker: str) -> float | None:
 
 @track_node_duration("n7_execute")
 def execution_node(state: AgentState) -> AgentState:
+    if state.get("user_approval") != UserApproval.APPROVED:
+        log.error(
+            "execution_node invoked with user_approval=%r — refusing to place orders",
+            state.get("user_approval"),
+        )
+        return {
+            "transactions": [],
+            "errors": [*state.get("errors", []),
+                       {"node": "execution", "reason": "not_approved"}],
+        }
+
     plan = state.get("allocation_plan") or {}
     weights = plan.get("weights") or []
     cash = float(plan.get("cash") or 0)
