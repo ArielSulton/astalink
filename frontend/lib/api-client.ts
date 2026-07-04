@@ -119,6 +119,7 @@ export interface Workspace {
   id: string;
   name: string;
   type: "personal" | "business";
+  cash_balance: number;
 }
 
 export const LAST_BUSINESS_KEY = "astalink_last_business_id";

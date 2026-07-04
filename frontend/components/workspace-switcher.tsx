@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api-client";
 
-interface Workspace { id: string; name: string; type: "personal" | "business"; }
+interface Workspace { id: string; name: string; type: "personal" | "business"; cash_balance: number; }
 
 const CREATE_VALUE = "__create__";
 export const LAST_WORKSPACE_KEY = "astalink_last_workspace_id";
@@ -26,7 +26,7 @@ export function WorkspaceSwitcher({
 
   function refresh(autoSelect: boolean) {
     const sb = createClient();
-    sb.from("workspaces").select("id,name,type").then(({ data }) => {
+    sb.from("workspaces").select("id,name,type,cash_balance").then(({ data }) => {
       const list = (data as Workspace[]) || [];
       setWorkspaces(list);
       // Don't make the user pick when there's nothing to choose between (or
@@ -67,30 +67,39 @@ export function WorkspaceSwitcher({
     }
   }
 
+  const currentWorkspace = workspaces.find((w) => w.id === current);
+
   return (
     <div className="relative inline-block">
-      <div className="relative inline-block">
-        <select
-          className="appearance-none bg-secondary hover:bg-secondary/80 border border-border hover:border-border/60 text-foreground rounded-xl px-4 py-2 pr-9 text-xs font-semibold tracking-wide focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200 cursor-pointer"
-          value={current ?? ""}
-          onChange={(e) => {
-            if (e.target.value === CREATE_VALUE) { setCreating(true); return; }
-            select(e.target.value);
-          }}
-        >
-          <option value="" disabled className="bg-card text-muted-foreground">Select workspace…</option>
-          {workspaces.map((w) => (
-            <option key={w.id} value={w.id} className="bg-card text-foreground">
-              {w.name} ({w.type === "personal" ? "Personal" : "Business"})
-            </option>
-          ))}
-          <option value={CREATE_VALUE} className="bg-card text-chart-2">+ Buat workspace baru</option>
-        </select>
-        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
-          <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
-          </svg>
+      <div className="flex items-center gap-2">
+        <div className="relative inline-block">
+          <select
+            className="appearance-none bg-secondary hover:bg-secondary/80 border border-border hover:border-border/60 text-foreground rounded-xl px-4 py-2 pr-9 text-xs font-semibold tracking-wide focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200 cursor-pointer"
+            value={current ?? ""}
+            onChange={(e) => {
+              if (e.target.value === CREATE_VALUE) { setCreating(true); return; }
+              select(e.target.value);
+            }}
+          >
+            <option value="" disabled className="bg-card text-muted-foreground">Select workspace…</option>
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id} className="bg-card text-foreground">
+                {w.name} ({w.type === "personal" ? "Personal" : "Business"})
+              </option>
+            ))}
+            <option value={CREATE_VALUE} className="bg-card text-chart-2">+ Buat workspace baru</option>
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground">
+            <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+            </svg>
+          </div>
         </div>
+        {currentWorkspace && (
+          <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+            Rp {currentWorkspace.cash_balance.toLocaleString("id-ID")}
+          </span>
+        )}
       </div>
 
       {creating && (
