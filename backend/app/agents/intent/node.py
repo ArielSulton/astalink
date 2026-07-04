@@ -32,10 +32,12 @@ Map the user message to one of:
 - explain: user wants an explanation of a concept/term
 - unknown: cannot determine
 
-Extract relevant entities (amount, tickers, sector, risk_profile, etc.) into
-the `entities` dict. Estimate `confidence` honestly: if the message is
-ambiguous, set confidence < 0.6 and provide a `clarification_question` in
-Indonesian.
+Extract relevant entities (amount, tickers, sector, risk_profile, business_name,
+etc.) into the `entities` dict. For evaluate_business, `business_name` should be
+the specific business name the user mentioned, if any (e.g. "Toko Maju Jaya") —
+omit the key entirely if the user didn't name a specific business. Estimate
+`confidence` honestly: if the message is ambiguous, set confidence < 0.6 and
+provide a `clarification_question` in Indonesian.
 """
 
 
