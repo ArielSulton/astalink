@@ -1,7 +1,8 @@
 """AstaLink LangGraph wiring.
 
 All nodes are real: intent, market, business, risk, optimizer, legal,
-hitl (real interrupt-based pause), and execution."""
+hitl (real interrupt-based pause), execution, and a direct Q&A path
+for pure informational (EXPLAIN) questions."""
 from __future__ import annotations
 
 import logging
@@ -10,7 +11,9 @@ from typing import Literal, Sequence
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.intent.node import intent_node
+from app.agents.intents import Intent
 from app.agents.legal.node import legal_node
+from app.agents.qa import qa_node
 from app.agents.rejection import rejection_handler
 from app.agents.state import AgentState, LegalStatus, UserApproval
 from app.agents.business.node import business_node
@@ -32,9 +35,14 @@ def _route_after_intent(
     """Skip the whole optimizer/legal pipeline when N1 couldn't confidently
     classify the message — there are no entities to build an allocation
     from, so proceeding always dead-ends in optimizer's no_tickers /
-    legal's empty_retrieval after burning a full revision loop."""
+    legal's empty_retrieval after burning a full revision loop.
+
+    EXPLAIN is a pure informational question: route it to the direct Q&A
+    node — there is nothing to optimize, legally validate, or approve."""
     if state.get("_needs_clarification"):
         return END
+    if state.get("intent") == Intent.EXPLAIN.value:
+        return "n8_qa"
     return ["n2a_market", "n2b_business", "n2c_risk"]
 
 
@@ -69,18 +77,21 @@ def build_graph():
     g.add_node("n3_legal", legal_node)
     g.add_node("n6_hitl", hitl_node)
     g.add_node("n7_execute", execution_node)
+    g.add_node("n8_qa", qa_node)
     g.add_node("rejection_handler", rejection_handler)
 
     # Linear entry
     g.add_edge(START, "n1_intent")
 
-    # Fan-out to analysis layer — unless N1 couldn't classify the message,
-    # in which case skip straight to END with the clarification question.
+    # Fan-out to analysis layer — unless N1 couldn't classify the message
+    # (END with clarification question) or the message is a pure question
+    # (answer directly via n8_qa).
     g.add_conditional_edges(
         "n1_intent",
         _route_after_intent,
-        ["n2a_market", "n2b_business", "n2c_risk", END],
+        ["n2a_market", "n2b_business", "n2c_risk", "n8_qa", END],
     )
+    g.add_edge("n8_qa", END)
 
     # Join: each analyst → optimizer (LangGraph implicitly waits for all preds)
     for analyst in ("n2a_market", "n2b_business", "n2c_risk"):

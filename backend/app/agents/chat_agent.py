@@ -8,6 +8,7 @@ pipeline's final AgentState into one conversational reply; it holds no graph
 of its own."""
 from __future__ import annotations
 
+from app.agents.intents import Intent
 from app.agents.state import AgentState, LegalStatus, UserApproval
 
 
@@ -21,16 +22,20 @@ def build_chat_reply(state: AgentState) -> str:
 
     Priority mirrors what the user needs to see first:
     1. N1 couldn't classify the message — relay its clarification question.
-    2. Legal rejected the plan — explain that (pipeline stops here).
-    3. Legal approved/partial but no human decision yet — point at Approvals.
-    4. Execution already ran — summarize the resulting transactions.
-    5. Fallback — relay whatever the last message says, or a generic apology.
+    2. EXPLAIN question — relay the Q&A node's direct answer as-is.
+    3. Legal rejected the plan — explain that (pipeline stops here).
+    4. Legal approved/partial but no human decision yet — point at Approvals.
+    5. Execution already ran — summarize the resulting transactions.
+    6. Fallback — relay whatever the last message says, or a generic apology.
     """
     messages = state.get("messages") or []
     legal_status = state.get("legal_status")
     audit_id = state.get("audit_id")
 
     if state.get("_needs_clarification") and messages:
+        return _last_text(messages)
+
+    if state.get("intent") == Intent.EXPLAIN.value and messages:
         return _last_text(messages)
 
     if legal_status in (LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS):
