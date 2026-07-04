@@ -70,9 +70,8 @@ def business_node(state: AgentState) -> AgentState:
                        {"node": "business", "reason": "no_financial_records"}],
         }
 
-    cashflows = [float(r["profit"]) for r in records]
-
     try:
+        cashflows = [float(r["profit"]) for r in records]
         ev = discounted_cash_flow(
             cashflows=cashflows,
             discount_rate=DEFAULT_DISCOUNT,
@@ -86,13 +85,21 @@ def business_node(state: AgentState) -> AgentState:
                        {"node": "business", "reason": str(exc)}],
         }
 
-    llm = get_chat_model()
-    narration = extract_text(llm.invoke([
-        SystemMessage(content=NARRATE_SYSTEM),
-        HumanMessage(content=f"Bisnis={business['name']}, EV={ev:,.0f}, "
-                             f"cashflows={cashflows}, r={DEFAULT_DISCOUNT}, "
-                             f"g={DEFAULT_TERMINAL}"),
-    ]).content)
+    try:
+        llm = get_chat_model()
+        narration = extract_text(llm.invoke([
+            SystemMessage(content=NARRATE_SYSTEM),
+            HumanMessage(content=f"Bisnis={business['name']}, EV={ev:,.0f}, "
+                                 f"cashflows={cashflows}, r={DEFAULT_DISCOUNT}, "
+                                 f"g={DEFAULT_TERMINAL}"),
+        ]).content)
+    except Exception as exc:
+        log.error("business_node: LLM narration failed: %s", exc)
+        return {
+            "entities": {**state.get("entities", {}), "business_valuation": None},
+            "errors": [*state.get("errors", []),
+                       {"node": "business", "reason": str(exc)}],
+        }
 
     val = BusinessValuation(
         business_name=business["name"],

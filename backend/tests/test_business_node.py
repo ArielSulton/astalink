@@ -120,3 +120,25 @@ def test_business_node_returns_none_when_no_workspace_id() -> None:
     state = new_state()  # no _workspace_id set
     update = business_node(state)
     assert update["entities"]["business_valuation"] is None
+
+
+def test_business_node_handles_llm_exception_gracefully() -> None:
+    """An LLM failure (timeout, quota, etc.) during narration must be caught
+    and returned as a structured error, not re-raised out of the node."""
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+
+    fake_admin = _mock_admin_client(
+        businesses=[{"id": "biz-1", "name": "Toko Maju Jaya"}],
+        records=[{"period_year": 2023, "profit": 100_000.0},
+                 {"period_year": 2024, "profit": 120_000.0}],
+    )
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = RuntimeError("LLM quota exceeded")
+
+    with patch("app.agents.business.node.get_admin_client", return_value=fake_admin), \
+         patch("app.agents.business.node.get_chat_model", return_value=fake_llm):
+        update = business_node(state)
+
+    assert update["entities"]["business_valuation"] is None
+    assert any("LLM quota exceeded" in e["reason"] for e in update["errors"])
