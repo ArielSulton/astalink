@@ -5,6 +5,8 @@ from app.agents.chat_agent import build_chat_reply
 from app.agents.graph import graph
 from app.agents.state import new_state
 from app.api.deps import get_current_user
+from app.core.ownership import assert_workspace_owned
+from app.core.supabase_admin import get_admin_client
 from app.models.chat import ChatRequest, ChatResponse
 
 router = APIRouter()
@@ -19,6 +21,8 @@ async def chat(
     user_sub = current_user["sub"]
     raw_thread = request.thread_id or str(uuid.uuid4())
     thread_id = f"{user_sub}:{raw_thread}"
+
+    assert_workspace_owned(get_admin_client(), request.workspace_id, user_sub)
 
     initial = new_state()
     initial["messages"] = [HumanMessage(content=request.message)]

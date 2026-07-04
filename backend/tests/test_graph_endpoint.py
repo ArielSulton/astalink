@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip("talib")
 
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -14,6 +14,10 @@ from app.agents.state import LegalStatus, UserApproval
 def test_agent_run_returns_final_state(client: TestClient) -> None:
     user = {"sub": str(uuid.uuid4()), "email": "u@test.com"}
     workspace_id = str(uuid.uuid4())
+
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = \
+        MagicMock(data=[{"id": workspace_id}])
 
     fake_final = {
         "audit_id": "abc",
@@ -30,6 +34,7 @@ def test_agent_run_returns_final_state(client: TestClient) -> None:
     }
 
     with patch("app.api.deps.verify_token", return_value=user), \
+         patch("app.api.v1.agent.get_admin_client", return_value=fake_admin), \
          patch("app.api.v1.agent.graph.invoke", return_value=fake_final):
         resp = client.post(
             "/api/v1/agent/run",

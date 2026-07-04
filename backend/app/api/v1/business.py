@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_current_user
+from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
 
 router = APIRouter()
@@ -43,22 +44,12 @@ class BusinessDetailOut(BusinessOut):
     financial_records: list[FinancialRecordOut]
 
 
-def _assert_workspace_owned(sb, workspace_id: str, user_id: str) -> None:
-    res = (
-        sb.table("workspaces").select("id")
-        .eq("id", workspace_id).eq("owner_user_id", user_id)
-        .limit(1).execute()
-    )
-    if not res.data:
-        raise HTTPException(status_code=403, detail="Workspace not found or not owned by you.")
-
-
 def _get_owned_business(sb, business_id: str, user_id: str) -> dict:
     res = sb.table("businesses").select("*").eq("id", business_id).limit(1).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Business not found.")
     business = res.data[0]
-    _assert_workspace_owned(sb, business["workspace_id"], user_id)
+    assert_workspace_owned(sb, business["workspace_id"], user_id)
     return business
 
 
@@ -68,7 +59,7 @@ async def create_business(
     user: dict = Depends(get_current_user),
 ) -> BusinessOut:
     sb = get_admin_client()
-    _assert_workspace_owned(sb, body.workspace_id, user["sub"])
+    assert_workspace_owned(sb, body.workspace_id, user["sub"])
     row = (
         sb.table("businesses")
         .insert({
@@ -90,7 +81,7 @@ async def list_businesses(
     user: dict = Depends(get_current_user),
 ) -> list[BusinessOut]:
     sb = get_admin_client()
-    _assert_workspace_owned(sb, workspace_id, user["sub"])
+    assert_workspace_owned(sb, workspace_id, user["sub"])
     res = (
         sb.table("businesses").select("id,name,industry,description,created_at")
         .eq("workspace_id", workspace_id)
