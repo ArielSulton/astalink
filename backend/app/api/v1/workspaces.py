@@ -16,6 +16,7 @@ class WorkspaceOut(BaseModel):
     id: str
     name: str
     type: str
+    cash_balance: float
 
 
 @router.post("", response_model=WorkspaceOut)
