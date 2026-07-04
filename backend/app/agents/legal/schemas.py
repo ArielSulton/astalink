@@ -32,12 +32,21 @@ class Citation(BaseModel):
 
     `chunk_id` ties the citation back to the retrieved chunk so the grader can
     verify it. `span` is the literal substring the LLM claims supports its
-    reasoning — the grader checks this is present in the chunk text."""
+    reasoning — the grader checks this is present in the chunk text.
+
+    `forbidden_tickers`/`partial_tickers` let a citation carry the specific
+    instruments a regulation bans or caps — app.agents.optimizer.constraints
+    aggregates these across all citations into solver constraints."""
     source: str
     pasal: str
     ayat: str | None = None
     chunk_id: str
     span: str
+    forbidden_tickers: list[str] = Field(default_factory=list)
+    partial_tickers: dict[str, float] = Field(
+        default_factory=dict,
+        description="ticker → max-allowed weight (e.g. 0.1 for partial-only).",
+    )
 
 
 class LegalDecision(BaseModel):
