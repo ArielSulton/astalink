@@ -12,6 +12,7 @@ from app.agents.execution.schemas import BrokerOrder, OrderSide
 from app.agents.state import AgentState, UserApproval
 from app.core.metrics import record_execution, track_node_duration
 from app.core.supabase_admin import get_admin_client
+from app.core.wallet import debit_workspace_balance
 from app.integrations.broker import BrokerAdapter, SandboxBroker
 
 log = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ def execution_node(state: AgentState) -> AgentState:
     weights = plan.get("weights") or []
     cash = float(plan.get("cash") or 0)
     audit_id = state["audit_id"]
+    workspace_id = state.get("_workspace_id")
 
     if not weights or cash <= 0:
         return {"transactions": []}
@@ -63,6 +65,7 @@ def execution_node(state: AgentState) -> AgentState:
     existing = _existing_fills(audit_id)
     broker = get_broker()
     transactions: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = list(state.get("errors", []))
 
     for leg in weights:
         ticker = leg["ticker"]
@@ -84,6 +87,20 @@ def execution_node(state: AgentState) -> AgentState:
         qty = (cash * weight) / last_close
         if qty <= 0:
             continue
+
+        if workspace_id:
+            cost = qty * last_close
+            if debit_workspace_balance(get_admin_client(), workspace_id, cost) is None:
+                log.warning(
+                    "execution: insufficient sandbox balance for %s (cost=%.2f)",
+                    ticker, cost,
+                )
+                transactions.append({
+                    "ticker": ticker, "side": side.value, "quantity": qty,
+                    "status": "rejected_insufficient_balance", "broker_ref": None,
+                })
+                errors.append({"node": "execution", "reason": "insufficient_balance", "ticker": ticker})
+                continue
 
         try:
             order: BrokerOrder = broker.place_order(
@@ -125,4 +142,4 @@ def execution_node(state: AgentState) -> AgentState:
         })
         record_execution(order.status)
 
-    return {"transactions": transactions}
+    return {"transactions": transactions, "errors": errors}
