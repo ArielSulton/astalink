@@ -19,6 +19,7 @@ except ImportError:
     ConnectionPool = None  # type: ignore[assignment,misc]
 
 from app.core.config import settings
+from app.core.metrics import record_checkpointer_degraded
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +62,14 @@ def get_checkpointer():
             saver.setup()
             _saver = saver
         except Exception as exc:
-            log.warning("checkpointer: PostgresSaver init failed (%s); falling back to MemorySaver", exc)
+            # SUPABASE_DB_URL was explicitly configured — a durable Postgres
+            # checkpointer was expected here. Falling back silently would let
+            # HITL state loss on restart go unnoticed in production.
+            log.error(
+                "checkpointer: PostgresSaver init failed (%s); falling back to "
+                "MemorySaver — HITL state will NOT survive a restart", exc,
+            )
+            record_checkpointer_degraded()
             _saver = MemorySaver()
     else:
         log.warning(
