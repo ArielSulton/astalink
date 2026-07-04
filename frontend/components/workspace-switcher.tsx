@@ -7,7 +7,7 @@ import { api } from "@/lib/api-client";
 interface Workspace { id: string; name: string; type: "personal" | "business"; }
 
 const CREATE_VALUE = "__create__";
-const LAST_WORKSPACE_KEY = "astalink_last_workspace_id";
+export const LAST_WORKSPACE_KEY = "astalink_last_workspace_id";
 
 export function WorkspaceSwitcher({
   current,

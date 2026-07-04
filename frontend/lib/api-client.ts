@@ -121,6 +121,28 @@ export interface Workspace {
   type: "personal" | "business";
 }
 
+export const LAST_BUSINESS_KEY = "astalink_last_business_id";
+
+export interface Business {
+  id: string;
+  name: string;
+  industry: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+export interface FinancialRecord {
+  id: string;
+  period_year: number;
+  aset: number;
+  omset: number;
+  profit: number;
+}
+
+export interface BusinessDetail extends Business {
+  financial_records: FinancialRecord[];
+}
+
 export interface RegulationDoc {
   id: string;
   source: string;
@@ -202,6 +224,35 @@ export const api = {
   ): Promise<Workspace> =>
     jsonFetch<Workspace>(
       "/api/v1/workspaces",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
+
+  listBusinesses: (workspaceId: string, token: string): Promise<Business[]> =>
+    jsonFetch<Business[]>(
+      `/api/v1/business?workspace_id=${workspaceId}`, { method: "GET" }, token,
+    ),
+
+  createBusiness: (
+    body: { name: string; workspace_id: string; industry?: string; description?: string },
+    token: string,
+  ): Promise<Business> =>
+    jsonFetch<Business>(
+      "/api/v1/business",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
+
+  getBusiness: (businessId: string, token: string): Promise<BusinessDetail> =>
+    jsonFetch<BusinessDetail>(`/api/v1/business/${businessId}`, { method: "GET" }, token),
+
+  addFinancialRecord: (
+    businessId: string,
+    body: { period_year: number; aset: number; omset: number; profit: number },
+    token: string,
+  ): Promise<FinancialRecord> =>
+    jsonFetch<FinancialRecord>(
+      `/api/v1/business/${businessId}/financials`,
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),
