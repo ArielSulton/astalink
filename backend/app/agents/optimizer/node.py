@@ -22,6 +22,8 @@ from app.agents.optimizer.schemas import (
 from app.agents.state import AgentState
 from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import record_revision_count, track_node_duration
+from app.core.supabase_admin import get_admin_client
+from app.core.wallet import get_workspace_balance
 
 log = logging.getLogger(__name__)
 
@@ -65,11 +67,25 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
     citations = state.get("legal_citations") or []
     max_per_asset, min_cash_buffer = _constraints_from_risk_profile(ents.get("risk_profile"))
 
+    # Cap the requested amount at the workspace's real sandbox balance
+    # (Task 4) — entities.amount alone is just a number the LLM parsed out
+    # of the chat message, never checked against anything. Default to the
+    # full balance when no amount was stated at all.
+    requested = ents.get("amount") or 0
+    workspace_id = state.get("_workspace_id")
+    balance = get_workspace_balance(get_admin_client(), workspace_id) if workspace_id else None
+    if balance is None:
+        cash = requested
+    elif requested:
+        cash = min(requested, balance)
+    else:
+        cash = balance
+
     return OptimizerInputs(
         tickers=tickers,
         expected_returns=er,
         cov=cov,
-        cash=ents.get("amount", 0),
+        cash=cash,
         forbidden_tickers=forbidden_from_citations(citations),
         partial_tickers=partial_tickers_from_citations(citations),
         sector_caps=sector_caps_from_citations(citations),
