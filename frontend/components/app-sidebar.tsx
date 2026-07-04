@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import {
   Bot,
   Briefcase,
+  Building2,
+  ChevronRight,
   ClipboardCheck,
   History,
   LayoutDashboard,
@@ -13,6 +15,7 @@ import {
   Receipt,
   Scale,
   Settings,
+  type LucideIcon,
 } from "lucide-react";
 
 import { NavUser } from "@/components/nav-user";
@@ -26,10 +29,21 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-const NAV_SECTIONS = [
+type NavLeaf = { href: string; label: string; icon: LucideIcon };
+type NavGroup = { label: string; icon: LucideIcon; children: { href: string; label: string }[] };
+type NavItem = NavLeaf | NavGroup;
+
+function isNavGroup(item: NavItem): item is NavGroup {
+  return "children" in item;
+}
+
+const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
   {
     label: "Portfolio",
     items: [
@@ -37,6 +51,19 @@ const NAV_SECTIONS = [
       { href: "/chatbot", label: "AI Chatbot", icon: Bot },
       { href: "/assets", label: "Asset View", icon: Briefcase },
       { href: "/transactions", label: "Transactions", icon: Receipt },
+    ],
+  },
+  {
+    label: "Business",
+    items: [
+      {
+        label: "Bisnis Saya",
+        icon: Building2,
+        children: [
+          { href: "/business", label: "List Bisnis" },
+          { href: "/business/detail", label: "Detail Bisnis" },
+        ],
+      },
     ],
   },
   {
@@ -56,6 +83,12 @@ const NAV_SECTIONS = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
+
+  function isGroupOpen(group: NavGroup): boolean {
+    if (group.label in openGroups) return openGroups[group.label];
+    return group.children.some((c) => pathname.startsWith(c.href));
+  }
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -82,18 +115,51 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroup key={label}>
             <SidebarGroupLabel>{label}</SidebarGroupLabel>
             <SidebarMenu>
-              {items.map(({ href, label: itemLabel, icon: Icon }) => (
-                <SidebarMenuItem key={href}>
-                  <SidebarMenuButton
-                    tooltip={itemLabel}
-                    isActive={pathname.startsWith(href)}
-                    render={<Link href={href} />}
-                  >
-                    <Icon />
-                    <span>{itemLabel}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {items.map((item) =>
+                isNavGroup(item) ? (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      tooltip={item.label}
+                      onClick={() =>
+                        setOpenGroups((prev) => ({ ...prev, [item.label]: !isGroupOpen(item) }))
+                      }
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                      <ChevronRight
+                        className={`ml-auto size-4 shrink-0 transition-transform ${
+                          isGroupOpen(item) ? "rotate-90" : ""
+                        }`}
+                      />
+                    </SidebarMenuButton>
+                    {isGroupOpen(item) && (
+                      <SidebarMenuSub>
+                        {item.children.map((child) => (
+                          <SidebarMenuSubItem key={child.href}>
+                            <SidebarMenuSubButton
+                              isActive={pathname.startsWith(child.href)}
+                              render={<Link href={child.href} />}
+                            >
+                              <span>{child.label}</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    )}
+                  </SidebarMenuItem>
+                ) : (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      tooltip={item.label}
+                      isActive={pathname.startsWith(item.href)}
+                      render={<Link href={item.href} />}
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              )}
             </SidebarMenu>
           </SidebarGroup>
         ))}
