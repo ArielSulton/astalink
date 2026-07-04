@@ -23,10 +23,10 @@ export default function BusinessListPage() {
     if (!workspaceId) return;
     setLoading(true);
     (async () => {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
       try {
+        const sb = createClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return;
         setBusinesses(await api.listBusinesses(workspaceId, session.access_token));
       } catch {
         toast.error("Gagal memuat daftar bisnis.");

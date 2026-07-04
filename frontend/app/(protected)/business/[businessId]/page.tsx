@@ -22,10 +22,10 @@ export default function BusinessDetailPage() {
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    const sb = createClient();
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) return;
     try {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
       setBusiness(await api.getBusiness(businessId, session.access_token));
       localStorage.setItem(LAST_BUSINESS_KEY, businessId);
     } catch {

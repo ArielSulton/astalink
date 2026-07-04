@@ -134,16 +134,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </SidebarMenuButton>
                     {isGroupOpen(item) && (
                       <SidebarMenuSub>
-                        {item.children.map((child) => (
+                        {item.children.map((child) => {
+                          // For "/business": active when on the list page itself OR any
+                          // /business/{uuid} sub-route — but NOT /business/detail (that
+                          // belongs to the "Detail Bisnis" item).
+                          // For all other sub-items: exact match or strict prefix (child.href + "/").
+                          const isActive = child.href === "/business"
+                            ? pathname === "/business" || (pathname.startsWith("/business/") && !pathname.startsWith("/business/detail"))
+                            : pathname === child.href || pathname.startsWith(child.href + "/");
+                          return (
                           <SidebarMenuSubItem key={child.href}>
                             <SidebarMenuSubButton
-                              isActive={pathname.startsWith(child.href)}
+                              isActive={isActive}
                               render={<Link href={child.href} />}
                             >
                               <span>{child.label}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
-                        ))}
+                          );
+                        })}
                       </SidebarMenuSub>
                     )}
                   </SidebarMenuItem>
