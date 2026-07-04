@@ -27,7 +27,11 @@ def compute_indicators(close: np.ndarray) -> dict[str, np.ndarray]:
     avg_gain = gain.ewm(alpha=1 / 14, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / 14, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi14 = (100 - (100 / (1 + rs))).where(s.notna() & (s.index >= 14))
+    rsi14 = 100 - (100 / (1 + rs))
+    # avg_loss == 0 means no losses in the lookback (e.g. a straight uptrend);
+    # RSI is defined as 100 there, not NaN from the divide-by-zero guard above.
+    rsi14 = rsi14.where(avg_loss != 0, other=100.0)
+    rsi14 = rsi14.where(s.notna() & (s.index >= 14))
 
     # MACD (12, 26, 9)
     ema12 = s.ewm(span=12, min_periods=12, adjust=False).mean()

@@ -97,8 +97,8 @@ def _process_message(msg: dict[str, Any]) -> None:
     initial = new_state()
     initial["messages"] = [HumanMessage(content=text)]
     initial["entities"] = {"workspace_id": binding["workspace_id"]}
-    initial["_user_id"] = binding["user_id"]                # type: ignore[misc]
-    initial["_workspace_id"] = binding["workspace_id"]      # type: ignore[misc]
+    initial["_user_id"] = binding["user_id"]
+    initial["_workspace_id"] = binding["workspace_id"]
 
     thread_id = f"wa-{phone}-{binding['workspace_id']}"
     final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})

@@ -1,16 +1,20 @@
-"""Lazy singleton Gemini chat and embedding clients.
+"""Lazy singleton Gemini chat client.
 
 Construction is deferred to first use so the backend can boot even when
 GOOGLE_API_KEY is unset (e.g. during partial-config dev work). Failures
-surface only when a caller actually invokes the model."""
+surface only when a caller actually invokes the model.
+
+Embeddings are handled by Pinecone's integrated inference (index-side
+multilingual-e5-large) — see app.core.pinecone — not by Gemini."""
 from __future__ import annotations
 
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from typing import Any
+
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.core.config import settings
 
 _chat_model: ChatGoogleGenerativeAI | None = None
-_embedding_model: GoogleGenerativeAIEmbeddings | None = None
 
 
 def get_chat_model() -> ChatGoogleGenerativeAI:
@@ -24,12 +28,20 @@ def get_chat_model() -> ChatGoogleGenerativeAI:
     return _chat_model
 
 
-def get_embedding_model() -> GoogleGenerativeAIEmbeddings:
-    global _embedding_model
-    if _embedding_model is None:
-        # langchain-google-genai expects "models/<id>" prefix for embedding models
-        _embedding_model = GoogleGenerativeAIEmbeddings(
-            model=f"models/{settings.GEMINI_EMBEDDING_MODEL}",
-            google_api_key=settings.GOOGLE_API_KEY,
+def extract_text(content: Any) -> str:
+    """Normalize an AIMessage.content payload to plain text.
+
+    Newer Gemini models (anything past gemini-1.5-flash) return content as a
+    list of content blocks (``[{"type": "text", "text": "..."}]``) instead of
+    a bare string; older ones return a plain string. Every narration/JSON
+    call site expects a string, so normalize here once instead of each
+    caller guessing at the shape."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
         )
-    return _embedding_model
+    return str(content) if content else ""

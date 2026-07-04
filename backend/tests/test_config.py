@@ -17,7 +17,11 @@ def _set_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def _reload_settings():
     from app.core import config
     importlib.reload(config)
-    return config.settings
+    # Settings(env_file=".env") also reads the real .env file on disk, which
+    # in this dev container is fully populated — bypassing it here so fields
+    # this test doesn't monkeypatch fall through to the code's own default
+    # instead of silently picking up the real dev value.
+    return config.Settings(_env_file=None)
 
 
 def test_settings_has_supabase_service_role_key() -> None:
@@ -33,7 +37,6 @@ def test_settings_has_google_api_key() -> None:
 def test_settings_has_gemini_model_defaults() -> None:
     s = _reload_settings()
     assert s.GEMINI_CHAT_MODEL == "gemini-1.5-flash"
-    assert s.GEMINI_EMBEDDING_MODEL == "text-embedding-004"
 
 
 def test_settings_has_pinecone_config() -> None:

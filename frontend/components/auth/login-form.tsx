@@ -86,7 +86,7 @@ export function LoginForm() {
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button
           type="submit"
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-[0_0_16px_rgba(37,99,235,0.35)] transition-all duration-200 rounded-xl font-semibold py-5"
+          className="w-full"
           disabled={loading}
         >
           {loading ? "Signing in..." : "Sign In"}

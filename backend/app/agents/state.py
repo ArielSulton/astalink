@@ -44,6 +44,12 @@ class AgentState(TypedDict, total=False):
     # Trace
     audit_id: str
 
+    # Set by the API entry point (agent.py / whatsapp.py) before the first
+    # invoke — must be declared here or LangGraph silently drops them, since
+    # StateGraph(AgentState) only tracks channels present in this schema.
+    _user_id: str | None
+    _workspace_id: str | None
+
     # Conversation
     messages: list[BaseMessage]
 
@@ -52,6 +58,12 @@ class AgentState(TypedDict, total=False):
     # Annotated with dict-union reducer so parallel analysis nodes (n2a/n2b/n2c)
     # can each write their sub-key in the same superstep without conflict.
     entities: Annotated[dict[str, Any], operator.or_]
+    # True when N1 couldn't confidently classify the message (unknown intent
+    # or confidence < CONFIDENCE_FLOOR) — routes straight to END instead of
+    # burning a full optimizer/legal cycle on entities that were never
+    # extracted. Always set explicitly by intent_node (never left absent) so
+    # a stale True can't leak in from an earlier turn on the same thread.
+    _needs_clarification: bool
 
     # N2/N5 — Allocation
     allocation_plan: dict[str, Any] | None

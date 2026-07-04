@@ -8,6 +8,10 @@ from pinecone import Pinecone
 
 from app.core.config import settings
 
+# The index uses integrated embedding (records API), which since API version
+# 2025-04 rejects an empty-string namespace and requires this sentinel.
+DEFAULT_NAMESPACE = "__default__"
+
 _client: Pinecone | None = None
 _index = None  # pinecone.Index — type omitted because the SDK doesn't export it cleanly
 

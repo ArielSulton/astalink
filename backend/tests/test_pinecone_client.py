@@ -16,6 +16,11 @@ def _reload_config_with_test_env(monkeypatch: pytest.MonkeyPatch):
 
     from app.core import config as config_module
     importlib.reload(config_module)
+    # Settings(env_file=".env") also reads the real .env file on disk, which
+    # in this dev container is fully populated — bypassing it here so fields
+    # this test doesn't monkeypatch fall through to the code's own default
+    # instead of silently picking up the real dev value.
+    config_module.settings = config_module.Settings(_env_file=None)
     from app.core import pinecone as pinecone_module
     importlib.reload(pinecone_module)
     yield

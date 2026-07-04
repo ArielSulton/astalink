@@ -21,11 +21,10 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: str
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
-    # Google Gemini — optional so the app boots without keys; the lazy chat /
-    # embedding clients raise only when actually invoked.
+    # Google Gemini — optional so the app boots without a key; the lazy chat
+    # client raises only when actually invoked.
     GOOGLE_API_KEY: str = ""
     GEMINI_CHAT_MODEL: str = "gemini-1.5-flash"
-    GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
 
     # Pinecone — same lazy-boot philosophy.
     PINECONE_API_KEY: str = ""

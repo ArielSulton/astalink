@@ -12,8 +12,7 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi
 
 from app.agents.legal.schemas import Chunk
-from app.core.gemini import get_embedding_model
-from app.core.pinecone import get_index
+from app.core.pinecone import DEFAULT_NAMESPACE, get_index
 
 
 def _tokenize(text: str) -> list[str]:
@@ -56,29 +55,31 @@ class BM25Retriever:
 
 
 class DenseRetriever:
-    """Pinecone-backed dense retrieval. The chunk text is stored in metadata
-    at ingest time so we can rebuild Chunks from query results without a
-    second round-trip to Postgres."""
+    """Pinecone-backed dense retrieval via Pinecone's hosted integrated
+    embedding model (multilingual-e5-large, configured on the index itself).
+    Pinecone embeds the query text server-side, so no separate embedding
+    call is needed here."""
 
     def retrieve(self, query: str, k: int = 10) -> list[Chunk]:
-        embed = get_embedding_model()
-        vec = embed.embed_query(query)
         index = get_index()
-        result = index.query(vector=vec, top_k=k, include_metadata=True)
+        result = index.search(
+            namespace=DEFAULT_NAMESPACE,
+            query={"top_k": k, "inputs": {"text": query}},
+        )
 
         out: list[Chunk] = []
-        for match in result.get("matches", []):
-            md = match.get("metadata", {})
+        for hit in result.result.hits:
+            fields = hit.fields
             out.append(
                 Chunk(
-                    text=md.get("text", ""),
-                    source=md.get("source", "unknown"),
-                    pasal=md.get("pasal"),
-                    ayat=md.get("ayat"),
-                    page=md.get("page"),
-                    doc_hash=md.get("doc_hash", ""),
-                    chunk_id=match["id"],
-                    score=float(match.get("score", 0.0)),
+                    text=fields.get("text", ""),
+                    source=fields.get("source", "unknown"),
+                    pasal=fields.get("pasal"),
+                    ayat=fields.get("ayat"),
+                    page=fields.get("page"),
+                    doc_hash=fields.get("doc_hash", ""),
+                    chunk_id=hit._id,
+                    score=float(hit._score),
                 )
             )
         return out

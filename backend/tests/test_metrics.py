@@ -45,3 +45,17 @@ def test_record_legal_status_increments_counter() -> None:
                for s in m.samples if s.name == "astalink_legal_status_total"}
     assert samples.get(("approved",), 0) >= 2
     assert samples.get(("rejected",), 0) >= 1
+
+
+def test_record_checkpointer_degraded_increments_counter() -> None:
+    from app.core.metrics import record_checkpointer_degraded
+    from prometheus_client import REGISTRY
+
+    before = next((s.value for m in REGISTRY.collect() for s in m.samples
+                   if s.name == "astalink_checkpointer_degraded_total"), 0.0)
+
+    record_checkpointer_degraded()
+
+    after = next((s.value for m in REGISTRY.collect() for s in m.samples
+                  if s.name == "astalink_checkpointer_degraded_total"), 0.0)
+    assert after == before + 1

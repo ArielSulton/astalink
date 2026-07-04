@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from app.agents.execution.node import execution_node
-from app.agents.state import new_state
+from app.agents.state import UserApproval, new_state
 
 
 def test_re_running_execution_does_not_place_duplicate_orders() -> None:
@@ -14,6 +14,7 @@ def test_re_running_execution_does_not_place_duplicate_orders() -> None:
     state["entities"] = {"market_snapshot": {"tickers": [
         {"ticker": "BBCA", "last_close": 8000},
     ]}}
+    state["user_approval"] = UserApproval.APPROVED
 
     fake_broker = MagicMock()
     fake_admin = MagicMock()

@@ -46,6 +46,12 @@ EXECUTIONS = Counter(
     labelnames=["status"],
 )
 
+CHECKPOINTER_DEGRADED = Counter(
+    "astalink_checkpointer_degraded_total",
+    "Times the Postgres checkpointer failed to initialize despite "
+    "SUPABASE_DB_URL being configured and fell back to MemorySaver",
+)
+
 
 def track_node_duration(node_name: str):
     def decorator(fn):
@@ -74,3 +80,7 @@ def record_execution(status: str) -> None:
 
 def record_node_error(node_name: str) -> None:
     NODE_ERRORS.labels(node=node_name).inc()
+
+
+def record_checkpointer_degraded() -> None:
+    CHECKPOINTER_DEGRADED.inc()

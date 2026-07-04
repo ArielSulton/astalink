@@ -21,7 +21,7 @@ from app.agents.legal.retriever import (
 )
 from app.agents.legal.schemas import Chunk, LegalDecision, LegalStatus
 from app.agents.state import AgentState
-from app.core.gemini import get_chat_model
+from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import record_legal_status, track_node_duration
 from app.core.supabase_admin import get_admin_client
 
@@ -37,12 +37,21 @@ the allocation is approved, partial (some legs blocked), or rejected.
 You MUST cite specific chunks by chunk_id, pasal, and ayat. Never invent pasal
 references. If the retrieved chunks do not support a claim, do not make it.
 
+If a citation's regulation explicitly bans specific tickers from the proposed
+allocation, list them in that citation's "forbidden_tickers". If a citation
+caps (rather than bans) a specific ticker's weight, list it in
+"partial_tickers" as {"TICKER": max_weight_as_fraction}. Only include tickers
+that are IN THE PROPOSED ALLOCATION — never invent tickers not mentioned in
+the input. Leave both empty ([] / {}) when a citation doesn't concern a
+specific ticker.
+
 Return STRICT JSON matching this schema:
 {
   "status": "approved" | "partial" | "rejected",
   "reasoning": "...",
   "citations": [
-    {"source": "...", "pasal": "...", "ayat": "..." | null, "chunk_id": "...", "span": "..."}
+    {"source": "...", "pasal": "...", "ayat": "..." | null, "chunk_id": "...", "span": "...",
+     "forbidden_tickers": ["..."], "partial_tickers": {"TICKER": 0.1}}
   ],
   "alternative_actions": ["...", ...]   // ALWAYS include alternatives if status != approved
 }
@@ -86,10 +95,11 @@ def _generate_decision(plan: dict[str, Any], chunks: list[Chunk]) -> LegalDecisi
         f"Decide and return JSON only."
     )
     resp = llm.invoke([SystemMessage(content=LEGAL_SYSTEM), HumanMessage(content=user)])
+    text = extract_text(resp.content)
     try:
-        data = json.loads(resp.content)
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Legal LLM returned non-JSON: {resp.content!r}") from exc
+        raise ValueError(f"Legal LLM returned non-JSON: {text!r}") from exc
     return LegalDecision.model_validate(data)
 
 

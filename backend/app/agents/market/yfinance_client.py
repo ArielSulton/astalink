@@ -35,6 +35,16 @@ class _SeriesCacheEntry:
 _series_cache: dict[str, _SeriesCacheEntry] = {}
 
 
+def _normalize_idx_ticker(ticker: str) -> str:
+    """IDX-listed tickers need a .JK suffix on Yahoo Finance. A bare code
+    like "BBCA" doesn't 404 — it silently resolves to an unrelated foreign
+    symbol on a different exchange, which is worse than a crash (wrong price
+    data, no error). AstaLink is IDX-only (OJK/UUPM compliance scope), so any
+    ticker without an exchange suffix is assumed to be one; codes that
+    already carry a suffix (e.g. "BBCA.JK") are left untouched."""
+    return ticker if "." in ticker else f"{ticker}.JK"
+
+
 def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
     """Return `window` trading days of OHLCV + precomputed indicators.
 
@@ -42,6 +52,7 @@ def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
     Returns a dict with keys: series, last_close, prev_close, rsi14, sma20, macd,
     bb_upper, bb_lower.  Any uncomputable value is None.
     """
+    ticker = _normalize_idx_ticker(ticker)
     cache_key = f"series:{ticker}"
     now = time.time()
     if (entry := _series_cache.get(cache_key)) and now - entry.fetched_at < _CACHE_TTL:
@@ -105,6 +116,7 @@ def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
 
 
 def fetch_close_prices(ticker: str, period: str = "1y") -> np.ndarray:
+    ticker = _normalize_idx_ticker(ticker)
     now = time.time()
     if (entry := _cache.get(ticker)) and now - entry.fetched_at < _CACHE_TTL:
         return entry.closes

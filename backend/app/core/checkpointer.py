@@ -13,30 +13,63 @@ from langgraph.checkpoint.memory import MemorySaver
 
 try:
     from langgraph.checkpoint.postgres import PostgresSaver
+    from psycopg_pool import ConnectionPool
 except ImportError:
     PostgresSaver = None  # type: ignore[assignment,misc]
+    ConnectionPool = None  # type: ignore[assignment,misc]
 
 from app.core.config import settings
+from app.core.metrics import record_checkpointer_degraded
 
 log = logging.getLogger(__name__)
 
 _saver: Any = None
+_pool: Any = None
+
+# SUPABASE_DB_URL points at Supabase's Supavisor pooler in transaction mode
+# (port 6543), which recycles/closes idle connections aggressively — a single
+# long-lived psycopg.Connection eventually dies with "the connection is
+# closed". A ConnectionPool borrows a fresh connection per checkpoint
+# operation instead, so PostgresSaver never holds one long enough to see it
+# get dropped. prepare_threshold=None disables server-side prepared
+# statements entirely — transaction-mode pooling reassigns the physical
+# backend connection between statements, so a prepared statement from one
+# "connection" can collide with one already on the backend it's handed next
+# (psycopg's own docs: 0 means "prepare immediately", None means "never").
+_CONNECTION_KWARGS = {"autocommit": True, "prepare_threshold": None}
 
 
 def get_checkpointer():
-    global _saver
+    global _saver, _pool
     if _saver is not None:
         return _saver
 
     if settings.SUPABASE_DB_URL and PostgresSaver is not None:
-        log.info("checkpointer: using PostgresSaver against Supabase")
+        log.info("checkpointer: using PostgresSaver (pooled) against Supabase")
         try:
-            # from_conn_string returns a context manager in langgraph-checkpoint-postgres >= 2.x
-            # Enter it to get the actual saver; the connection lives for the app lifetime.
-            cm = PostgresSaver.from_conn_string(settings.SUPABASE_DB_URL)
-            _saver = cm.__enter__()
+            _pool = ConnectionPool(
+                conninfo=settings.SUPABASE_DB_URL,
+                kwargs=_CONNECTION_KWARGS,
+                min_size=1,
+                max_size=5,
+                open=True,
+            )
+            saver = PostgresSaver(_pool)
+            # Idempotent, version-tracked schema migrations (checkpoint_migrations
+            # table) — required because the hand-written migration
+            # (0008_langgraph_checkpoints.sql) mirrors an older library schema
+            # and drifts as langgraph-checkpoint-postgres adds columns/indexes.
+            saver.setup()
+            _saver = saver
         except Exception as exc:
-            log.warning("checkpointer: PostgresSaver init failed (%s); falling back to MemorySaver", exc)
+            # SUPABASE_DB_URL was explicitly configured — a durable Postgres
+            # checkpointer was expected here. Falling back silently would let
+            # HITL state loss on restart go unnoticed in production.
+            log.error(
+                "checkpointer: PostgresSaver init failed (%s); falling back to "
+                "MemorySaver — HITL state will NOT survive a restart", exc,
+            )
+            record_checkpointer_degraded()
             _saver = MemorySaver()
     else:
         log.warning(

@@ -1,23 +1,57 @@
 "use client";
+
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bot,
   Briefcase,
+  Building2,
+  ChevronRight,
   ClipboardCheck,
+  History,
   LayoutDashboard,
   Newspaper,
+  Receipt,
   Scale,
   Settings,
+  type LucideIcon,
 } from "lucide-react";
 
-const NAV_SECTIONS = [
+import { NavUser } from "@/components/nav-user";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarRail,
+} from "@/components/ui/sidebar";
+
+type NavLeaf = { href: string; label: string; icon: LucideIcon };
+type NavGroup = { label: string; icon: LucideIcon; children: { href: string; label: string }[] };
+type NavItem = NavLeaf | NavGroup;
+
+function isNavGroup(item: NavItem): item is NavGroup {
+  return "children" in item;
+}
+
+const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
   {
     label: "Portfolio",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/chatbot", label: "AI Chatbot", icon: Bot },
       { href: "/assets", label: "Asset View", icon: Briefcase },
+      { href: "/transactions", label: "Transactions", icon: Receipt },
     ],
   },
   {
@@ -25,87 +59,127 @@ const NAV_SECTIONS = [
     items: [
       { href: "/legal-docs", label: "Legal Docs", icon: Scale },
       { href: "/approvals", label: "Approvals", icon: ClipboardCheck },
+      { href: "/audit", label: "Audit Trail", icon: History },
       { href: "/news", label: "Market News", icon: Newspaper },
     ],
   },
+  {
+    label: "Business",
+    items: [
+      {
+        label: "Bisnis Saya",
+        icon: Building2,
+        children: [
+          { href: "/business", label: "List Bisnis" },
+          { href: "/business/detail", label: "Detail Bisnis" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "System",
+    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+  },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
+
+  function isGroupOpen(group: NavGroup): boolean {
+    if (group.label in openGroups) return openGroups[group.label];
+    return group.children.some((c) => pathname.startsWith(c.href));
+  }
 
   return (
-    <aside className="w-56 shrink-0 bg-sidebar min-h-screen border-r border-sidebar-border flex flex-col z-20">
-      {/* Brand */}
-      <div className="px-5 py-5 border-b border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
-            <span className="text-primary text-[10px] font-black font-mono">A</span>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-foreground font-bold text-sm tracking-tight">Astalink</span>
-            <span className="text-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
-          </div>
-        </div>
-      </div>
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-chart-2/15 border border-chart-2/30">
+                <span className="text-chart-2 text-[10px] font-black font-mono">A</span>
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-bold tracking-tight">Astalink</span>
+                <span className="truncate text-[10px] text-chart-2 font-mono font-black uppercase tracking-widest">
+                  AI
+                </span>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <WorkspaceSwitcher />
+      </SidebarHeader>
 
-      {/* Nav sections */}
-      <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+      <SidebarContent>
         {NAV_SECTIONS.map(({ label, items }) => (
-          <div key={label}>
-            <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-muted-foreground/60 font-mono">
-              {label}
-            </p>
-            <div className="space-y-0.5">
-              {items.map(({ href, label: itemLabel, icon: Icon }) => {
-                const active = pathname.startsWith(href);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 relative ${
-                      active
-                        ? "bg-primary/[0.12] text-foreground"
-                        : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                    }`}
-                  >
-                    {active && (
-                      <span className="absolute left-0 top-[20%] h-[60%] w-[2px] rounded-r-full bg-primary shadow-[0_0_8px_rgba(37,99,235,0.6)]" />
+          <SidebarGroup key={label}>
+            <SidebarGroupLabel>{label}</SidebarGroupLabel>
+            <SidebarMenu>
+              {items.map((item) =>
+                isNavGroup(item) ? (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      tooltip={item.label}
+                      onClick={() =>
+                        setOpenGroups((prev) => ({ ...prev, [item.label]: !isGroupOpen(item) }))
+                      }
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                      <ChevronRight
+                        className={`ml-auto size-4 shrink-0 transition-transform ${
+                          isGroupOpen(item) ? "rotate-90" : ""
+                        }`}
+                      />
+                    </SidebarMenuButton>
+                    {isGroupOpen(item) && (
+                      <SidebarMenuSub>
+                        {item.children.map((child) => {
+                          // For "/business": active when on the list page itself OR any
+                          // /business/{uuid} sub-route — but NOT /business/detail (that
+                          // belongs to the "Detail Bisnis" item).
+                          // For all other sub-items: exact match or strict prefix (child.href + "/").
+                          const isActive = child.href === "/business"
+                            ? pathname === "/business" || (pathname.startsWith("/business/") && !pathname.startsWith("/business/detail"))
+                            : pathname === child.href || pathname.startsWith(child.href + "/");
+                          return (
+                          <SidebarMenuSubItem key={child.href}>
+                            <SidebarMenuSubButton
+                              isActive={isActive}
+                              render={<Link href={child.href} />}
+                            >
+                              <span>{child.label}</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
                     )}
-                    <Icon
-                      className={`h-4 w-4 shrink-0 transition-colors duration-150 ${
-                        active ? "text-primary" : "text-muted-foreground/70"
-                      }`}
-                    />
-                    {itemLabel}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
+                  </SidebarMenuItem>
+                ) : (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      tooltip={item.label}
+                      isActive={pathname.startsWith(item.href)}
+                      render={<Link href={item.href} />}
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              )}
+            </SidebarMenu>
+          </SidebarGroup>
         ))}
-      </nav>
+      </SidebarContent>
 
-      {/* Bottom: Settings */}
-      <div className="px-3 py-3 border-t border-sidebar-border">
-        <Link
-          href="/settings"
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 relative ${
-            pathname.startsWith("/settings")
-              ? "bg-primary/[0.12] text-foreground"
-              : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-          }`}
-        >
-          {pathname.startsWith("/settings") && (
-            <span className="absolute left-0 top-[20%] h-[60%] w-[2px] rounded-r-full bg-primary shadow-[0_0_8px_rgba(37,99,235,0.6)]" />
-          )}
-          <Settings
-            className={`h-4 w-4 shrink-0 ${
-              pathname.startsWith("/settings") ? "text-primary" : "text-muted-foreground/70"
-            }`}
-          />
-          Settings
-        </Link>
-      </div>
-    </aside>
+      <SidebarFooter>
+        <NavUser />
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   );
 }

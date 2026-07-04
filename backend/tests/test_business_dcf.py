@@ -32,3 +32,32 @@ def test_dcf_raises_when_discount_le_growth() -> None:
     """Gordon model degenerates when r ≤ g; we must reject not silently swallow."""
     with pytest.raises(ValueError, match="discount_rate must be greater than terminal_growth"):
         discounted_cash_flow(cashflows=[100], discount_rate=0.05, terminal_growth=0.10)
+
+
+def test_dcf_clamps_terminal_value_to_zero_when_final_cashflow_is_negative() -> None:
+    """When the most recent year has a loss, the Gordon-growth terminal value
+    is undefined/meaningless (a perpetuity of losses amplified to minus-infinity).
+    The function must treat terminal_value as 0 in that case, so the total EV
+    equals only pv_explicit — not a large negative number."""
+    cashflows = [800_000.0, 900_000.0, -200_000.0]
+    r, g = 0.10, 0.03
+    result = discounted_cash_flow(
+        cashflows=cashflows, discount_rate=r, terminal_growth=g,
+    )
+    # Terminal value must be 0 for a non-positive final cashflow.
+    # EV should equal only the explicit PV (which absorbs the loss year correctly).
+    pv_explicit = sum(c / (1 + r) ** t for t, c in enumerate(cashflows, start=1))
+    assert result == pytest.approx(pv_explicit, rel=1e-6)
+    # Sanity: the result must not be a large negative number.
+    assert result > -1_000_000.0
+
+
+def test_dcf_clamps_terminal_value_to_zero_when_final_cashflow_is_exactly_zero() -> None:
+    """Zero final cashflow should also produce terminal_value = 0."""
+    cashflows = [500_000.0, 0.0]
+    r, g = 0.10, 0.03
+    result = discounted_cash_flow(
+        cashflows=cashflows, discount_rate=r, terminal_growth=g,
+    )
+    pv_explicit = sum(c / (1 + r) ** t for t, c in enumerate(cashflows, start=1))
+    assert result == pytest.approx(pv_explicit, rel=1e-6)

@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from app.agents.graph import graph
 from app.agents.state import new_state
 from app.api.deps import get_current_user
+from app.core.ownership import assert_workspace_owned
+from app.core.supabase_admin import get_admin_client
 
 router = APIRouter()
 
@@ -48,10 +50,12 @@ async def run_agent(
 ) -> AgentRunResponse:
     thread_id = body.thread_id or str(uuid.uuid4())
 
+    assert_workspace_owned(get_admin_client(), body.workspace_id, user["sub"])
+
     initial = new_state()
     initial["messages"] = [HumanMessage(content=body.message)]
-    initial["_user_id"] = user["sub"]            # type: ignore[misc]
-    initial["_workspace_id"] = body.workspace_id  # type: ignore[misc]
+    initial["_user_id"] = user["sub"]
+    initial["_workspace_id"] = body.workspace_id
     initial["entities"] = {"workspace_id": body.workspace_id}
 
     final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})

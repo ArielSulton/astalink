@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class BusinessValuation(BaseModel):
+    business_name: str
     enterprise_value: float
     discount_rate: float
     terminal_growth: float

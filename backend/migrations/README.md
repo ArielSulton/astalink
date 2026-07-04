@@ -30,3 +30,7 @@ of scope for Phase 0.
 | `0005_pin_codes.sql` | HITL approval gate storage |
 | `0006_regulation_documents.sql` | RAG metadata catalog |
 | `0007_rls_policies.sql` | Deny-by-default workspace-scoped access |
+| `0008_langgraph_checkpoints.sql` | LangGraph checkpoint tables (schema kept current via `saver.setup()`) |
+| `0009_whatsapp.sql` | WhatsApp binding + dedup + pending-code tables |
+| `0010_businesses.sql` | User-owned businesses + per-period financial records (aset/omset/profit) |
+| `0011_workspace_cash_balance.sql` | Sandbox virtual cash balance per workspace (seeded at Rp 1,000,000,000) |

@@ -27,6 +27,18 @@ def forbidden_from_citations(citations: list[dict[str, Any]]) -> list[str]:
     return [t for t in out if not (t in seen or seen.add(t))]
 
 
+def partial_tickers_from_citations(citations: list[dict[str, Any]]) -> dict[str, float]:
+    """Merge per-citation partial-weight caps. When multiple citations cap
+    the same ticker differently, the stricter (lower) cap wins — legal
+    constraints tighten, they never get relaxed by picking the looser rule."""
+    caps: dict[str, float] = {}
+    for c in citations:
+        for ticker, cap in (c.get("partial_tickers") or {}).items():
+            if ticker not in caps or cap < caps[ticker]:
+                caps[ticker] = cap
+    return caps
+
+
 def sector_caps_from_citations(citations: list[dict[str, Any]]) -> dict[str, float]:
     caps: dict[str, float] = {}
     for c in citations:

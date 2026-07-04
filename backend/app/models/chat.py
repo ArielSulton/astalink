@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class ChatRequest(BaseModel):
     message: str
+    workspace_id: str
     thread_id: str | None = None
 
 

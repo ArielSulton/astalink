@@ -16,6 +16,10 @@ dependencies = [
     # AI orchestration
     "langgraph>=0.2.0",
     "langgraph-checkpoint-postgres>=2.0.0",
+    # langgraph-checkpoint-postgres pulls plain "psycopg", which needs the
+    # system libpq shared library at runtime and isn't present in the slim
+    # image. The [binary] extra bundles a self-contained wheel instead.
+    "psycopg[binary]>=3.0.0",
     "langchain-core>=0.3.0",
     "langchain-google-genai>=2.0.0",
 

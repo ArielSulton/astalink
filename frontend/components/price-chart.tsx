@@ -23,9 +23,9 @@ interface PriceChartProps {
 }
 
 const TOOLTIP_STYLE = {
-  background: "rgba(8, 13, 30, 0.97)",
-  border: "1px solid rgba(255, 255, 255, 0.08)",
-  color: "#edf1ff",
+  background: "rgba(23, 23, 23, 0.97)",
+  border: "1px solid rgba(255, 255, 255, 0.1)",
+  color: "#fafafa",
   borderRadius: "12px",
   fontSize: "11px",
   boxShadow: "0 10px 30px -10px rgba(0, 0, 0, 0.6)",
@@ -72,8 +72,8 @@ export function PriceChart({
           <span
             className={`font-mono text-xs font-semibold px-2 py-0.5 rounded-lg border ${
               isUp
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15"
-                : "bg-red-500/10 text-red-400 border-red-500/15"
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : "bg-rose-500/10 text-rose-400 border-rose-500/20"
             }`}
           >
             {priceChangePct >= 0 ? "▲" : "▼"} {Math.abs(priceChangePct).toFixed(2)}%
@@ -91,20 +91,20 @@ export function PriceChart({
         <ComposedChart data={priceData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#2563eb" stopOpacity={0.22} />
-              <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+              <stop offset="5%" stopColor="#22c55e" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: "#7585a3", fontSize: 10 }}
+            tick={{ fill: "#a1a1aa", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
             interval="preserveStartEnd"
           />
           <YAxis
-            tick={{ fill: "#7585a3", fontSize: 10 }}
+            tick={{ fill: "#a1a1aa", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
             tickFormatter={(v: number) => v.toLocaleString("id-ID")}
@@ -120,16 +120,16 @@ export function PriceChart({
           <Area
             type="monotone"
             dataKey="close"
-            stroke="#2563eb"
+            stroke="#22c55e"
             strokeWidth={2}
             fill="url(#priceGrad)"
             dot={false}
-            activeDot={{ r: 4, fill: "#2563eb" }}
+            activeDot={{ r: 4, fill: "#22c55e" }}
           />
           <Line
             type="monotone"
             dataKey="sma20"
-            stroke="#f4b000"
+            stroke="#86efac"
             strokeWidth={1.5}
             dot={false}
             strokeDasharray="4 2"
@@ -138,7 +138,7 @@ export function PriceChart({
           <Line
             type="monotone"
             dataKey="ema50"
-            stroke="#7585a3"
+            stroke="#a1a1aa"
             strokeWidth={1.5}
             dot={false}
             strokeDasharray="4 2"
@@ -153,18 +153,18 @@ export function PriceChart({
       {/* RSI chart */}
       <ResponsiveContainer width="100%" height={72}>
         <LineChart data={rsiData} margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis dataKey="date" hide />
           <YAxis
             domain={[0, 100]}
             ticks={[30, 50, 70]}
-            tick={{ fill: "#7585a3", fontSize: 10 }}
+            tick={{ fill: "#a1a1aa", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
             width={76}
           />
-          <ReferenceLine y={70} stroke="#cf202f" strokeDasharray="3 3" strokeWidth={1} />
-          <ReferenceLine y={30} stroke="#05b169" strokeDasharray="3 3" strokeWidth={1} />
+          <ReferenceLine y={70} stroke="#f87171" strokeDasharray="3 3" strokeWidth={1} />
+          <ReferenceLine y={30} stroke="#86efac" strokeDasharray="3 3" strokeWidth={1} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
             formatter={(v) => [typeof v === "number" ? v.toFixed(1) : String(v), "RSI14"]}
@@ -172,7 +172,7 @@ export function PriceChart({
           <Line
             type="monotone"
             dataKey="rsi14"
-            stroke="#7585a3"
+            stroke="#a1a1aa"
             strokeWidth={1.5}
             dot={false}
             connectNulls
@@ -182,9 +182,9 @@ export function PriceChart({
 
       {/* Legend */}
       <div className="flex gap-4 mt-2 text-[10px] font-mono text-muted-foreground">
-        <span><span className="inline-block w-3 h-0.5 bg-[#2563eb] mr-1 align-middle" />Harga</span>
-        <span><span className="inline-block w-3 h-0.5 mr-1 align-middle" style={{ borderTop: "1.5px dashed #f4b000" }} />SMA20</span>
-        <span><span className="inline-block w-3 h-0.5 mr-1 align-middle" style={{ borderTop: "1.5px dashed #7585a3" }} />EMA50</span>
+        <span><span className="inline-block w-3 h-0.5 bg-[#22c55e] mr-1 align-middle" />Harga</span>
+        <span><span className="inline-block w-3 h-0.5 mr-1 align-middle" style={{ borderTop: "1.5px dashed #86efac" }} />SMA20</span>
+        <span><span className="inline-block w-3 h-0.5 mr-1 align-middle" style={{ borderTop: "1.5px dashed #a1a1aa" }} />EMA50</span>
       </div>
     </div>
   );
