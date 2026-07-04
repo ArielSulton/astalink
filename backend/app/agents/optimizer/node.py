@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.optimizer.constraints import (
     forbidden_from_citations,
+    partial_tickers_from_citations,
     sector_caps_from_citations,
 )
 from app.agents.optimizer.relaxation import solve_with_relaxation
@@ -31,6 +32,24 @@ Acknowledge any relaxations applied. Do NOT introduce numeric metrics not in
 the input."""
 
 
+# Heuristic mapping from the free-text risk_profile Gemini extracts in N1
+# (e.g. "konservatif"/"sedang"/"agresif") to solver constraints. Anything
+# unrecognized (including no risk_profile at all) keeps OptimizerInputs'
+# own defaults — behavior for a run with no stated preference is unchanged.
+_CONSERVATIVE_KEYWORDS = ("konservatif", "rendah", "low", "conservative")
+_AGGRESSIVE_KEYWORDS = ("agresif", "tinggi", "high", "aggressive")
+
+
+def _constraints_from_risk_profile(risk_profile: str | None) -> tuple[float, float]:
+    """Returns (max_per_asset, min_cash_buffer)."""
+    profile = (risk_profile or "").strip().lower()
+    if any(k in profile for k in _CONSERVATIVE_KEYWORDS):
+        return 0.25, 0.15
+    if any(k in profile for k in _AGGRESSIVE_KEYWORDS):
+        return 0.6, 0.0
+    return 0.4, 0.05  # OptimizerInputs' own defaults — "sedang"/unstated
+
+
 def _build_inputs(state: AgentState) -> OptimizerInputs:
     ents = state.get("entities", {})
     tickers = list(ents.get("tickers", []))
@@ -43,13 +62,19 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
     n = len(tickers)
     cov = (np.eye(n) * 0.04).tolist()
 
+    citations = state.get("legal_citations") or []
+    max_per_asset, min_cash_buffer = _constraints_from_risk_profile(ents.get("risk_profile"))
+
     return OptimizerInputs(
         tickers=tickers,
         expected_returns=er,
         cov=cov,
         cash=ents.get("amount", 0),
-        forbidden_tickers=forbidden_from_citations(state.get("legal_citations") or []),
-        sector_caps=sector_caps_from_citations(state.get("legal_citations") or []),
+        forbidden_tickers=forbidden_from_citations(citations),
+        partial_tickers=partial_tickers_from_citations(citations),
+        sector_caps=sector_caps_from_citations(citations),
+        max_per_asset=max_per_asset,
+        min_cash_buffer=min_cash_buffer,
     )
 
 
