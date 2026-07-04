@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 
 interface Message {
   role: "user" | "assistant";
@@ -16,6 +18,7 @@ export default function ChatbotPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export default function ChatbotPage() {
   async function sendMessage() {
     const text = input.trim();
     if (!text || loading) return;
+    if (!workspaceId) { toast.error("Pilih workspace terlebih dahulu."); return; }
 
     const sb = createClient();
     const {
@@ -43,7 +47,7 @@ export default function ChatbotPage() {
 
     try {
       const res = await api.chat(
-        { message: text, thread_id: threadId },
+        { message: text, workspace_id: workspaceId, thread_id: threadId },
         session.access_token,
       );
       setThreadId(res.thread_id);
@@ -70,23 +74,26 @@ export default function ChatbotPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/40 shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
-            <Bot className="h-4 w-4 text-primary" />
+          <div className="w-8 h-8 rounded-lg bg-chart-2/10 flex items-center justify-center border border-chart-2/20">
+            <Bot className="h-4 w-4 text-chart-2" />
           </div>
           <div>
             <span className="text-foreground font-bold text-sm block">Astalink AI</span>
             <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" /> Online
+              <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> Online
             </span>
           </div>
         </div>
-        <button
-          onClick={clearThread}
-          className="text-xs text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 font-medium py-1 px-2.5 rounded-lg hover:bg-secondary"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          Percakapan baru
-        </button>
+        <div className="flex items-center gap-2">
+          <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
+          <button
+            onClick={clearThread}
+            className="text-xs text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 font-medium py-1 px-2.5 rounded-lg hover:bg-secondary"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Percakapan baru
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -94,7 +101,7 @@ export default function ChatbotPage() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-card border border-border flex items-center justify-center mb-2">
-              <Bot className="h-7 w-7 text-primary" />
+              <Bot className="h-7 w-7 text-chart-2" />
             </div>
             <h3 className="text-foreground font-bold text-sm tracking-tight">Tanya Astalink AI</h3>
             <p className="text-muted-foreground text-xs max-w-xs leading-relaxed">
@@ -111,7 +118,7 @@ export default function ChatbotPage() {
             <div
               className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                 m.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-tr-none shadow-[0_4px_16px_-4px_rgba(37,99,235,0.3)]"
+                  ? "bg-primary text-primary-foreground rounded-tr-none"
                   : "bg-glass text-foreground border border-border rounded-tl-none"
               }`}
             >
@@ -152,13 +159,13 @@ export default function ChatbotPage() {
             }}
             placeholder="Ketik pesan… (Enter untuk kirim, Shift+Enter untuk baris baru)"
             rows={1}
-            className="flex-1 resize-none bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all duration-200"
+            className="flex-1 resize-none bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
             style={{ maxHeight: "128px" }}
           />
           <button
             onClick={sendMessage}
             disabled={!input.trim() || loading}
-            className="shrink-0 h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 hover:shadow-[0_0_16px_rgba(37,99,235,0.4)] disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
+            className="shrink-0 h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
           >
             <Send className="h-4 w-4" />
           </button>

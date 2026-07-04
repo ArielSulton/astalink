@@ -1,45 +1,67 @@
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/signup-form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function SignupPage() {
   return (
-    <div className="relative min-h-screen bg-background bg-grid-pattern flex items-center justify-center p-4 overflow-hidden">
-      {/* Radial glow backdrop */}
-      <div className="absolute top-[35%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full bg-[radial-gradient(circle,oklch(0.538_0.243_264/0.10)_0%,transparent_70%)] pointer-events-none filter blur-2xl" />
+    <div className="flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">
+      <div className="flex w-full max-w-sm flex-col gap-6 md:max-w-4xl">
+        <Card className="overflow-hidden p-0">
+          <CardContent className="grid p-0 md:grid-cols-2">
+            <div className="flex flex-col justify-center gap-6 p-6 md:p-8">
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-chart-2/15 border border-chart-2/30">
+                    <span className="text-chart-2 text-[11px] font-black font-mono">A</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-foreground font-bold tracking-tight">Astalink</span>
+                    <span className="text-chart-2 text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+                  </div>
+                </div>
+                <h1 className="text-2xl font-bold">Create your account</h1>
+                <p className="text-sm text-balance text-muted-foreground">
+                  Mulai analisis portofolio IDX pertamamu dalam 2 menit
+                </p>
+              </div>
+              <SignupForm />
+              <p className="text-center text-sm text-muted-foreground">
+                Sudah punya akun?{" "}
+                <Link href="/login" className="underline underline-offset-4 hover:text-foreground">
+                  Sign in
+                </Link>
+              </p>
+            </div>
 
-      <Card className="w-full max-w-md bg-glass border border-border shadow-[0_24px_60px_rgba(0,0,0,0.5)] relative z-10 backdrop-blur-xl rounded-2xl overflow-hidden">
-        <CardHeader className="space-y-1 text-center pt-8 pb-4">
-          <div className="flex justify-center items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/25 flex items-center justify-center">
-              <span className="text-primary text-[11px] font-black font-mono">A</span>
+            {/* Brand panel */}
+            <div className="relative hidden flex-col justify-between overflow-hidden border-l border-border bg-sidebar p-8 md:flex">
+              <div className="pointer-events-none absolute inset-0 bg-grid-pattern" />
+              <div className="pointer-events-none absolute -bottom-20 -right-20 size-64 rounded-full bg-chart-2/10 blur-[80px]" />
+              <p className="relative text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                Astalink AI Console
+              </p>
+              <div className="relative space-y-3">
+                <p className="font-heading text-2xl font-bold leading-snug text-foreground">
+                  Tiga lapisan yang
+                  <br />
+                  <span className="text-chart-2">melindungi investasimu.</span>
+                </p>
+                <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  <li>01 · Analisis multi-agen fundamental &amp; teknikal</li>
+                  <li>02 · Verifikasi regulasi OJK otomatis</li>
+                  <li>03 · Konfirmasi PIN di tanganmu</li>
+                </ul>
+              </div>
+              <p className="relative text-[10px] font-mono tracking-wide text-muted-foreground/70">
+                Gratis · Tanpa kartu kredit · Teregulasi OJK
+              </p>
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-foreground font-bold text-base tracking-tight">Astalink</span>
-              <span className="text-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
-            </div>
-          </div>
-          <CardTitle className="text-2xl font-bold tracking-tight text-foreground">Create an account</CardTitle>
-          <CardDescription className="text-muted-foreground text-sm">
-            Enter your email and password to get started
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6 px-8 pb-8">
-          <SignupForm />
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            Already have an account?{" "}
-            <Link href="/login" className="text-primary hover:text-primary/80 hover:underline font-semibold transition-colors">
-              Sign in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        <p className="px-6 text-center text-xs text-balance text-muted-foreground">
+          Dengan mendaftar, Anda menyetujui Ketentuan Layanan dan Kebijakan Privasi Astalink.
+        </p>
+      </div>
     </div>
   );
 }

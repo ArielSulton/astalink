@@ -5,13 +5,9 @@ import { api, type AuditSummary } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { History, ArrowRight } from "lucide-react";
-
-const STATUS_STYLE: Record<string, string> = {
-  approved: "text-emerald-400 bg-emerald-500/10 border-emerald-500/15",
-  rejected: "text-rose-400 bg-rose-500/10 border-rose-500/15",
-  rejected_after_max_revisions: "text-rose-400 bg-rose-500/10 border-rose-500/15",
-  awaiting_approval: "text-amber-400 bg-amber-500/10 border-amber-500/15",
-};
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function AuditTrail() {
   const [items, setItems] = useState<AuditSummary[]>([]);
@@ -31,28 +27,20 @@ export default function AuditTrail() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground">
-      <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
-        <div>
-          <p className="text-muted-foreground text-[10px] font-black font-mono uppercase tracking-[0.2em] mb-1">
-            Decision Ledger
-          </p>
-          <h1 className="text-foreground text-2xl font-bold tracking-tight">
-            Jejak Audit
-          </h1>
-        </div>
+      <PageHeader eyebrow="Decision Ledger" title="Jejak Audit" className="mb-8">
         <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
-      </div>
+      </PageHeader>
 
       {!workspaceId && (
-        <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground text-sm">
+        <EmptyState icon={History} title="Pilih Workspace">
           Pilih workspace untuk melihat jejak keputusan.
-        </div>
+        </EmptyState>
       )}
 
       {workspaceId && items.length === 0 && (
-        <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground text-sm">
+        <EmptyState icon={History} title="Belum Ada Keputusan">
           Belum ada keputusan tercatat untuk workspace ini.
-        </div>
+        </EmptyState>
       )}
 
       {workspaceId && items.length > 0 && (
@@ -62,15 +50,14 @@ export default function AuditTrail() {
               day: "numeric", month: "short", year: "numeric",
               hour: "2-digit", minute: "2-digit",
             });
-            const badge = STATUS_STYLE[it.status] ?? "text-muted-foreground bg-secondary border-border";
             return (
               <li
                 key={it.audit_id}
-                className="flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-primary/30 hover:bg-primary/[0.04] transition-all duration-200"
+                className="flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-chart-2/30 hover:bg-chart-2/[0.04] transition-all duration-200"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                    <History className="h-5 w-5 text-primary" />
+                  <div className="w-10 h-10 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center shrink-0">
+                    <History className="h-5 w-5 text-chart-2" />
                   </div>
                   <div className="min-w-0">
                     <div className="font-bold text-foreground text-sm tracking-tight truncate">
@@ -82,9 +69,7 @@ export default function AuditTrail() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider border ${badge}`}>
-                    {it.status}
-                  </span>
+                  <StatusBadge status={it.status} />
                   <Link
                     href={`/audit/${it.audit_id}`}
                     className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-all duration-200"

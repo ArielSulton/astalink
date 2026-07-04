@@ -2,15 +2,18 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.prod
-      args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        NEXT_PUBLIC_BACKEND_URL: http://localhost:${BACKEND_PORT:-8000}
+      dockerfile: Dockerfile.dev
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:${BACKEND_PORT:-8000}
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
-    environment:
-      - NODE_ENV=production
     depends_on:
       - backend
 
@@ -32,7 +35,6 @@ services:
       # Gemini
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - GEMINI_CHAT_MODEL=${GEMINI_CHAT_MODEL:-gemini-1.5-flash}
-      - GEMINI_EMBEDDING_MODEL=${GEMINI_EMBEDDING_MODEL:-text-embedding-004}
       # Pinecone
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-astalink-regulations}

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { FileText, Scale, Upload } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
 import { api, RegulationDoc } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 
@@ -62,10 +63,7 @@ export default function LegalDocsPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
-      <div>
-        <p className="text-muted-foreground text-[10px] font-black font-mono uppercase tracking-[0.2em] mb-1">Regulations</p>
-        <h1 className="text-foreground text-2xl font-bold tracking-tight">Legal Documents</h1>
-      </div>
+      <PageHeader eyebrow="Regulations" title="Legal Documents" />
 
       {/* ── Indexed docs ── */}
       <section className="space-y-3">
@@ -92,7 +90,7 @@ export default function LegalDocsPage() {
 
         {!docsLoading && !docsError && docs.length === 0 && (
           <div className="flex items-center gap-3 p-5 rounded-xl border border-border bg-card text-muted-foreground">
-            <Scale className="h-5 w-5 shrink-0 text-primary" />
+            <Scale className="h-5 w-5 shrink-0 text-chart-2" />
             <p className="text-sm">
               Belum ada dokumen terindeks. Unggah dokumen pertama di bawah.
             </p>
@@ -106,8 +104,8 @@ export default function LegalDocsPage() {
                 key={doc.id}
                 className="flex items-start gap-3.5 p-4 rounded-xl border border-border bg-card hover:border-border/60 hover:bg-secondary/30 transition-all duration-200"
               >
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 mt-0.5 shrink-0">
-                  <FileText className="h-4 w-4 text-primary" />
+                <div className="w-8 h-8 rounded-lg bg-chart-2/10 flex items-center justify-center border border-chart-2/20 mt-0.5 shrink-0">
+                  <FileText className="h-4 w-4 text-chart-2" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-foreground font-semibold truncate leading-tight">{doc.title}</p>
@@ -143,7 +141,7 @@ export default function LegalDocsPage() {
             <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">File PDF</label>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border border-dashed border-border hover:border-primary rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer bg-secondary hover:bg-primary/[0.04] transition-all duration-200"
+              className="border border-dashed border-border hover:border-chart-2 rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer bg-secondary hover:bg-chart-2/[0.04] transition-all duration-200"
             >
               <Upload className="h-6 w-6 text-muted-foreground" />
               <p className="text-sm text-muted-foreground font-medium">
@@ -171,7 +169,7 @@ export default function LegalDocsPage() {
                 value={uploadSource}
                 onChange={(e) => setUploadSource(e.target.value)}
                 placeholder="cth. OJK, UUPM, user"
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all duration-200"
+                className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
               />
             </div>
             <div>
@@ -180,7 +178,7 @@ export default function LegalDocsPage() {
                 value={uploadTitle}
                 onChange={(e) => setUploadTitle(e.target.value)}
                 placeholder="Judul dokumen"
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all duration-200"
+                className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
               />
             </div>
           </div>
@@ -199,7 +197,7 @@ export default function LegalDocsPage() {
           <button
             onClick={handleUpload}
             disabled={!uploadFile || uploading}
-            className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 hover:shadow-[0_0_16px_rgba(37,99,235,0.3)] disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
+            className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
           >
             {uploading ? "Mengunggah…" : "Unggah & Indeks"}
           </button>

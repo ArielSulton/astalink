@@ -5,19 +5,8 @@ import { api, type AuditDetail } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { AllocationChart } from "@/components/allocation-chart";
 import { Target, ShieldCheck, Scale, CheckCircle2, Receipt } from "lucide-react";
-
-const STATUS_STYLE: Record<string, string> = {
-  approved: "text-emerald-400 bg-emerald-500/10 border-emerald-500/15",
-  partial: "text-amber-400 bg-amber-500/10 border-amber-500/15",
-  rejected: "text-rose-400 bg-rose-500/10 border-rose-500/15",
-  rejected_after_max_revisions: "text-rose-400 bg-rose-500/10 border-rose-500/15",
-  awaiting_approval: "text-amber-400 bg-amber-500/10 border-amber-500/15",
-};
-
-function badge(status: string | null): string {
-  if (!status) return "text-muted-foreground bg-secondary border-border";
-  return STATUS_STYLE[status] ?? "text-muted-foreground bg-secondary border-border";
-}
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function AuditDetailPage() {
   const { auditId } = useParams<{ auditId: string }>();
@@ -36,7 +25,7 @@ export default function AuditDetailPage() {
   if (!detail) {
     return (
       <div className="h-screen flex items-center justify-center bg-background text-muted-foreground text-xs font-mono tracking-wider">
-        <span className="w-2 h-2 rounded-full bg-primary animate-ping mr-2.5" />
+        <span className="w-2 h-2 rounded-full bg-chart-2 animate-ping mr-2.5" />
         Memuat jejak audit…
       </div>
     );
@@ -46,24 +35,14 @@ export default function AuditDetailPage() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-muted-foreground text-[10px] font-black font-mono uppercase tracking-[0.2em] mb-1">
-            Decision Trace
-          </p>
-          <h1 className="text-foreground text-2xl font-bold tracking-tight">
-            Audit #{auditId.slice(0, 8)}…
-          </h1>
-        </div>
-        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider border ${badge(detail.status)}`}>
-          {detail.status}
-        </span>
-      </div>
+      <PageHeader eyebrow="Decision Trace" title={`Audit #${auditId.slice(0, 8)}…`}>
+        <StatusBadge status={detail.status} />
+      </PageHeader>
 
       {/* 1 — Intent */}
       <section className="bg-card border border-border rounded-2xl p-6 shadow-xl">
         <div className="flex items-center gap-2 mb-2">
-          <Target className="h-5 w-5 text-primary" />
+          <Target className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Permintaan</h2>
         </div>
         <p className="text-sm text-muted-foreground">{detail.intent ?? "—"}</p>
@@ -72,7 +51,7 @@ export default function AuditDetailPage() {
       {/* 2 — Alokasi */}
       <section className="bg-card border border-border rounded-2xl p-6 shadow-xl">
         <div className="flex items-center gap-2 mb-4">
-          <ShieldCheck className="h-5 w-5 text-primary" />
+          <ShieldCheck className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Alokasi</h2>
         </div>
         {plan ? <AllocationChart weights={plan.weights} /> : <p className="text-sm text-muted-foreground">Tidak ada data alokasi.</p>}
@@ -87,12 +66,10 @@ export default function AuditDetailPage() {
       <section className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3 border-b border-border pb-4">
           <div className="flex items-center gap-2">
-            <Scale className="h-5 w-5 text-primary" />
+            <Scale className="h-5 w-5 text-chart-2" />
             <h2 className="text-foreground font-bold text-base tracking-tight">Kepatuhan regulasi</h2>
           </div>
-          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider border ${badge(detail.legal_status)}`}>
-            {detail.legal_status ?? "—"}
-          </span>
+          <StatusBadge status={detail.legal_status} />
         </div>
         {detail.legal_citations.length === 0 ? (
           <p className="text-sm text-muted-foreground">Tidak ada catatan hukum terlampir.</p>
@@ -101,7 +78,7 @@ export default function AuditDetailPage() {
             {detail.legal_citations.map((c, i) => (
               <li key={i} className="bg-secondary border border-border rounded-xl p-4 text-sm leading-relaxed text-muted-foreground">
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <span className="px-2 py-0.5 rounded bg-primary/10 border border-primary/15 font-mono text-[9px] font-bold text-primary uppercase tracking-wider">
+                  <span className="px-2 py-0.5 rounded bg-chart-2/10 border border-chart-2/15 font-mono text-[9px] font-bold text-chart-2 uppercase tracking-wider">
                     {c.source}
                   </span>
                   <span className="text-[10px] text-foreground font-semibold font-mono">
@@ -120,7 +97,7 @@ export default function AuditDetailPage() {
       {/* 4 — Transaksi */}
       <section className="bg-card border border-border rounded-2xl p-6 shadow-xl">
         <div className="flex items-center gap-2 mb-4">
-          <Receipt className="h-5 w-5 text-primary" />
+          <Receipt className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Transaksi</h2>
         </div>
         {detail.transactions.length === 0 ? (
@@ -139,9 +116,7 @@ export default function AuditDetailPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {t.broker_ref && <span className="text-[10px] text-muted-foreground font-mono">{t.broker_ref}</span>}
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold font-mono uppercase border ${badge(t.status)}`}>
-                    {t.status}
-                  </span>
+                  <StatusBadge status={t.status} className="text-[9px]" />
                 </div>
               </li>
             ))}

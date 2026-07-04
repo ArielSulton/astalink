@@ -1,10 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Briefcase, TrendingUp } from "lucide-react";
+import { Briefcase, PiggyBank, TrendingUp, Wallet } from "lucide-react";
 import { api, ApprovalDetail } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { AllocationChart } from "@/components/allocation-chart";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function AssetsPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -52,36 +56,20 @@ export default function AssetsPage() {
   const cashBuffer = detail?.plan_json?.cash_buffer ?? 0;
   const narration = detail?.plan_json?.narration ?? "";
 
-  const isApproved = detail?.legal_status === "approved";
-  const statusBadgeClass = isApproved
-    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/15"
-    : detail?.legal_status === "partial"
-    ? "text-amber-400 bg-amber-500/10 border-amber-500/15"
-    : "text-rose-400 bg-rose-500/10 border-rose-500/15";
-
   return (
     <div className="p-8 space-y-6 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 border-b border-border pb-5 flex-wrap">
-        <div>
-          <p className="text-muted-foreground text-[10px] font-black font-mono uppercase tracking-[0.2em] mb-1">
-            Portfolio Balance
-          </p>
-          <h1 className="text-foreground text-2xl font-bold tracking-tight">
-            Asset View
-          </h1>
-        </div>
+      <PageHeader
+        eyebrow="Portfolio Balance"
+        title="Asset View"
+        className="border-b border-border pb-5"
+      >
         <WorkspaceSwitcher current={workspaceId} onChange={setWorkspaceId} />
-      </div>
+      </PageHeader>
 
       {!workspaceId && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground bg-card border border-border rounded-2xl p-6">
-          <Briefcase className="h-10 w-10 text-primary/80" />
-          <p className="text-sm font-semibold text-foreground">Pilih Workspace</p>
-          <p className="text-xs text-muted-foreground text-center max-w-xs">
-            Pilih workspace di kanan atas untuk melihat alokasi aset Anda.
-          </p>
-        </div>
+        <EmptyState icon={Briefcase} title="Pilih Workspace">
+          Pilih workspace di kanan atas untuk melihat alokasi aset Anda.
+        </EmptyState>
       )}
 
       {workspaceId && loading && (
@@ -101,24 +89,18 @@ export default function AssetsPage() {
       )}
 
       {workspaceId && !loading && !error && !detail && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground bg-card border border-border rounded-2xl p-6">
-          <TrendingUp className="h-10 w-10 text-primary/80" />
-          <p className="text-sm font-semibold text-foreground">Belum Ada Alokasi Disetujui</p>
-          <p className="text-xs text-muted-foreground text-center max-w-sm leading-relaxed">
-            Belum ada alokasi yang disetujui di workspace ini.
-            <br />
-            Jalankan analisis dari halaman Dashboard terlebih dahulu.
-          </p>
-        </div>
+        <EmptyState icon={TrendingUp} title="Belum Ada Alokasi Disetujui">
+          Belum ada alokasi yang disetujui di workspace ini.
+          <br />
+          Jalankan analisis dari halaman Dashboard terlebih dahulu.
+        </EmptyState>
       )}
 
       {workspaceId && !loading && detail && (
         <div className="space-y-5">
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground font-medium">Status Dokumen:</span>
-            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold font-mono uppercase tracking-wider border ${statusBadgeClass}`}>
-              {detail.legal_status ?? "—"}
-            </span>
+            <StatusBadge status={detail.legal_status} />
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-6 shadow-xl">
@@ -133,18 +115,18 @@ export default function AssetsPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-border bg-card p-5">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 font-mono">Kas</p>
-              <p className="text-2xl font-bold text-foreground font-mono">
-                {(cash * 100).toFixed(1)}%
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-5">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 font-mono">Buffer Kas</p>
-              <p className="text-2xl font-bold text-foreground font-mono">
-                {(cashBuffer * 100).toFixed(1)}%
-              </p>
-            </div>
+            <StatCard
+              label="Kas"
+              value={`${(cash * 100).toFixed(1)}%`}
+              icon={Wallet}
+              hint="Porsi dana tunai portofolio"
+            />
+            <StatCard
+              label="Buffer Kas"
+              value={`${(cashBuffer * 100).toFixed(1)}%`}
+              icon={PiggyBank}
+              hint="Cadangan likuiditas minimum"
+            />
           </div>
 
           {narration && (
