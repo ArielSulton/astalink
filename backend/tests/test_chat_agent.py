@@ -55,3 +55,36 @@ def test_build_chat_reply_falls_back_to_last_message() -> None:
 def test_build_chat_reply_has_a_message_when_nothing_else_applies() -> None:
     state = new_state()
     assert build_chat_reply(state)  # non-empty string, no crash
+
+
+def test_build_chat_reply_reports_balance_rejected_legs_honestly() -> None:
+    state = new_state()
+    state["legal_status"] = LegalStatus.APPROVED
+    state["user_approval"] = UserApproval.APPROVED
+    state["audit_id"] = "audit-999"
+    state["transactions"] = [
+        {"ticker": "BBCA", "side": "buy", "quantity": 10, "status": "filled", "broker_ref": "r1"},
+        {"ticker": "BMRI", "side": "buy", "quantity": 5, "status": "rejected_insufficient_balance", "broker_ref": None},
+    ]
+    reply = build_chat_reply(state)
+    assert "BBCA" in reply
+    assert "berhasil dieksekusi" in reply.lower()
+    assert "BMRI" in reply
+    assert "tidak mencukupi" in reply.lower()
+    # BMRI must not be listed among the successfully-executed tickers
+    executed_sentence = reply.split(".")[0]
+    assert "BMRI" not in executed_sentence
+
+
+def test_build_chat_reply_all_legs_rejected_does_not_claim_success() -> None:
+    state = new_state()
+    state["legal_status"] = LegalStatus.APPROVED
+    state["user_approval"] = UserApproval.APPROVED
+    state["audit_id"] = "audit-1000"
+    state["transactions"] = [
+        {"ticker": "BMRI", "side": "buy", "quantity": 5, "status": "rejected_insufficient_balance", "broker_ref": None},
+    ]
+    reply = build_chat_reply(state)
+    assert "berhasil dieksekusi" not in reply.lower()
+    assert "BMRI" in reply
+    assert "tidak mencukupi" in reply.lower()

@@ -52,8 +52,18 @@ def build_chat_reply(state: AgentState) -> str:
         )
 
     if state.get("user_approval") == UserApproval.APPROVED and state.get("transactions"):
-        tickers = ", ".join(t["ticker"] for t in state["transactions"])
-        return f"Transaksi berhasil dieksekusi untuk: {tickers}. Audit ID: {audit_id}."
+        filled = [t for t in state["transactions"] if t.get("status") == "filled"]
+        rejected = [t for t in state["transactions"]
+                    if t.get("status") == "rejected_insufficient_balance"]
+        parts = []
+        if filled:
+            parts.append(f"Transaksi berhasil dieksekusi untuk: {', '.join(t['ticker'] for t in filled)}.")
+        if rejected:
+            parts.append(
+                f"{', '.join(t['ticker'] for t in rejected)} ditolak karena saldo tidak mencukupi."
+            )
+        if parts:
+            return " ".join(parts) + f" Audit ID: {audit_id}."
 
     if messages:
         return _last_text(messages)
