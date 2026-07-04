@@ -12,7 +12,7 @@ def _mock_admin(select_data: list[dict], update_data: list[dict] | None = None):
     query = MagicMock()
     query.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
         MagicMock(data=select_data)
-    query.update.return_value.eq.return_value.gte.return_value.execute.return_value = \
+    query.update.return_value.eq.return_value.eq.return_value.gte.return_value.execute.return_value = \
         MagicMock(data=update_data or [])
     sb.table.return_value = query
     return sb, query
@@ -67,3 +67,18 @@ def test_debit_workspace_balance_raises_on_non_positive_amount() -> None:
     sb, _ = _mock_admin(select_data=[{"cash_balance": 1_000_000_000}])
     with pytest.raises(ValueError):
         debit_workspace_balance(sb, "ws-1", 0)
+
+
+def test_debit_workspace_balance_uses_optimistic_lock_on_current_value() -> None:
+    """The UPDATE must be guarded by .eq("cash_balance", current) — not just
+    .gte(amount) — so a concurrent debit that already changed the balance
+    is detected even if the new balance still individually covers this
+    debit's amount."""
+    sb, query = _mock_admin(
+        select_data=[{"cash_balance": 1_000_000_000}],
+        update_data=[{"cash_balance": 900_000_000}],
+    )
+    debit_workspace_balance(sb, "ws-1", 100_000_000)
+    query.update.return_value.eq.return_value.eq.assert_called_once_with(
+        "cash_balance", 1_000_000_000,
+    )

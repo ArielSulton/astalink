@@ -56,7 +56,7 @@ def _mock_execution_admin(*, balance: float, debit_success: bool):
     workspaces_query = MagicMock()
     workspaces_query.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
         MagicMock(data=[{"cash_balance": balance}])
-    workspaces_query.update.return_value.eq.return_value.gte.return_value.execute.return_value = \
+    workspaces_query.update.return_value.eq.return_value.eq.return_value.gte.return_value.execute.return_value = \
         MagicMock(data=[{"cash_balance": balance - 1}] if debit_success else [])
 
     def _table(name: str):

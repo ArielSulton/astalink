@@ -23,15 +23,21 @@ def get_workspace_balance(sb, workspace_id: str) -> float | None:
 def debit_workspace_balance(sb, workspace_id: str, amount: float) -> float | None:
     """Atomically decrement cash_balance by `amount` if sufficient funds
     exist. Returns the new balance on success, or None if funds were
-    insufficient (including a race where a concurrent debit already spent
-    them) or the workspace doesn't exist.
+    insufficient, the workspace doesn't exist, or a concurrent debit
+    already changed the balance since we read it (optimistic-concurrency
+    lost race).
 
-    The `.gte("cash_balance", amount)` filter on the UPDATE's WHERE clause
-    is what makes this safe under concurrent debits: if another debit
-    already dropped the balance below `amount` between our read and this
-    write, the WHERE clause matches zero rows and `res.data` comes back
-    empty — the Python-level read-then-write has a gap, but the guard on
-    the write itself is what prevents any double-spend outcome."""
+    Safety comes from `.eq("cash_balance", current)` on the UPDATE's WHERE
+    clause: it requires the database's balance to still exactly match what
+    we just read. If any other debit committed between our read and this
+    write — even one that individually looked "affordable" and wouldn't
+    have tripped a bare `.gte(amount)` check — the WHERE clause no longer
+    matches, `res.data` comes back empty, and we correctly return None
+    instead of silently double-spending. The `.gte("cash_balance", amount)`
+    filter is kept alongside it as a redundant defensive check (harmless,
+    since Python already verified `current >= amount` above) but the
+    `.eq("cash_balance", current)` compare-and-swap is what actually
+    prevents double-spend."""
     if amount <= 0:
         raise ValueError("amount must be > 0")
 
@@ -44,6 +50,7 @@ def debit_workspace_balance(sb, workspace_id: str, amount: float) -> float | Non
         sb.table("workspaces")
         .update({"cash_balance": new_balance})
         .eq("id", workspace_id)
+        .eq("cash_balance", current)
         .gte("cash_balance", amount)
         .execute()
     )
