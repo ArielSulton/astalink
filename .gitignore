@@ -65,8 +65,6 @@ __pycache__/
 .pytest_cache/
 /reference/
 /*.js
-.env
-.env.local
 
 # Auto-generated agent files
 frontend/AGENTS.md
