@@ -166,6 +166,7 @@ def test_optimizer_node_uses_default_constraints_when_risk_profile_absent() -> N
 
     assert captured[0].max_per_asset == 0.4
     assert captured[0].min_cash_buffer == 0.05
+    assert captured[0].cash == 10_000_000
 
 
 def test_optimizer_node_wires_partial_tickers_from_legal_citations() -> None:
