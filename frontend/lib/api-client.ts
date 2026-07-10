@@ -193,6 +193,9 @@ export const api = {
   setPin: (pin: string, token: string) =>
     jsonFetch<void>(`/api/v1/users/me/pin`,
       { method: "POST", body: JSON.stringify({ pin }) }, token),
+  bindWhatsapp: (code: string, workspaceId: string, token: string) =>
+    jsonFetch<void>(`/api/v1/whatsapp/bind`,
+      { method: "POST", body: JSON.stringify({ code, workspace_id: workspaceId }) }, token),
   runAgent: (body: AgentRunRequest, token: string) =>
     jsonFetch<AgentRunResponse>(
       "/api/v1/agent/run",
