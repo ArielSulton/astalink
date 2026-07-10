@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +25,9 @@ export default function LoginPage() {
                   Masuk untuk mengelola portofolio IDX Anda
                 </p>
               </div>
-              <LoginForm />
+              <Suspense fallback={null}>
+                <LoginForm />
+              </Suspense>
               <p className="text-center text-sm text-muted-foreground">
                 Belum punya akun?{" "}
                 <Link href="/signup" className="underline underline-offset-4 hover:text-foreground">
