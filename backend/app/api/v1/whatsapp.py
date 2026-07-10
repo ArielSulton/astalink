@@ -1,13 +1,17 @@
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel, Field
 
 import app.core.config as _config
 from app.agents.chat_agent import build_chat_reply
 from app.agents.graph import graph
 from app.agents.state import LegalStatus, UserApproval, new_state
+from app.api.deps import get_current_user
+from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
 from app.integrations.whatsapp import send_text, verify_signature
 
@@ -120,3 +124,51 @@ def _process_message(msg: dict[str, Any]) -> None:
         reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
 
     send_text(to_phone_e164=phone, body=reply)
+
+
+class BindWhatsAppRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+    workspace_id: str = Field(..., min_length=1)
+
+
+@router.post("/bind", status_code=status.HTTP_204_NO_CONTENT)
+async def bind(
+    body: BindWhatsAppRequest,
+    user: dict = Depends(get_current_user),
+) -> None:
+    sb = get_admin_client()
+
+    code_res = (
+        sb.table("whatsapp_pending_codes").select("*")
+        .eq("code", body.code).execute()
+    )
+    if not code_res.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kode tidak ditemukan.")
+
+    pending = code_res.data[0]
+    expires_at = datetime.fromisoformat(pending["expires_at"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if pending.get("consumed_at") is not None or expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Link kadaluarsa, kirim pesan lagi ke bot WhatsApp untuk dapat link baru.",
+        )
+
+    assert_workspace_owned(sb, body.workspace_id, user["sub"])
+
+    try:
+        sb.table("whatsapp_bindings").insert({
+            "user_id": user["sub"],
+            "phone_e164": pending["phone_e164"],
+            "workspace_id": body.workspace_id,
+        }).execute()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Nomor ini atau akun Anda sudah terhubung sebelumnya.",
+        )
+
+    sb.table("whatsapp_pending_codes").update(
+        {"consumed_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("code", body.code).execute()
