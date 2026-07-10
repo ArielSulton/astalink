@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # News API (optional — N2a runs without it)
     NEWS_API_KEY: str = ""
 
+    # Resend (transactional email — signup confirmation, password reset)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "noreply@astalink.my.id"
+
     # WhatsApp Business API (Meta Cloud API)
     WHATSAPP_VERIFY_TOKEN: str = ""        # used during webhook subscription
     WHATSAPP_APP_SECRET: str = ""          # for signature verification

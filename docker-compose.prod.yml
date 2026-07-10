@@ -44,6 +44,9 @@ services:
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
       # News
       - NEWS_API_KEY=${NEWS_API_KEY}
+      # Resend
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@astalink.my.id}
       # App
       - APP_BASE_URL=${PROD_DOMAIN}
       - DEBUG=false
