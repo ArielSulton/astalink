@@ -225,6 +225,11 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
+  getMe: (token: string): Promise<{ email: string; is_admin: boolean }> =>
+    jsonFetch<{ email: string; is_admin: boolean }>(
+      "/api/v1/auth/me", { method: "GET" }, token,
+    ),
+
   signup: (body: { email: string; password: string }): Promise<{ message: string }> =>
     jsonFetch<{ message: string }>(
       "/api/v1/auth/signup",
@@ -270,8 +275,8 @@ export const api = {
       token,
     ),
 
-  listLegalDocs: (): Promise<RegulationDoc[]> =>
-    jsonFetch<RegulationDoc[]>("/api/v1/legal/documents", { method: "GET" }),
+  listLegalDocs: (token: string): Promise<RegulationDoc[]> =>
+    jsonFetch<RegulationDoc[]>("/api/v1/legal/documents", { method: "GET" }, token),
 
   uploadLegalDoc: async (
     file: File,

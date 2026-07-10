@@ -47,6 +47,8 @@ services:
       # Resend
       - RESEND_API_KEY=${RESEND_API_KEY}
       - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@astalink.my.id}
+      # Admin role
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-[]}
       # App
       - APP_BASE_URL=${PROD_DOMAIN}
       - DEBUG=false

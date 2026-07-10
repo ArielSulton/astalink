@@ -120,3 +120,28 @@ def test_forgot_password_message_identical_regardless_of_email_existence(client:
 
     assert resp_found.status_code == resp_missing.status_code == 200
     assert resp_found.json() == resp_missing.json()
+
+
+def test_me_reports_is_admin_true_for_configured_admin(client: TestClient) -> None:
+    mock_user = {"sub": "user-1", "email": "astalink21@gmail.com"}
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.deps.settings.ADMIN_EMAILS", ["astalink21@gmail.com"]):
+        resp = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer fake-token"})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"email": "astalink21@gmail.com", "is_admin": True}
+
+
+def test_me_reports_is_admin_false_for_non_admin(client: TestClient) -> None:
+    mock_user = {"sub": "user-2", "email": "user@example.com"}
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.deps.settings.ADMIN_EMAILS", ["astalink21@gmail.com"]):
+        resp = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer fake-token"})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"email": "user@example.com", "is_admin": False}
+
+
+def test_me_requires_auth(client: TestClient) -> None:
+    resp = client.get("/api/v1/auth/me")
+    assert resp.status_code == 401

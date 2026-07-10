@@ -20,6 +20,8 @@ import {
 
 import { NavUser } from "@/components/nav-user";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import {
   Sidebar,
   SidebarContent,
@@ -42,6 +44,13 @@ type NavItem = NavLeaf | NavGroup;
 
 function isNavGroup(item: NavItem): item is NavGroup {
   return "children" in item;
+}
+
+// Legal Docs is admin-only (server-enforced on GET/POST /api/v1/legal/documents*)
+// — this hides the link for everyone else; it's UX polish, not the security boundary.
+function isVisible(item: NavItem, isAdmin: boolean): boolean {
+  if (!isNavGroup(item) && item.href === "/legal-docs") return isAdmin;
+  return true;
 }
 
 const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
@@ -85,11 +94,31 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
+  const [isAdmin, setIsAdmin] = React.useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      try {
+        const me = await api.getMe(session.access_token);
+        setIsAdmin(me.is_admin);
+      } catch {
+        // Fail closed — stays non-admin, Legal Docs link stays hidden.
+      }
+    })();
+  }, []);
 
   function isGroupOpen(group: NavGroup): boolean {
     if (group.label in openGroups) return openGroups[group.label];
     return group.children.some((c) => pathname.startsWith(c.href));
   }
+
+  const navSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => isVisible(item, isAdmin)),
+  }));
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -113,7 +142,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        {NAV_SECTIONS.map(({ label, items }) => (
+        {navSections.map(({ label, items }) => (
           <SidebarGroup key={label}>
             <SidebarGroupLabel>{label}</SidebarGroupLabel>
             <SidebarMenu>

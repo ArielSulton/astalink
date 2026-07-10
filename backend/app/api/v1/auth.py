@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.deps import get_current_user, is_admin_email
 from app.core.config import settings
 from app.core.email import render_template, send_email
 from app.core.supabase_admin import get_admin_client
@@ -17,6 +18,11 @@ router = APIRouter()
 class SignupRequest(BaseModel):
     email: str
     password: str = Field(..., min_length=6)
+
+
+class MeResponse(BaseModel):
+    email: str
+    is_admin: bool
 
 
 class SignupResponse(BaseModel):
@@ -32,6 +38,12 @@ class ForgotPasswordResponse(BaseModel):
 
 
 _FORGOT_PASSWORD_MESSAGE = "Jika email terdaftar, kami sudah mengirim link reset password."
+
+
+@router.get("/me", response_model=MeResponse)
+async def me(user: dict = Depends(get_current_user)) -> MeResponse:
+    email = user.get("email") or ""
+    return MeResponse(email=email, is_admin=is_admin_email(email))
 
 
 @router.post("/signup", response_model=SignupResponse)

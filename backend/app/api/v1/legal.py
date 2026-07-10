@@ -11,7 +11,7 @@ from app.agents.legal.chunker import chunk_regulation_text
 from app.agents.legal.node import legal_node
 from app.agents.legal.retriever import BM25Retriever
 from app.agents.state import AgentState
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
 from app.core.pinecone import DEFAULT_NAMESPACE, get_index
 from app.core.supabase_admin import get_admin_client
 
@@ -47,7 +47,7 @@ _BM25_PATH = Path(__file__).parent.parent.parent.parent / "data" / "bm25_index.p
 
 
 @router.get("/documents", response_model=list[RegulationDocumentOut])
-async def list_documents() -> list[RegulationDocumentOut]:
+async def list_documents(admin: dict = Depends(require_admin)) -> list[RegulationDocumentOut]:
     sb = get_admin_client()
     res = (
         sb.table("regulation_documents")
@@ -63,7 +63,7 @@ async def upload_document(
     file: UploadFile = File(...),
     source: str = "user",
     title: str = "",
-    user: dict = Depends(get_current_user),
+    admin: dict = Depends(require_admin),
 ) -> RegulationDocumentOut:
     if not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted.")

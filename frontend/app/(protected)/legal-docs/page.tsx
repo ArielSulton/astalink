@@ -20,11 +20,18 @@ export default function LegalDocsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    api
-      .listLegalDocs()
-      .then(setDocs)
-      .catch(() => { setDocsError(true); })
-      .finally(() => setDocsLoading(false));
+    (async () => {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { setDocsError(true); setDocsLoading(false); return; }
+      try {
+        setDocs(await api.listLegalDocs(session.access_token));
+      } catch {
+        setDocsError(true);
+      } finally {
+        setDocsLoading(false);
+      }
+    })();
   }, []);
 
   async function handleUpload() {

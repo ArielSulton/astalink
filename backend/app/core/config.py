@@ -51,5 +51,11 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    # Admin role — emails in this list get admin-only access (e.g. Legal
+    # Docs). Not a real RBAC table; role is derived purely from this list
+    # against the authenticated user's email, matching this hackathon's
+    # scope. Empty by default so the app boots without any admin configured.
+    ADMIN_EMAILS: list[str] = []
+
 
 settings = Settings()
