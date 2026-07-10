@@ -219,6 +219,12 @@ export const api = {
       token,
     ),
 
+  forgotPassword: (body: { email: string }): Promise<{ message: string }> =>
+    jsonFetch<{ message: string }>(
+      "/api/v1/auth/forgot-password",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
   createWorkspace: (
     body: { name: string; type: "personal" | "business" },
     token: string,
