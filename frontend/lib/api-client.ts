@@ -162,6 +162,7 @@ async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: stri
     },
   });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
