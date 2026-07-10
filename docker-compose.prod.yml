@@ -9,12 +9,16 @@ services:
         NEXT_PUBLIC_BACKEND_URL: ${PROD_DOMAIN}
     environment:
       - NODE_ENV=production
+    networks:
+      - internal
+      - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.astalink-fe.rule=Host(`${PROD_DOMAIN_HOST}`)"
       - "traefik.http.routers.astalink-fe.entrypoints=websecure"
       - "traefik.http.routers.astalink-fe.tls.certresolver=letsencrypt"
       - "traefik.http.services.astalink-fe.loadbalancer.server.port=3000"
+      - "traefik.docker.network=dokploy-network"
     restart: unless-stopped
 
   backend:
@@ -45,12 +49,16 @@ services:
       - APP_BASE_URL=${PROD_DOMAIN}
       - DEBUG=false
       - BACKEND_CORS_ORIGINS=["${PROD_DOMAIN}"]
+    networks:
+      - internal
+      - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.astalink-be.rule=Host(`${PROD_DOMAIN_HOST}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.astalink-be.entrypoints=websecure"
       - "traefik.http.routers.astalink-be.tls.certresolver=letsencrypt"
       - "traefik.http.services.astalink-be.loadbalancer.server.port=8000"
+      - "traefik.docker.network=dokploy-network"
     restart: unless-stopped
 
   prometheus:
@@ -58,6 +66,8 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    networks:
+      - internal
     restart: unless-stopped
 
   grafana:
@@ -70,12 +80,16 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
+    networks:
+      - internal
+      - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.astalink-grafana.rule=Host(`${PROD_DOMAIN_HOST}`) && PathPrefix(`/grafana`)"
       - "traefik.http.routers.astalink-grafana.entrypoints=websecure"
       - "traefik.http.routers.astalink-grafana.tls.certresolver=letsencrypt"
       - "traefik.http.services.astalink-grafana.loadbalancer.server.port=3000"
+      - "traefik.docker.network=dokploy-network"
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -83,3 +97,8 @@ services:
 volumes:
   prometheus_data:
   grafana_data:
+
+networks:
+  internal:
+  dokploy-network:
+    external: true
