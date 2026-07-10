@@ -36,7 +36,7 @@ def test_settings_has_google_api_key() -> None:
 
 def test_settings_has_gemini_model_defaults() -> None:
     s = _reload_settings()
-    assert s.GEMINI_CHAT_MODEL == "gemini-1.5-flash"
+    assert s.GEMINI_CHAT_MODEL == "gemini-3.1-flash-lite"
 
 
 def test_settings_has_pinecone_config() -> None:

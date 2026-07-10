@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # Google Gemini — optional so the app boots without a key; the lazy chat
     # client raises only when actually invoked.
     GOOGLE_API_KEY: str = ""
-    GEMINI_CHAT_MODEL: str = "gemini-1.5-flash"
+    GEMINI_CHAT_MODEL: str = "gemini-3.1-flash-lite"
 
     # Pinecone — same lazy-boot philosophy.
     PINECONE_API_KEY: str = ""

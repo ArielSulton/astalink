@@ -4,6 +4,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 
 
 def test_webhook_get_verifies_subscription(client: TestClient, monkeypatch) -> None:
@@ -81,3 +82,105 @@ def test_webhook_post_dedupes_replays(client: TestClient, monkeypatch) -> None:
 
     assert r1.status_code == 200 and r2.status_code == 200
     assert invoke_mock.call_count == 1, "graph must run exactly once for a replayed message_id"
+
+
+def _post_wa_message(client: TestClient, monkeypatch, *, message_id: str, text: str,
+                     final_state: dict) -> str:
+    """Send one signed WhatsApp webhook payload and return the text passed to
+    send_text (an AttributeError is raised if send_text was never called)."""
+    secret = "appsec"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    import importlib, app.core.config
+    importlib.reload(app.core.config)
+
+    payload = {
+        "entry": [{"changes": [{"value": {"messages": [{
+            "id": message_id,
+            "from": "6281234567890",
+            "type": "text",
+            "text": {"body": text},
+        }]}}]}]
+    }
+    body = json.dumps(payload).encode()
+    sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[{}])
+    fake_admin.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"user_id": "u1", "workspace_id": "w1"}
+    )
+
+    with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.whatsapp.graph.invoke", return_value=final_state), \
+         patch("app.api.v1.whatsapp.send_text") as send_mock:
+        resp = client.post("/api/v1/whatsapp/webhook", content=body,
+                           headers={"X-Hub-Signature-256": sig,
+                                    "Content-Type": "application/json"})
+        assert resp.status_code == 200
+        send_mock.assert_called_once()
+        return send_mock.call_args.kwargs["body"]
+
+
+def test_whatsapp_reply_for_informational_intent_has_no_approval_link(monkeypatch, client: TestClient) -> None:
+    """Before this fix, ANY reply with user_approval is None — including
+    EXPLAIN/evaluate_business/risk_review answers, which never touch HITL —
+    was wrongly sent as 'Saya sudah menyiapkan rekomendasi alokasi, review
+    & approve di: .../approvals/{audit_id}'. An informational answer must be
+    relayed as-is, with no approval link appended."""
+    final_state = {
+        "audit_id": "audit-explain-1",
+        "intent": "explain",
+        "messages": [AIMessage(content="RSI (Relative Strength Index) mengukur momentum harga.")],
+        "legal_status": None,
+        "user_approval": None,
+        "transactions": [],
+        "errors": [],
+    }
+    body = _post_wa_message(client, monkeypatch, message_id="wamid.EXPLAIN-1",
+                            text="apa itu RSI?", final_state=final_state)
+
+    assert body == "RSI (Relative Strength Index) mengukur momentum harga."
+    assert "approvals" not in body.lower()
+    assert "rekomendasi alokasi" not in body.lower()
+
+
+def test_whatsapp_reply_appends_approval_link_when_awaiting_hitl(monkeypatch, client: TestClient) -> None:
+    from app.agents.state import LegalStatus
+
+    final_state = {
+        "audit_id": "audit-hitl-1",
+        "intent": "allocate_stocks",
+        "messages": [],
+        "legal_status": LegalStatus.APPROVED,
+        "user_approval": None,
+        "transactions": [],
+        "errors": [],
+    }
+    body = _post_wa_message(client, monkeypatch, message_id="wamid.HITL-1",
+                            text="alokasikan 10jt ke BBCA", final_state=final_state)
+
+    assert "Approvals" in body
+    assert "audit-hitl-1" in body
+    assert body.endswith("/approvals/audit-hitl-1")
+
+
+def test_whatsapp_reply_appends_audit_link_after_execution(monkeypatch, client: TestClient) -> None:
+    from app.agents.state import LegalStatus, UserApproval
+
+    final_state = {
+        "audit_id": "audit-exec-1",
+        "intent": "allocate_stocks",
+        "messages": [],
+        "legal_status": LegalStatus.APPROVED,
+        "user_approval": UserApproval.APPROVED,
+        "transactions": [
+            {"ticker": "BBCA", "side": "buy", "quantity": 10, "status": "filled", "broker_ref": "r1"},
+        ],
+        "errors": [],
+    }
+    body = _post_wa_message(client, monkeypatch, message_id="wamid.EXEC-1",
+                            text="ya, setuju", final_state=final_state)
+
+    assert "BBCA" in body
+    assert "berhasil dieksekusi" in body.lower()
+    assert body.endswith("/audit/audit-exec-1")

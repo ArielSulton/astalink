@@ -5,8 +5,9 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from langchain_core.messages import HumanMessage
 
 import app.core.config as _config
+from app.agents.chat_agent import build_chat_reply
 from app.agents.graph import graph
-from app.agents.state import new_state
+from app.agents.state import LegalStatus, UserApproval, new_state
 from app.core.supabase_admin import get_admin_client
 from app.integrations.whatsapp import send_text, verify_signature
 
@@ -104,14 +105,18 @@ def _process_message(msg: dict[str, Any]) -> None:
     final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})
 
     audit_id = final.get("audit_id")
-    if final.get("__interrupt__") or final.get("user_approval") is None:
-        link = f"{_config.settings.APP_BASE_URL}/approvals/{audit_id}"
-        send_text(to_phone_e164=phone,
-                  body=f"Saya sudah menyiapkan rekomendasi alokasi.\nReview & approve di: {link}")
-    elif final.get("transactions"):
-        n = len(final["transactions"])
-        send_text(to_phone_e164=phone,
-                  body=f"Eksekusi selesai: {n} order. Detail: {_config.settings.APP_BASE_URL}/audit/{audit_id}")
-    else:
-        send_text(to_phone_e164=phone,
-                  body="Permintaan tidak dapat diproses. Coba pesan yang lebih spesifik.")
+    reply = build_chat_reply(final)
+
+    # build_chat_reply's text is web-oriented ("buka halaman Approvals") —
+    # WhatsApp has no in-app navigation, so append a direct deep link for the
+    # same two cases it already detects, using the identical state-shape
+    # checks (never a bare "user_approval is None", which used to also catch
+    # informational replies, clarification questions, and legal rejections —
+    # none of which have anything to approve).
+    legal_status = final.get("legal_status")
+    if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) and final.get("user_approval") is None:
+        reply += f"\nReview & approve di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
+    elif final.get("user_approval") == UserApproval.APPROVED and final.get("transactions"):
+        reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
+
+    send_text(to_phone_e164=phone, body=reply)

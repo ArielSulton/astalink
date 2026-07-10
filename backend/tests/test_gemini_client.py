@@ -48,5 +48,5 @@ def test_get_chat_model_is_lazy_and_cached() -> None:
     assert first is second, "should return cached singleton"
     assert ctor.call_count == 1, "constructor must be called exactly once"
     kwargs = ctor.call_args.kwargs
-    assert kwargs["model"] == "gemini-1.5-flash"
+    assert kwargs["model"] == "gemini-3.1-flash-lite"
     assert kwargs["google_api_key"] == "d"
