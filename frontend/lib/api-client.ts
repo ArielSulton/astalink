@@ -225,6 +225,12 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
     ),
 
+  signup: (body: { email: string; password: string }): Promise<{ message: string }> =>
+    jsonFetch<{ message: string }>(
+      "/api/v1/auth/signup",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
   createWorkspace: (
     body: { name: string; type: "personal" | "business" },
     token: string,
