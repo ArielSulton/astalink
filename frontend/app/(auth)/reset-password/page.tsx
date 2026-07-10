@@ -14,13 +14,19 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setHasSession(!!session);
-      setChecking(false);
-      if (!session) {
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setHasSession(!!session);
+        setChecking(false);
+        if (!session) {
+          router.replace("/forgot-password");
+        }
+      })
+      .catch(() => {
+        setHasSession(false);
+        setChecking(false);
         router.replace("/forgot-password");
-      }
-    });
+      });
   }, [router]);
 
   return (
