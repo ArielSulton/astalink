@@ -39,7 +39,7 @@ async def signup(body: SignupRequest) -> SignupResponse:
     sb = get_admin_client()
 
     try:
-        sb.auth.admin.create_user({
+        create_res = sb.auth.admin.create_user({
             "email": body.email,
             "password": body.password,
             "email_confirm": False,
@@ -47,16 +47,28 @@ async def signup(body: SignupRequest) -> SignupResponse:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    link_res = sb.auth.admin.generate_link({
-        "type": "signup",
-        "email": body.email,
-        "password": body.password,
-        "options": {"redirect_to": f"{settings.APP_BASE_URL}/auth/callback"},
-    })
-    action_link = link_res.properties.action_link
+    try:
+        link_res = sb.auth.admin.generate_link({
+            "type": "signup",
+            "email": body.email,
+            "password": body.password,
+            "options": {"redirect_to": f"{settings.APP_BASE_URL}/auth/callback"},
+        })
+        action_link = link_res.properties.action_link
 
-    html = render_template("confirm_signup.html", action_link=action_link)
-    send_email(body.email, "Konfirmasi akun Astalink kamu", html)
+        html = render_template("confirm_signup.html", action_link=action_link)
+        send_email(body.email, "Konfirmasi akun Astalink kamu", html)
+    except Exception as exc:
+        log.error(
+            "signup: created user %s but failed to send confirmation email (%s) — "
+            "deleting the orphaned account so the user can retry signup",
+            body.email, exc,
+        )
+        sb.auth.admin.delete_user(create_res.user.id)
+        raise HTTPException(
+            status_code=500,
+            detail="Gagal mengirim email konfirmasi. Silakan coba daftar lagi.",
+        )
 
     return SignupResponse(message="Cek email kamu untuk konfirmasi akun.")
 

@@ -50,6 +50,22 @@ def test_signup_returns_400_when_create_user_fails(client: TestClient) -> None:
     assert resp.status_code == 400
 
 
+def test_signup_deletes_orphaned_user_when_confirmation_email_fails(client: TestClient) -> None:
+    fake_admin = MagicMock()
+    fake_user = MagicMock()
+    fake_user.id = "user-123"
+    fake_admin.auth.admin.create_user.return_value = MagicMock(user=fake_user)
+    fake_admin.auth.admin.generate_link.side_effect = Exception("Resend API down")
+
+    with patch("app.api.v1.auth.get_admin_client", return_value=fake_admin):
+        resp = client.post("/api/v1/auth/signup", json={
+            "email": "user@example.com", "password": "supersecret",
+        })
+
+    assert resp.status_code == 500
+    fake_admin.auth.admin.delete_user.assert_called_once_with("user-123")
+
+
 def test_forgot_password_sends_email_when_user_exists(client: TestClient) -> None:
     fake_admin = MagicMock()
     fake_link_res = MagicMock()
