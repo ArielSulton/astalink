@@ -68,7 +68,10 @@ async def signup(body: SignupRequest) -> SignupResponse:
         })
         action_link = link_res.properties.action_link
 
-        html = render_template("confirm_signup.html", action_link=action_link)
+        html = render_template(
+            "confirm_signup.html", action_link=action_link,
+            logo_url=f"{settings.APP_BASE_URL}/astalink.png",
+        )
         send_email(body.email, "Konfirmasi akun Astalink kamu", html)
     except Exception as exc:
         log.error(
@@ -98,7 +101,10 @@ async def forgot_password(body: ForgotPasswordRequest) -> ForgotPasswordResponse
             },
         })
         action_link = link_res.properties.action_link
-        html = render_template("reset_password.html", action_link=action_link)
+        html = render_template(
+            "reset_password.html", action_link=action_link,
+            logo_url=f"{settings.APP_BASE_URL}/astalink.png",
+        )
         send_email(body.email, "Reset password Astalink kamu", html)
     except Exception as exc:
         # Deliberately swallowed — the response must be identical whether

@@ -25,6 +25,7 @@ def test_signup_creates_user_and_sends_confirmation_email(client: TestClient) ->
     assert generate_link_call["email"] == "user@example.com"
     mock_render.assert_called_once_with(
         "confirm_signup.html", action_link="https://supabase.example/verify?token=abc",
+        logo_url="http://localhost:3000/astalink.png",
     )
     mock_send.assert_called_once_with(
         "user@example.com", "Konfirmasi akun Astalink kamu", "<html>confirm</html>",
