@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/signup-form";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,8 +12,8 @@ export default function SignupPage() {
             <div className="flex flex-col justify-center gap-6 p-6 md:p-8">
               <div className="flex flex-col items-center gap-2 text-center">
                 <div className="mb-2 flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-chart-2/15 border border-chart-2/30">
-                    <span className="text-chart-2 text-[11px] font-black font-mono">A</span>
+                  <div className="flex size-8 items-center justify-center">
+                    <Image src="/astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
                   </div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-foreground font-bold tracking-tight">Astalink</span>

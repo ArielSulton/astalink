@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   title: "Astalink AI — Investasi IDX Berbasis AI",
   description:
     "Platform investasi saham IDX dengan AI multi-agen, kepatuhan OJK otomatis, dan kontrol penuh di tangan kamu.",
+  icons: {
+    icon: "/astalink.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

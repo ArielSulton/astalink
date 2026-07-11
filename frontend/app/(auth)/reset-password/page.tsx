@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
@@ -36,8 +37,8 @@ export default function ResetPasswordPage() {
           <CardContent className="p-6 md:p-8">
             <div className="mb-6 flex flex-col items-center gap-2 text-center">
               <div className="mb-2 flex items-center gap-2">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-chart-2/15 border border-chart-2/30">
-                  <span className="text-chart-2 text-[11px] font-black font-mono">A</span>
+                <div className="flex size-8 items-center justify-center">
+                  <Image src="/astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-foreground font-bold tracking-tight">Astalink</span>
