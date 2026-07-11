@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import { Card, CardContent } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "Lupa Password",
+  description: "Reset password akun Astalink AI kamu.",
+};
 
 export default function ForgotPasswordPage() {
   return (

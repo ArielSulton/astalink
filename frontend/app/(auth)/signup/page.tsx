@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/signup-form";
 import { Card, CardContent } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "Daftar",
+  description: "Mulai analisis portofolio IDX pertamamu dalam 2 menit bersama Astalink AI.",
+};
 
 export default function SignupPage() {
   return (

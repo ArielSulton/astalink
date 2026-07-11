@@ -45,7 +45,7 @@ def _already_seen(message_id: str) -> bool:
 def _resolve_user(phone_e164: str) -> dict[str, str] | None:
     res = (
         get_admin_client().table("whatsapp_bindings")
-        .select("user_id, workspace_id").eq("phone_e164", phone_e164).single().execute()
+        .select("user_id, workspace_id").eq("phone_e164", phone_e164).maybe_single().execute()
     )
     return res.data
 

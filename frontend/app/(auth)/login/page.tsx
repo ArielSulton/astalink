@@ -1,8 +1,14 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "Login",
+  description: "Masuk ke Astalink AI untuk mengelola portofolio IDX kamu.",
+};
 
 export default function LoginPage() {
   return (
