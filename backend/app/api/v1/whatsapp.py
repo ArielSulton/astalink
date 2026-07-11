@@ -47,7 +47,7 @@ def _resolve_user(phone_e164: str) -> dict[str, str] | None:
         get_admin_client().table("whatsapp_bindings")
         .select("user_id, workspace_id").eq("phone_e164", phone_e164).maybe_single().execute()
     )
-    return res.data
+    return res.data if res else None
 
 
 def _onboarding_link(phone_e164: str) -> str:
