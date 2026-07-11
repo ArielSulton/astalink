@@ -25,7 +25,6 @@ export default async function OpengraphImage() {
             "radial-gradient(circle at 25% 20%, rgba(34,197,94,0.16), transparent 55%), radial-gradient(circle at 80% 85%, rgba(34,197,94,0.10), transparent 50%)",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={logoBase64} width={168} height={168} alt="" style={{ marginBottom: 32 }} />
         <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
           <span style={{ fontSize: 76, fontWeight: 800, color: "#fafafa", letterSpacing: "-0.02em" }}>
