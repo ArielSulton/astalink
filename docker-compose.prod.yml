@@ -98,7 +98,9 @@ services:
 
 volumes:
   prometheus_data:
+    name: astalink-prometheus-data
   grafana_data:
+    name: astalink-grafana-data
 
 networks:
   dokploy-network:
