@@ -14,6 +14,25 @@ def test_build_chat_reply_returns_clarification_message_when_ambiguous() -> None
     assert build_chat_reply(state) == "Bisa dijelaskan lagi tujuan Anda?"
 
 
+def test_build_chat_reply_asks_for_tickers_instead_of_misleading_legal_rejection() -> None:
+    """Live incident: user asked "rekomendasi investasi untuk dana 20 juta"
+    without naming any ticker. optimizer_node correctly bails with
+    allocation_plan=None and an optimizer/no_tickers error, but the empty
+    plan still flowed through to legal_node, which reasonably rejected an
+    EMPTY allocation ("cannot ground a decision") — and the user saw that
+    downstream rejection as "ditolak secara legal", with zero indication
+    that just naming a stock would fix it. The real, fixable reason
+    (optimizer/no_tickers) must take priority over the misleading
+    downstream legal rejection it caused."""
+    state = new_state()
+    state["legal_status"] = LegalStatus.REJECTED
+    state["audit_id"] = "audit-no-tickers"
+    state["errors"] = [{"node": "optimizer", "reason": "no_tickers"}]
+    reply = build_chat_reply(state)
+    assert "ditolak secara legal" not in reply.lower()
+    assert "saham" in reply.lower() or "ticker" in reply.lower()
+
+
 def test_build_chat_reply_explains_legal_rejection() -> None:
     state = new_state()
     state["legal_status"] = LegalStatus.REJECTED
