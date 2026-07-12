@@ -13,7 +13,8 @@ from app.agents.state import LegalStatus, UserApproval, new_state
 from app.api.deps import get_current_user
 from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
-from app.integrations.whatsapp import send_text, verify_signature
+from app.integrations.chart import render_allocation_chart
+from app.integrations.whatsapp import send_image, send_text, verify_signature
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,6 +107,7 @@ def _process_message(msg: dict[str, Any]) -> None:
     initial["_workspace_id"] = binding["workspace_id"]
 
     thread_id = f"wa-{phone}-{binding['workspace_id']}"
+    allocation_plan = None
     try:
         final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})
 
@@ -121,8 +123,10 @@ def _process_message(msg: dict[str, Any]) -> None:
         legal_status = final.get("legal_status")
         if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) and final.get("user_approval") is None:
             reply += f"\nReview & approve di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
+            allocation_plan = final.get("allocation_plan")
         elif final.get("user_approval") == UserApproval.APPROVED and final.get("transactions"):
             reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
+            allocation_plan = final.get("allocation_plan")
     except Exception:
         # Any unhandled exception anywhere in the pipeline (market data
         # fetch, solver, legal RAG, etc.) used to propagate all the way up
@@ -131,6 +135,17 @@ def _process_message(msg: dict[str, Any]) -> None:
         # with no indication anything went wrong.
         log.exception("whatsapp: pipeline failed for thread %s", thread_id)
         reply = "Maaf, terjadi kendala saat memproses permintaan Anda. Silakan coba lagi beberapa saat lagi."
+
+    if allocation_plan and allocation_plan.get("weights"):
+        try:
+            png = render_allocation_chart(
+                allocation_plan["weights"], allocation_plan.get("cash_buffer", 0.0),
+            )
+            send_image(to_phone_e164=phone, image_bytes=png, caption="Alokasi Portofolio")
+        except Exception:
+            # A chart render/upload failure must never block the text reply
+            # (which carries the actual approve/detail link) from sending.
+            log.exception("whatsapp: chart render/send failed for thread %s", thread_id)
 
     send_text(to_phone_e164=phone, body=reply)
 

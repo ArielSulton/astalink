@@ -228,3 +228,180 @@ def test_whatsapp_sends_fallback_reply_when_pipeline_raises(monkeypatch, client:
     reply = send_mock.call_args.kwargs["body"]
     assert reply
     assert "maaf" in reply.lower()
+
+
+def _post_wa_message_with_chart_mocks(client: TestClient, monkeypatch, *, message_id: str,
+                                      text: str, final_state: dict):
+    """Same signed-payload setup as _post_wa_message, but also mocks
+    render_allocation_chart/send_image so both can be asserted on. Returns
+    (send_text_mock, send_image_mock, render_chart_mock)."""
+    secret = "appsec"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    import importlib, app.core.config
+    importlib.reload(app.core.config)
+
+    payload = {
+        "entry": [{"changes": [{"value": {"messages": [{
+            "id": message_id,
+            "from": "6281234567890",
+            "type": "text",
+            "text": {"body": text},
+        }]}}]}]
+    }
+    body = json.dumps(payload).encode()
+    sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[{}])
+    fake_admin.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"user_id": "u1", "workspace_id": "w1"}
+    )
+
+    with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.whatsapp.graph.invoke", return_value=final_state), \
+         patch("app.api.v1.whatsapp.render_allocation_chart", return_value=b"fake-png-bytes") as render_mock, \
+         patch("app.api.v1.whatsapp.send_image") as image_mock, \
+         patch("app.api.v1.whatsapp.send_text") as text_mock:
+        resp = client.post("/api/v1/whatsapp/webhook", content=body,
+                           headers={"X-Hub-Signature-256": sig,
+                                    "Content-Type": "application/json"})
+        assert resp.status_code == 200
+        return text_mock, image_mock, render_mock
+
+
+def test_whatsapp_sends_chart_image_when_hitl_pending(monkeypatch, client: TestClient) -> None:
+    from app.agents.state import LegalStatus
+
+    final_state = {
+        "audit_id": "audit-chart-1",
+        "intent": "allocate_stocks",
+        "messages": [],
+        "legal_status": LegalStatus.APPROVED,
+        "user_approval": None,
+        "allocation_plan": {
+            "weights": [{"ticker": "BBCA", "weight": 0.6}, {"ticker": "TLKM", "weight": 0.3}],
+            "cash": 2_000_000, "cash_buffer": 0.1,
+            "narration": "n", "relaxations_applied": [],
+        },
+        "transactions": [],
+        "errors": [],
+    }
+    text_mock, image_mock, render_mock = _post_wa_message_with_chart_mocks(
+        client, monkeypatch, message_id="wamid.CHART-1",
+        text="alokasikan 20jt ke BBCA dan TLKM", final_state=final_state,
+    )
+
+    render_mock.assert_called_once_with(final_state["allocation_plan"]["weights"], 0.1)
+    image_mock.assert_called_once()
+    assert image_mock.call_args.kwargs["image_bytes"] == b"fake-png-bytes"
+    assert image_mock.call_args.kwargs["to_phone_e164"] == "6281234567890"
+    text_mock.assert_called_once()  # the link/text reply must still be sent
+
+
+def test_whatsapp_sends_chart_image_after_execution(monkeypatch, client: TestClient) -> None:
+    from app.agents.state import LegalStatus, UserApproval
+
+    final_state = {
+        "audit_id": "audit-chart-2",
+        "intent": "allocate_stocks",
+        "messages": [],
+        "legal_status": LegalStatus.APPROVED,
+        "user_approval": UserApproval.APPROVED,
+        "allocation_plan": {
+            "weights": [{"ticker": "BBCA", "weight": 0.9}],
+            "cash": 1_000_000, "cash_buffer": 0.1,
+            "narration": "n", "relaxations_applied": [],
+        },
+        "transactions": [
+            {"ticker": "BBCA", "side": "buy", "quantity": 10, "status": "filled", "broker_ref": "r1"},
+        ],
+        "errors": [],
+    }
+    text_mock, image_mock, render_mock = _post_wa_message_with_chart_mocks(
+        client, monkeypatch, message_id="wamid.CHART-2",
+        text="ya, setuju", final_state=final_state,
+    )
+
+    render_mock.assert_called_once()
+    image_mock.assert_called_once()
+    text_mock.assert_called_once()
+
+
+def test_whatsapp_does_not_send_chart_for_informational_reply(monkeypatch, client: TestClient) -> None:
+    """explain/evaluate_business/risk_review/portfolio_status replies have
+    no allocation_plan at all — no chart to send."""
+    final_state = {
+        "audit_id": "audit-chart-3",
+        "intent": "explain",
+        "messages": [AIMessage(content="RSI mengukur momentum harga.")],
+        "legal_status": None,
+        "user_approval": None,
+        "transactions": [],
+        "errors": [],
+    }
+    text_mock, image_mock, render_mock = _post_wa_message_with_chart_mocks(
+        client, monkeypatch, message_id="wamid.CHART-3",
+        text="apa itu RSI?", final_state=final_state,
+    )
+
+    render_mock.assert_not_called()
+    image_mock.assert_not_called()
+    text_mock.assert_called_once()
+
+
+def test_whatsapp_chart_failure_does_not_block_text_reply(monkeypatch, client: TestClient) -> None:
+    """A chart render/upload failure must never prevent the text reply
+    (which carries the actual approve/detail link) from sending."""
+    from app.agents.state import LegalStatus
+
+    final_state = {
+        "audit_id": "audit-chart-4",
+        "intent": "allocate_stocks",
+        "messages": [],
+        "legal_status": LegalStatus.APPROVED,
+        "user_approval": None,
+        "allocation_plan": {
+            "weights": [{"ticker": "BBCA", "weight": 0.6}],
+            "cash": 1_000_000, "cash_buffer": 0.4,
+            "narration": "n", "relaxations_applied": [],
+        },
+        "transactions": [],
+        "errors": [],
+    }
+
+    secret = "appsec"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    import importlib, app.core.config
+    importlib.reload(app.core.config)
+
+    payload = {
+        "entry": [{"changes": [{"value": {"messages": [{
+            "id": "wamid.CHART-4",
+            "from": "6281234567890",
+            "type": "text",
+            "text": {"body": "alokasikan 20jt ke BBCA"},
+        }]}}]}]
+    }
+    body = json.dumps(payload).encode()
+    sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[{}])
+    fake_admin.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"user_id": "u1", "workspace_id": "w1"}
+    )
+
+    with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.whatsapp.graph.invoke", return_value=final_state), \
+         patch("app.api.v1.whatsapp.render_allocation_chart", side_effect=Exception("render blew up")), \
+         patch("app.api.v1.whatsapp.send_image") as image_mock, \
+         patch("app.api.v1.whatsapp.send_text") as text_mock:
+        resp = client.post("/api/v1/whatsapp/webhook", content=body,
+                           headers={"X-Hub-Signature-256": sig,
+                                    "Content-Type": "application/json"})
+
+    assert resp.status_code == 200
+    image_mock.assert_not_called()
+    text_mock.assert_called_once()
+    assert "approve" in text_mock.call_args.kwargs["body"].lower() or \
+           "approvals" in text_mock.call_args.kwargs["body"].lower()
