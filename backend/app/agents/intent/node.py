@@ -38,6 +38,13 @@ the specific business name the user mentioned, if any (e.g. "Toko Maju Jaya") â€
 omit the key entirely if the user didn't name a specific business. Estimate
 `confidence` honestly: if the message is ambiguous, set confidence < 0.6 and
 provide a `clarification_question` in Indonesian.
+
+The clarification_question is the ONLY thing the user sees when confidence is
+low â€” it must stand alone as a complete, friendly sentence a first-time user
+would understand with no other context, never a bare word or fragment like
+"gimana?" or "maksudnya?". State what was unclear and give a concrete example,
+e.g. "Maaf, saya kurang paham maksud pesan Anda. Bisa dijelaskan lebih detail?
+Misalnya: \"alokasikan 10 juta ke BBCA\" atau \"apa itu RSI?\"."
 """
 
 

@@ -71,7 +71,15 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
     # (Task 4) — entities.amount alone is just a number the LLM parsed out
     # of the chat message, never checked against anything. Default to the
     # full balance when no amount was stated at all.
-    requested = ents.get("amount") or 0
+    #
+    # entities is dict[str, Any] (N1's structured-output schema has no
+    # numeric field for "amount"), and Gemini sometimes hands it back as a
+    # numeral string ("20000000") rather than a number — coerce defensively
+    # rather than letting `min()` crash comparing str to float.
+    try:
+        requested = float(ents.get("amount") or 0)
+    except (TypeError, ValueError):
+        requested = 0
     workspace_id = state.get("_workspace_id")
     balance = get_workspace_balance(get_admin_client(), workspace_id) if workspace_id else None
     if balance is None:

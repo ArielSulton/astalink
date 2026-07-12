@@ -106,22 +106,31 @@ def _process_message(msg: dict[str, Any]) -> None:
     initial["_workspace_id"] = binding["workspace_id"]
 
     thread_id = f"wa-{phone}-{binding['workspace_id']}"
-    final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})
+    try:
+        final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})
 
-    audit_id = final.get("audit_id")
-    reply = build_chat_reply(final)
+        audit_id = final.get("audit_id")
+        reply = build_chat_reply(final)
 
-    # build_chat_reply's text is web-oriented ("buka halaman Approvals") —
-    # WhatsApp has no in-app navigation, so append a direct deep link for the
-    # same two cases it already detects, using the identical state-shape
-    # checks (never a bare "user_approval is None", which used to also catch
-    # informational replies, clarification questions, and legal rejections —
-    # none of which have anything to approve).
-    legal_status = final.get("legal_status")
-    if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) and final.get("user_approval") is None:
-        reply += f"\nReview & approve di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
-    elif final.get("user_approval") == UserApproval.APPROVED and final.get("transactions"):
-        reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
+        # build_chat_reply's text is web-oriented ("buka halaman Approvals") —
+        # WhatsApp has no in-app navigation, so append a direct deep link for the
+        # same two cases it already detects, using the identical state-shape
+        # checks (never a bare "user_approval is None", which used to also catch
+        # informational replies, clarification questions, and legal rejections —
+        # none of which have anything to approve).
+        legal_status = final.get("legal_status")
+        if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) and final.get("user_approval") is None:
+            reply += f"\nReview & approve di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
+        elif final.get("user_approval") == UserApproval.APPROVED and final.get("transactions"):
+            reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
+    except Exception:
+        # Any unhandled exception anywhere in the pipeline (market data
+        # fetch, solver, legal RAG, etc.) used to propagate all the way up
+        # through this webhook handler, 500-ing the request — since
+        # send_text() below was never reached, the user just saw silence
+        # with no indication anything went wrong.
+        log.exception("whatsapp: pipeline failed for thread %s", thread_id)
+        reply = "Maaf, terjadi kendala saat memproses permintaan Anda. Silakan coba lagi beberapa saat lagi."
 
     send_text(to_phone_e164=phone, body=reply)
 

@@ -184,3 +184,47 @@ def test_whatsapp_reply_appends_audit_link_after_execution(monkeypatch, client: 
     assert "BBCA" in body
     assert "berhasil dieksekusi" in body.lower()
     assert body.endswith("/audit/audit-exec-1")
+
+
+def test_whatsapp_sends_fallback_reply_when_pipeline_raises(monkeypatch, client: TestClient) -> None:
+    """Reproduces a live incident: optimizer_node crashed with an unhandled
+    TypeError (comparing a string "amount" entity to a float balance), the
+    exception propagated all the way up through this webhook handler, the
+    request 500'd, and send_text() was never reached — the user saw no
+    reply at all with zero indication anything failed. The pipeline must
+    never be allowed to fail silently."""
+    secret = "appsec"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    import importlib, app.core.config
+    importlib.reload(app.core.config)
+
+    payload = {
+        "entry": [{"changes": [{"value": {"messages": [{
+            "id": "wamid.CRASH-1",
+            "from": "6281234567890",
+            "type": "text",
+            "text": {"body": "rekomendasi invest dana 20 juta rupiah"},
+        }]}}]}]
+    }
+    body = json.dumps(payload).encode()
+    sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[{}])
+    fake_admin.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"user_id": "u1", "workspace_id": "w1"}
+    )
+
+    with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.whatsapp.graph.invoke",
+               side_effect=TypeError("'<' not supported between instances of 'float' and 'str'")), \
+         patch("app.api.v1.whatsapp.send_text") as send_mock:
+        resp = client.post("/api/v1/whatsapp/webhook", content=body,
+                           headers={"X-Hub-Signature-256": sig,
+                                    "Content-Type": "application/json"})
+
+    assert resp.status_code == 200
+    send_mock.assert_called_once()
+    reply = send_mock.call_args.kwargs["body"]
+    assert reply
+    assert "maaf" in reply.lower()
