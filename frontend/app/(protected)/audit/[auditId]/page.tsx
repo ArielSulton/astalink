@@ -81,9 +81,11 @@ export default function AuditDetailPage() {
                   <span className="px-2 py-0.5 rounded bg-chart-2/10 border border-chart-2/15 font-mono text-[9px] font-bold text-chart-2 uppercase tracking-wider">
                     {c.source}
                   </span>
-                  <span className="text-[10px] text-foreground font-semibold font-mono">
-                    Pasal {c.pasal}{c.ayat ? ` ayat (${c.ayat})` : ""}
-                  </span>
+                  {c.pasal && (
+                    <span className="text-[10px] text-foreground font-semibold font-mono">
+                      Pasal {c.pasal}{c.ayat ? ` ayat (${c.ayat})` : ""}
+                    </span>
+                  )}
                 </div>
                 <div className="italic font-serif pl-3 border-l border-border mt-2 text-foreground/85">
                   &ldquo;{c.span}&rdquo;

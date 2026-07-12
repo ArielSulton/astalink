@@ -36,9 +36,12 @@ class Citation(BaseModel):
 
     `forbidden_tickers`/`partial_tickers` let a citation carry the specific
     instruments a regulation bans or caps — app.agents.optimizer.constraints
-    aggregates these across all citations into solver constraints."""
+    aggregates these across all citations into solver constraints.
+
+    `pasal` is nullable — mirrors Chunk.pasal, since a citation can point at
+    a general/preamble provision that has no specific article number."""
     source: str
-    pasal: str
+    pasal: str | None = None
     ayat: str | None = None
     chunk_id: str
     span: str

@@ -21,7 +21,7 @@ export interface ApprovalDetail {
     relaxations_applied: string[];
   } | null;
   legal_status: string | null;
-  legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
+  legal_citations: { source: string; pasal: string | null; ayat: string | null; span: string }[];
 }
 
 export interface AuditSummary {
@@ -47,7 +47,7 @@ export interface AuditDetail {
     relaxations_applied: string[];
   } | null;
   legal_status: string | null;
-  legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
+  legal_citations: { source: string; pasal: string | null; ayat: string | null; span: string }[];
   transactions: {
     ticker: string;
     side: string;

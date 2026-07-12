@@ -26,6 +26,21 @@ def test_citation_must_reference_a_chunk() -> None:
     assert cit.chunk_id == "UUPM-5-1-12-0"
 
 
+def test_citation_allows_missing_pasal() -> None:
+    """A citation can point at a Chunk whose own `pasal` is None (a
+    preamble/general provision without a specific article number) —
+    Citation.pasal must accept None the same way Chunk.pasal already does.
+    Live incident: Gemini echoed pasal=null for such a chunk and
+    LegalDecision.model_validate() crashed, which legal_node's broad
+    except then silently turned into a "ditolak secara legal" reply — a
+    schema bug misrepresented to the user as an actual legal rejection."""
+    cit = Citation(
+        source="UUPM", pasal=None, ayat=None,
+        chunk_id="UUPM-_-_-1-0", span="Ketentuan umum",
+    )
+    assert cit.pasal is None
+
+
 def test_citation_carries_optional_forbidden_and_partial_tickers() -> None:
     """The optimizer's forbidden_tickers/partial_tickers constraints (see
     app.agents.optimizer.constraints) are only as real as what the Legal LLM
