@@ -22,6 +22,12 @@ log = logging.getLogger(__name__)
 
 CONFIDENCE_FLOOR = 0.6
 
+# Same 4 blue-chip IDX tickers as app/api/v1/market.py's DEFAULT_TICKERS
+# (kept as a separate bare-code list here rather than imported, since that
+# constant lives in the API/route layer and is formatted for a query-param
+# default, not for entities.tickers).
+DEFAULT_ALLOCATION_TICKERS = ["BBCA", "TLKM", "ASII", "BBRI"]
+
 SYSTEM = """\
 You are an Indonesian financial-assistant intent classifier.
 Map the user message to one of:
@@ -106,9 +112,27 @@ def intent_node(state: AgentState) -> AgentState:
     needs_clarification = (
         decision.confidence < CONFIDENCE_FLOOR or decision.intent == Intent.UNKNOWN
     )
+    entities = decision.entities
+    # "rekomendasi investasi untuk dana 20 juta" names no ticker AND no
+    # sector — a genuine recommendation request, not something to bounce
+    # back asking the user to name a stock. Fall back to the same
+    # blue-chip basket already used as the Market watchlist's default
+    # (app/api/v1/market.py's DEFAULT_TICKERS). A stated sector with no
+    # exact tickers is left alone — silently substituting this basket
+    # would ignore what the user actually asked for (ASII/TLKM aren't
+    # bank stocks); optimizer_node's existing no-tickers gate is more
+    # honest than a default that quietly answers a different question.
+    if (
+        decision.intent == Intent.ALLOCATE_STOCKS
+        and not needs_clarification
+        and not entities.get("tickers")
+        and not entities.get("sector")
+    ):
+        entities = {**entities, "tickers": DEFAULT_ALLOCATION_TICKERS}
+
     update: dict[str, Any] = {
         "intent": decision.intent.value,
-        "entities": decision.entities,
+        "entities": entities,
         "_needs_clarification": needs_clarification,
     }
 
