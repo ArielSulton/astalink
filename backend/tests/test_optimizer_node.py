@@ -249,6 +249,82 @@ def test_optimizer_node_caps_cash_at_real_workspace_balance() -> None:
     assert captured[0].cash == 10_000_000
 
 
+def test_optimizer_node_coerces_string_amount_from_llm_entities() -> None:
+    """Gemini's structured-output `entities` dict is loosely typed
+    (dict[str, Any]) and sometimes extracts "amount" as a numeral string
+    (e.g. "20000000") instead of a number. Before this fix, `min(requested,
+    balance)` crashed with `TypeError: '<' not supported between instances
+    of 'float' and 'str'` — reproduced live via a WhatsApp 500."""
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+    state["entities"] = {
+        "tickers": ["BBCA"],
+        "amount": "20000000",
+        "market_snapshot": {"tickers": [{"ticker": "BBCA", "last_close": 8000}]},
+        "risk_metrics": {
+            "metrics": {"var_95": 0.02, "var_99": 0.03, "sharpe": 1.5},
+            "suggested_weights": {"BBCA": 1.0},
+        },
+    }
+    state["revision_count"] = 0
+
+    captured: list = []
+
+    def _capture_solve(inputs):
+        captured.append(inputs)
+        return SolverResult(status="optimal", weights={"BBCA": 0.9}), []
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="Alokasi.")
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
+        MagicMock(data=[{"cash_balance": 50_000_000}])
+
+    with patch("app.agents.optimizer.node.solve_with_relaxation", side_effect=_capture_solve), \
+         patch("app.agents.optimizer.node.get_chat_model", return_value=fake_llm), \
+         patch("app.agents.optimizer.node.get_admin_client", return_value=fake_admin):
+        optimizer_node(state)
+
+    assert captured[0].cash == 20_000_000.0
+
+
+def test_optimizer_node_ignores_unparseable_amount_from_llm_entities() -> None:
+    """If the LLM ever hands back genuine garbage for "amount", fall back to
+    the full workspace balance (same behavior as no amount stated at all)
+    instead of crashing."""
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+    state["entities"] = {
+        "tickers": ["BBCA"],
+        "amount": "sekitar dua puluh juta",
+        "market_snapshot": {"tickers": [{"ticker": "BBCA", "last_close": 8000}]},
+        "risk_metrics": {
+            "metrics": {"var_95": 0.02, "var_99": 0.03, "sharpe": 1.5},
+            "suggested_weights": {"BBCA": 1.0},
+        },
+    }
+    state["revision_count"] = 0
+
+    captured: list = []
+
+    def _capture_solve(inputs):
+        captured.append(inputs)
+        return SolverResult(status="optimal", weights={"BBCA": 0.9}), []
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="Alokasi.")
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
+        MagicMock(data=[{"cash_balance": 50_000_000}])
+
+    with patch("app.agents.optimizer.node.solve_with_relaxation", side_effect=_capture_solve), \
+         patch("app.agents.optimizer.node.get_chat_model", return_value=fake_llm), \
+         patch("app.agents.optimizer.node.get_admin_client", return_value=fake_admin):
+        optimizer_node(state)
+
+    assert captured[0].cash == 50_000_000
+
+
 def test_optimizer_node_uses_full_balance_when_no_amount_stated() -> None:
     """User didn't state an amount at all (entities.amount absent) — default
     to the workspace's full available balance rather than cash=0."""

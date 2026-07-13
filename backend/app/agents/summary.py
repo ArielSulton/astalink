@@ -18,6 +18,8 @@ from langchain_core.messages import AIMessage
 from app.agents.intents import Intent
 from app.agents.state import AgentState
 from app.core.metrics import track_node_duration
+from app.core.supabase_admin import get_admin_client
+from app.core.wallet import get_workspace_balance
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +91,19 @@ def _risk_reply(state: AgentState) -> str:
     return "\n".join(lines)
 
 
+def _portfolio_status_reply(state: AgentState) -> str:
+    workspace_id = state.get("_workspace_id")
+    balance = get_workspace_balance(get_admin_client(), workspace_id) if workspace_id else None
+    if balance is None:
+        return PORTFOLIO_STATUS_MESSAGE
+    return (
+        f"Saldo kas workspace Anda saat ini: {_fmt_rp(balance)}. "
+        "Ringkasan posisi/holdings lewat chat belum tersedia — silakan buka halaman "
+        "Asset View untuk melihat alokasi yang sudah disetujui, atau halaman "
+        "Transactions untuk riwayat eksekusi."
+    )
+
+
 @track_node_duration("n9_summary")
 def summary_node(state: AgentState) -> AgentState:
     intent = state.get("intent")
@@ -97,6 +112,6 @@ def summary_node(state: AgentState) -> AgentState:
     elif intent == Intent.RISK_REVIEW.value:
         reply = _risk_reply(state)
     else:  # PORTFOLIO_STATUS (and any future direct-summary intent)
-        reply = PORTFOLIO_STATUS_MESSAGE
+        reply = _portfolio_status_reply(state)
 
     return {"messages": [*state.get("messages", []), AIMessage(content=reply)]}

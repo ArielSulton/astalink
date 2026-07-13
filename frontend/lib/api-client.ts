@@ -21,7 +21,7 @@ export interface ApprovalDetail {
     relaxations_applied: string[];
   } | null;
   legal_status: string | null;
-  legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
+  legal_citations: { source: string; pasal: string | null; ayat: string | null; span: string }[];
 }
 
 export interface AuditSummary {
@@ -47,7 +47,7 @@ export interface AuditDetail {
     relaxations_applied: string[];
   } | null;
   legal_status: string | null;
-  legal_citations: { source: string; pasal: string; ayat: string | null; span: string }[];
+  legal_citations: { source: string; pasal: string | null; ayat: string | null; span: string }[];
   transactions: {
     ticker: string;
     side: string;
@@ -162,6 +162,7 @@ async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: stri
     },
   });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -193,6 +194,9 @@ export const api = {
   setPin: (pin: string, token: string) =>
     jsonFetch<void>(`/api/v1/users/me/pin`,
       { method: "POST", body: JSON.stringify({ pin }) }, token),
+  bindWhatsapp: (code: string, workspaceId: string, token: string) =>
+    jsonFetch<void>(`/api/v1/whatsapp/bind`,
+      { method: "POST", body: JSON.stringify({ code, workspace_id: workspaceId }) }, token),
   runAgent: (body: AgentRunRequest, token: string) =>
     jsonFetch<AgentRunResponse>(
       "/api/v1/agent/run",
@@ -217,6 +221,23 @@ export const api = {
       "/api/v1/chat/",
       { method: "POST", body: JSON.stringify(body) },
       token,
+    ),
+
+  forgotPassword: (body: { email: string }): Promise<{ message: string }> =>
+    jsonFetch<{ message: string }>(
+      "/api/v1/auth/forgot-password",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  getMe: (token: string): Promise<{ email: string; is_admin: boolean }> =>
+    jsonFetch<{ email: string; is_admin: boolean }>(
+      "/api/v1/auth/me", { method: "GET" }, token,
+    ),
+
+  signup: (body: { email: string; password: string }): Promise<{ message: string }> =>
+    jsonFetch<{ message: string }>(
+      "/api/v1/auth/signup",
+      { method: "POST", body: JSON.stringify(body) },
     ),
 
   createWorkspace: (
@@ -258,8 +279,8 @@ export const api = {
       token,
     ),
 
-  listLegalDocs: (): Promise<RegulationDoc[]> =>
-    jsonFetch<RegulationDoc[]>("/api/v1/legal/documents", { method: "GET" }),
+  listLegalDocs: (token: string): Promise<RegulationDoc[]> =>
+    jsonFetch<RegulationDoc[]>("/api/v1/legal/documents", { method: "GET" }, token),
 
   uploadLegalDoc: async (
     file: File,

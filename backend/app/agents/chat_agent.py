@@ -22,15 +22,21 @@ def build_chat_reply(state: AgentState) -> str:
 
     Priority mirrors what the user needs to see first:
     1. N1 couldn't classify the message — relay its clarification question.
-    2. Informational intents (explain/evaluate_business/risk_review/
+    2. optimizer_node had no tickers to work with (e.g. "rekomendasi invest
+       20 juta" without naming a stock) — ask for one. Checked BEFORE the
+       legal branches: an empty allocation_plan still flows through to
+       legal_node, which correctly rejects it ("cannot ground a decision on
+       an empty plan") — but that downstream rejection is misleading on its
+       own; the real, fixable reason is that no ticker was named.
+    3. Informational intents (explain/evaluate_business/risk_review/
        portfolio_status) — relay the QA/summary node's answer as-is. Checked
        BEFORE the legal branches: on a continued thread, legal_status from an
        earlier allocation run lingers in checkpointed state and must not
        hijack the reply for a non-allocation question.
-    3. Legal rejected the plan — explain that (pipeline stops here).
-    4. Legal approved/partial but no human decision yet — point at Approvals.
-    5. Execution already ran — summarize the resulting transactions.
-    6. Fallback — relay whatever the last message says, or a generic apology.
+    4. Legal rejected the plan — explain that (pipeline stops here).
+    5. Legal approved/partial but no human decision yet — point at Approvals.
+    6. Execution already ran — summarize the resulting transactions.
+    7. Fallback — relay whatever the last message says, or a generic apology.
     """
     messages = state.get("messages") or []
     legal_status = state.get("legal_status")
@@ -38,6 +44,15 @@ def build_chat_reply(state: AgentState) -> str:
 
     if state.get("_needs_clarification") and messages:
         return _last_text(messages)
+
+    optimizer_errors = {e.get("reason") for e in state.get("errors", []) if e.get("node") == "optimizer"}
+    if "no_tickers" in optimizer_errors:
+        return (
+            "Untuk kasih rekomendasi alokasi, saya perlu tahu saham yang ingin Anda "
+            "pertimbangkan. Sebutkan ticker-nya, misalnya: \"alokasikan 20 juta ke BBCA "
+            "dan TLKM\". Belum ada ide? Cek halaman Market News di dashboard untuk "
+            "referensi saham yang sedang tren."
+        )
 
     informational = (
         Intent.EXPLAIN.value,

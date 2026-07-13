@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -20,6 +21,8 @@ import {
 
 import { NavUser } from "@/components/nav-user";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import {
   Sidebar,
   SidebarContent,
@@ -42,6 +45,13 @@ type NavItem = NavLeaf | NavGroup;
 
 function isNavGroup(item: NavItem): item is NavGroup {
   return "children" in item;
+}
+
+// Legal Docs is admin-only (server-enforced on GET/POST /api/v1/legal/documents*)
+// — this hides the link for everyone else; it's UX polish, not the security boundary.
+function isVisible(item: NavItem, isAdmin: boolean): boolean {
+  if (!isNavGroup(item) && item.href === "/legal-docs") return isAdmin;
+  return true;
 }
 
 const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
@@ -85,11 +95,31 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
+  const [isAdmin, setIsAdmin] = React.useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      try {
+        const me = await api.getMe(session.access_token);
+        setIsAdmin(me.is_admin);
+      } catch {
+        // Fail closed — stays non-admin, Legal Docs link stays hidden.
+      }
+    })();
+  }, []);
 
   function isGroupOpen(group: NavGroup): boolean {
     if (group.label in openGroups) return openGroups[group.label];
     return group.children.some((c) => pathname.startsWith(c.href));
   }
+
+  const navSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => isVisible(item, isAdmin)),
+  }));
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -97,8 +127,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-chart-2/15 border border-chart-2/30">
-                <span className="text-chart-2 text-[10px] font-black font-mono">A</span>
+              <div className="flex aspect-square size-8 items-center justify-center">
+                <Image src="/astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-bold tracking-tight">Astalink</span>
@@ -113,7 +143,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        {NAV_SECTIONS.map(({ label, items }) => (
+        {navSections.map(({ label, items }) => (
           <SidebarGroup key={label}>
             <SidebarGroupLabel>{label}</SidebarGroupLabel>
             <SidebarMenu>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Brain, LayoutDashboard, ShieldCheck, UserCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -85,8 +86,8 @@ export default async function Home() {
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 rounded-full border border-sidebar-border bg-sidebar/85 backdrop-blur-xl py-2 pl-4 pr-2 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.6)]">
           {/* Brand */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-6 h-6 rounded-md bg-sidebar-primary/15 border border-sidebar-primary/30 flex items-center justify-center">
-              <span className="text-sidebar-primary text-[8px] font-black font-mono leading-none">A</span>
+            <div className="w-6 h-6 flex items-center justify-center">
+              <Image src="/astalink.png" alt="Astalink" width={24} height={24} className="w-6 h-6 object-contain" />
             </div>
             <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
             <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
@@ -458,8 +459,8 @@ export default async function Home() {
           {/* Brand */}
           <div className="space-y-4 max-w-xs">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-sidebar-primary/15 border border-sidebar-primary/30 flex items-center justify-center">
-                <span className="text-sidebar-primary text-[9px] font-black font-mono">A</span>
+              <div className="w-7 h-7 flex items-center justify-center">
+                <Image src="/astalink.png" alt="Astalink" width={28} height={28} className="w-7 h-7 object-contain" />
               </div>
               <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
               <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>

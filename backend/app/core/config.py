@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # News API (optional — N2a runs without it)
     NEWS_API_KEY: str = ""
 
+    # Resend (transactional email — signup confirmation, password reset)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "noreply@astalink.my.id"
+
     # WhatsApp Business API (Meta Cloud API)
     WHATSAPP_VERIFY_TOKEN: str = ""        # used during webhook subscription
     WHATSAPP_APP_SECRET: str = ""          # for signature verification
@@ -46,6 +50,12 @@ class Settings(BaseSettings):
 
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+
+    # Admin role — emails in this list get admin-only access (e.g. Legal
+    # Docs). Not a real RBAC table; role is derived purely from this list
+    # against the authenticated user's email, matching this hackathon's
+    # scope. Empty by default so the app boots without any admin configured.
+    ADMIN_EMAILS: list[str] = []
 
 
 settings = Settings()

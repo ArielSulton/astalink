@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import Link from "next/link";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,33 +18,34 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-const loginSchema = z.object({
-  email: z.email({ message: "Invalid email address" }),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
+const resetPasswordSchema = z
+  .object({
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
-type LoginForm = z.infer<typeof loginSchema>;
+type ResetPasswordForm = z.infer<typeof resetPasswordSchema>;
 
-export function LoginForm() {
+export function ResetPasswordForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const form = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+  const form = useForm<ResetPasswordForm>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
   });
 
-  async function onSubmit(data: LoginForm) {
+  async function onSubmit(data: ResetPasswordForm) {
     setLoading(true);
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
+    const { error } = await supabase.auth.updateUser({ password: data.password });
 
     if (error) {
       setError(error.message);
@@ -52,9 +53,9 @@ export function LoginForm() {
       return;
     }
 
-    const code = searchParams.get("code");
-    router.push(code ? `/settings/whatsapp?code=${code}` : "/dashboard");
-    router.refresh();
+    toast.success("Password berhasil diperbarui. Silakan login kembali.");
+    await supabase.auth.signOut();
+    router.push("/login");
   }
 
   return (
@@ -62,12 +63,12 @@ export function LoginForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
-          name="email"
+          name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Password Baru</FormLabel>
               <FormControl>
-                <Input placeholder="you@example.com" type="email" {...field} />
+                <Input placeholder="••••••••" type="password" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -75,18 +76,10 @@ export function LoginForm() {
         />
         <FormField
           control={form.control}
-          name="password"
+          name="confirmPassword"
           render={({ field }) => (
             <FormItem>
-              <div className="flex items-center justify-between">
-                <FormLabel>Password</FormLabel>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                >
-                  Lupa password?
-                </Link>
-              </div>
+              <FormLabel>Konfirmasi Password</FormLabel>
               <FormControl>
                 <Input placeholder="••••••••" type="password" {...field} />
               </FormControl>
@@ -95,12 +88,8 @@ export function LoginForm() {
           )}
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={loading}
-        >
-          {loading ? "Signing in..." : "Sign In"}
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Menyimpan..." : "Simpan Password Baru"}
         </Button>
       </form>
     </Form>

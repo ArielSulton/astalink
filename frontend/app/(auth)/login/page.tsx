@@ -1,6 +1,14 @@
+import { Suspense } from "react";
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "Login",
+  description: "Masuk ke Astalink AI untuk mengelola portofolio IDX kamu.",
+};
 
 export default function LoginPage() {
   return (
@@ -11,8 +19,8 @@ export default function LoginPage() {
             <div className="flex flex-col justify-center gap-6 p-6 md:p-8">
               <div className="flex flex-col items-center gap-2 text-center">
                 <div className="mb-2 flex items-center gap-2">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-chart-2/15 border border-chart-2/30">
-                    <span className="text-chart-2 text-[11px] font-black font-mono">A</span>
+                  <div className="flex size-8 items-center justify-center">
+                    <Image src="/astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
                   </div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-foreground font-bold tracking-tight">Astalink</span>
@@ -24,7 +32,9 @@ export default function LoginPage() {
                   Masuk untuk mengelola portofolio IDX Anda
                 </p>
               </div>
-              <LoginForm />
+              <Suspense fallback={null}>
+                <LoginForm />
+              </Suspense>
               <p className="text-center text-sm text-muted-foreground">
                 Belum punya akun?{" "}
                 <Link href="/signup" className="underline underline-offset-4 hover:text-foreground">

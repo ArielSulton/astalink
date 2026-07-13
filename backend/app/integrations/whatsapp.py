@@ -45,3 +45,41 @@ def send_text(*, to_phone_e164: str, body: str) -> None:
         resp.raise_for_status()
     except Exception as exc:
         log.error("whatsapp.send_text failed: %s", exc)
+
+
+def send_image(*, to_phone_e164: str, image_bytes: bytes, caption: str | None = None) -> None:
+    """Uploads image_bytes to Meta's Media API, then sends it as an image
+    message. Two calls are required — WhatsApp messages reference media by
+    an uploaded media_id, not a raw attachment."""
+    if not settings.WHATSAPP_ACCESS_TOKEN or not settings.WHATSAPP_PHONE_NUMBER_ID:
+        log.warning("whatsapp.send_image: skipping (creds unset)")
+        return
+    try:
+        upload_resp = httpx.post(
+            f"{META_BASE}/{settings.WHATSAPP_PHONE_NUMBER_ID}/media",
+            headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+            data={"messaging_product": "whatsapp", "type": "image/png"},
+            files={"file": ("chart.png", image_bytes, "image/png")},
+            timeout=15.0,
+        )
+        upload_resp.raise_for_status()
+        media_id = upload_resp.json()["id"]
+
+        image_payload: dict = {"id": media_id}
+        if caption:
+            image_payload["caption"] = caption
+
+        resp = httpx.post(
+            f"{META_BASE}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages",
+            headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+            json={
+                "messaging_product": "whatsapp",
+                "to": to_phone_e164,
+                "type": "image",
+                "image": image_payload,
+            },
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+    except Exception as exc:
+        log.error("whatsapp.send_image failed: %s", exc)

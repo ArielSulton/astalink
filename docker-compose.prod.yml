@@ -9,12 +9,15 @@ services:
         NEXT_PUBLIC_BACKEND_URL: ${PROD_DOMAIN}
     environment:
       - NODE_ENV=production
+    networks:
+      - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.astalink-fe.rule=Host(`${PROD_DOMAIN_HOST}`)"
       - "traefik.http.routers.astalink-fe.entrypoints=websecure"
       - "traefik.http.routers.astalink-fe.tls.certresolver=letsencrypt"
       - "traefik.http.services.astalink-fe.loadbalancer.server.port=3000"
+      - "traefik.docker.network=dokploy-network"
     restart: unless-stopped
 
   backend:
@@ -41,16 +44,24 @@ services:
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
       # News
       - NEWS_API_KEY=${NEWS_API_KEY}
+      # Resend
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@astalink.my.id}
+      # Admin role
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-[]}
       # App
       - APP_BASE_URL=${PROD_DOMAIN}
       - DEBUG=false
       - BACKEND_CORS_ORIGINS=["${PROD_DOMAIN}"]
+    networks:
+      - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.astalink-be.rule=Host(`${PROD_DOMAIN_HOST}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.astalink-be.entrypoints=websecure"
       - "traefik.http.routers.astalink-be.tls.certresolver=letsencrypt"
       - "traefik.http.services.astalink-be.loadbalancer.server.port=8000"
+      - "traefik.docker.network=dokploy-network"
     restart: unless-stopped
 
   prometheus:
@@ -58,6 +69,8 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    networks:
+      - dokploy-network
     restart: unless-stopped
 
   grafana:
@@ -70,16 +83,25 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
+    networks:
+      - dokploy-network
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.astalink-grafana.rule=Host(`${PROD_DOMAIN_HOST}`) && PathPrefix(`/grafana`)"
       - "traefik.http.routers.astalink-grafana.entrypoints=websecure"
       - "traefik.http.routers.astalink-grafana.tls.certresolver=letsencrypt"
       - "traefik.http.services.astalink-grafana.loadbalancer.server.port=3000"
+      - "traefik.docker.network=dokploy-network"
     restart: unless-stopped
     depends_on:
       - prometheus
 
 volumes:
   prometheus_data:
+    name: astalink-prometheus-data
   grafana_data:
+    name: astalink-grafana-data
+
+networks:
+  dokploy-network:
+    external: true
