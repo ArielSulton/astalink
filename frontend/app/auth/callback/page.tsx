@@ -8,7 +8,17 @@ function CallbackHandler() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const next = searchParams.get("next") ?? "/dashboard";
+    // Only allow same-origin relative paths as a redirect target. Reject
+    // protocol-relative ("//evil.com"), backslash tricks, and any value
+    // carrying a scheme (":" blocks javascript:/data:) to prevent open redirects.
+    const rawNext = searchParams.get("next") ?? "/dashboard";
+    const next =
+      rawNext.startsWith("/") &&
+      !rawNext.startsWith("//") &&
+      !rawNext.startsWith("/\\") &&
+      !rawNext.includes(":")
+        ? rawNext
+        : "/dashboard";
 
     // The client's default flowType is "pkce", under which the SDK's own
     // detectSessionInUrl only ever looks for a ?code= param — it silently
