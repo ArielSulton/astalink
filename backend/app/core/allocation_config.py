@@ -84,6 +84,21 @@ class NewsCredibilityConfig:
     amplification_window_hours: int = 24
 
 
+@dataclass(frozen=True)
+class MacroConfig:
+    """A2 — macro & regulation (Indonesia/IDX). Rule-based signals from
+    index + FX trends; each component in [-1, 1], combined by weight into
+    a 0-100 score (50 = neutral)."""
+    ihsg_symbol: str = "^JKSE"
+    fx_symbol: str = "USDIDR=X"     # rising = rupiah weakening = negative
+    trend_sma_days: int = 50
+    momentum_lookback_days: int = 63    # ~3 months of trading days
+    ihsg_weight: float = 0.6
+    fx_weight: float = 0.4
+    # momentum saturates at ±this 3-month move
+    momentum_saturation_pct: float = 0.10
+
+
 # --------------------------------------------------------------------------
 # Layer 0 — capital allocation
 # --------------------------------------------------------------------------
@@ -122,6 +137,21 @@ class QualityConfig:
     """L0-3 Q1 unit-economics hard rules."""
     max_cac_to_ltv_ratio: float = 1 / 3    # CAC < LTV/3
     max_payback_months: float = 12.0
+
+
+@dataclass(frozen=True)
+class DevilsAdvocateConfig:
+    """L0-4 DB1-DB7 finding severities → business-score penalty.
+    business_score = f(Q1..Q5) × (1 − DB_penalty) × completeness_factor."""
+    penalty_critical: float = 0.15
+    penalty_warning: float = 0.07
+    penalty_info: float = 0.0
+    penalty_cap: float = 0.60
+    # DB1: month-over-month growth above this, merely CLAIMED, is treated
+    # as a hockey-stick projection
+    hockey_stick_monthly_growth: float = 0.20
+    # DB2: base-rate prior for 5-year small-business survival (Indonesia)
+    base_rate_5yr_survival: float = 0.50
 
 
 @dataclass(frozen=True)
@@ -172,10 +202,12 @@ class AllocationConfig:
     stock_weights: StockScoreWeights = field(default_factory=StockScoreWeights)
     gate: LiquidityGateConfig = field(default_factory=LiquidityGateConfig)
     news: NewsCredibilityConfig = field(default_factory=NewsCredibilityConfig)
+    macro: MacroConfig = field(default_factory=MacroConfig)
     completeness: CompletenessConfig = field(default_factory=CompletenessConfig)
     evidence: EvidenceWeights = field(default_factory=EvidenceWeights)
     constraints: ConstraintConfig = field(default_factory=ConstraintConfig)
     quality: QualityConfig = field(default_factory=QualityConfig)
+    devils_advocate: DevilsAdvocateConfig = field(default_factory=DevilsAdvocateConfig)
     adjustment: AdjustmentConfig = field(default_factory=AdjustmentConfig)
     baseline: BaselineConfig = field(default_factory=BaselineConfig)
     verdict: VerdictBands = field(default_factory=VerdictBands)

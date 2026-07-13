@@ -6,12 +6,24 @@ from pydantic import BaseModel, Field
 
 Sentiment = Literal["positive", "neutral", "negative"]
 
+# A1 credibility ladder (folded-in hard gate — see market/news_scoring.py):
+# PRIMARY = IDX official disclosure, SECONDARY = mainstream media,
+# RUMOR = forum / social / unattributed.
+Credibility = Literal["primary", "secondary", "rumor"]
+
 
 class NewsItem(BaseModel):
     title: str
     source: str
     published_at: str
     sentiment: Sentiment
+    credibility: Credibility = "rumor"
+    # True when the price already moved >threshold BEFORE publication —
+    # the news is lagging, not a catalyst.
+    already_priced_in: bool = False
+    # True when one positive story is replicated across many low-quality
+    # outlets within a short window.
+    coordinated_amplification: bool = False
 
 
 class TickerSnapshot(BaseModel):
