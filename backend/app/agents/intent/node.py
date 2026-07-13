@@ -32,6 +32,10 @@ SYSTEM = """\
 You are an Indonesian financial-assistant intent classifier.
 Map the user message to one of:
 - allocate_stocks: user wants to invest cash into stocks/portfolio
+- allocate_capital: user is weighing where money should go between options —
+  e.g. stocks vs their own/someone's business ("mending taruh di saham atau
+  suntik ke usaha teman?", "uang 100 juta ini buat modal warung atau beli
+  saham?"). Extract business_name if a specific business is mentioned.
 - evaluate_business: user wants their own business valued
 - risk_review: user wants risk metrics on existing holdings
 - portfolio_status: user is asking about current holdings/positions
@@ -123,7 +127,7 @@ def intent_node(state: AgentState) -> AgentState:
     # bank stocks); optimizer_node's existing no-tickers gate is more
     # honest than a default that quietly answers a different question.
     if (
-        decision.intent == Intent.ALLOCATE_STOCKS
+        decision.intent in (Intent.ALLOCATE_STOCKS, Intent.ALLOCATE_CAPITAL)
         and not needs_clarification
         and not entities.get("tickers")
         and not entities.get("sector")

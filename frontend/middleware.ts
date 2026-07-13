@@ -40,6 +40,8 @@ export async function middleware(request: NextRequest) {
     "/chatbot",
     "/legal-docs",
     "/news",
+    "/allocation",
+    "/business",
   ];
   if (!user && PROTECTED_PREFIXES.some((p) => request.nextUrl.pathname.startsWith(p))) {
     const redirectUrl = request.nextUrl.clone();

@@ -174,6 +174,7 @@ class InvestorProfile(BaseModel):
     net_worth: float | None = None
     consumer_debt_interest_pct: float | None = None  # highest-rate debt
     available_hours_per_week: float | None = None
+    knows_sector: bool | None = None   # info edge for STEP 4 premiums
 
 
 class VetoFlag(BaseModel):

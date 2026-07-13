@@ -190,6 +190,29 @@ class VerdictBands:
 
 
 @dataclass(frozen=True)
+class SynthesizerConfig:
+    """Layer 1 synthesizer: verdict mechanics beyond the raw bands."""
+    # invalidation condition: thesis void if close drops this far below entry
+    invalidation_stop_pct: float = 0.08
+    default_horizon: str = "3-6 bulan"
+    # a CONDITIONAL A3 gate caps the verdict at WATCHLIST
+    conditional_gate_caps_at: str = "watchlist"
+    # score renormalization needs at least this many known components
+    min_known_components: int = 2
+
+
+@dataclass(frozen=True)
+class SplitConfig:
+    """Layer 0 STEP 5: how adjusted scores map to a cash/stocks/business split."""
+    min_cash_floor: float = 0.10
+    # an option only earns allocation for the score margin above this floor
+    score_floor: float = 30.0
+    # without control AND without info edge, business must beat stocks by
+    # this many points to receive any allocation at all
+    no_edge_business_hurdle: float = 15.0
+
+
+@dataclass(frozen=True)
 class StalenessConfig:
     """Guardrail 1: market data older than this is flagged stale and
     excluded from gating decisions."""
@@ -211,6 +234,8 @@ class AllocationConfig:
     adjustment: AdjustmentConfig = field(default_factory=AdjustmentConfig)
     baseline: BaselineConfig = field(default_factory=BaselineConfig)
     verdict: VerdictBands = field(default_factory=VerdictBands)
+    synthesizer: SynthesizerConfig = field(default_factory=SynthesizerConfig)
+    split: SplitConfig = field(default_factory=SplitConfig)
     staleness: StalenessConfig = field(default_factory=StalenessConfig)
     gate_profile: str = "conservative"  # which GateThresholds profile A3 uses
 

@@ -28,9 +28,17 @@ def _patch_externals():
     fake_admin.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
     fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[{"id": "x"}])
 
+    # Layer 1 stock engine would hit yfinance/NewsAPI — fake it as
+    # "everything eligible" so the optimizer path behaves as before.
+    fake_engine = lambda tickers, news_by_ticker, total_amount_idr=None: {
+        "verdicts": {}, "eligible_tickers": list(tickers),
+        "macro": {}, "as_of": "",
+    }
+
     with patch("app.agents.market.node.fetch_close_prices", return_value=fake_closes), \
          patch("app.agents.market.node.fetch_news", return_value=[]), \
          patch("app.agents.market.node.get_chat_model"), \
+         patch("app.agents.market.stock_engine.run_stock_engine", new=fake_engine), \
          patch("app.agents.risk.node.fetch_close_prices", return_value=np.linspace(100, 110, 252)), \
          patch("app.agents.risk.node.get_chat_model"), \
          patch("app.agents.business.node.get_chat_model"), \
@@ -116,3 +124,62 @@ def test_graph_revision_loop_caps_at_three() -> None:
         LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS,
     )
     assert not result["transactions"]
+
+
+def test_layer0_force_cash_gates_off_stock_engine() -> None:
+    """L0-2 veto (no emergency fund) → 0% stocks → graph ends at Layer 0:
+    no market/optimizer/legal/execution work at all."""
+    from app.agents.allocation.schemas import InvestorProfile
+    from app.agents.graph import build_graph
+
+    fake_intent = lambda s: {"intent": Intent.ALLOCATE_STOCKS.value,
+                             "entities": {"tickers": ["BBCA"], "amount": 1_000_000}}
+    broke = InvestorProfile(monthly_expenses=10_000_000, emergency_fund=5_000_000)
+
+    with patch("app.agents.graph.intent_node", new=fake_intent), \
+         patch("app.agents.allocation.node.load_investor_profile", return_value=broke):
+        graph = build_graph()
+        result = graph.invoke(
+            {"messages": [HumanMessage(content="beli BBCA")],
+             "audit_id": "t4", "revision_count": 0, "_workspace_id": "ws-1",
+             "entities": {}, "transactions": [], "errors": []},
+            config={"configurable": {"thread_id": "t4"}},
+        )
+
+    alloc = result["layer0_result"]["allocation"]
+    assert alloc == {"cash": 1.0, "stocks": 0.0, "business": 0.0}
+    assert not result["transactions"]
+    assert result.get("allocation_plan") is None, "optimizer must never run"
+    assert any("Dana darurat" in m.content for m in result["messages"]
+               if hasattr(m, "content"))
+
+
+def test_layer0_insufficient_data_is_terminal_with_questions() -> None:
+    """ALLOCATE_CAPITAL with an empty intake profile → INSUFFICIENT_DATA is
+    the entire output: staged questions, no allocation, no downstream run."""
+    from app.agents.allocation.schemas import BusinessProfile, InvestorProfile
+    from app.agents.graph import build_graph
+
+    fake_intent = lambda s: {"intent": Intent.ALLOCATE_CAPITAL.value,
+                             "entities": {"business_name": "Warung Maju"}}
+
+    with patch("app.agents.graph.intent_node", new=fake_intent), \
+         patch("app.agents.allocation.node.load_investor_profile",
+               return_value=InvestorProfile()), \
+         patch("app.agents.allocation.node.load_business_profile",
+               return_value=({"id": "b1", "name": "Warung Maju"},
+                             BusinessProfile())):
+        graph = build_graph()
+        result = graph.invoke(
+            {"messages": [HumanMessage(content="mending saham atau suntik warung?")],
+             "audit_id": "t5", "revision_count": 0, "_workspace_id": "ws-1",
+             "entities": {}, "transactions": [], "errors": []},
+            config={"configurable": {"thread_id": "t5"}},
+        )
+
+    l0 = result["layer0_result"]
+    assert l0["status"] == "insufficient_data"
+    assert l0["allocation"] is None
+    assert len(l0["questions"]) == 3
+    assert not result["transactions"]
+    assert result.get("allocation_plan") is None

@@ -144,6 +144,122 @@ export interface BusinessDetail extends Business {
   financial_records: FinancialRecord[];
 }
 
+// ---------------------------------------------------------------------------
+// Layer 0 capital allocation
+// ---------------------------------------------------------------------------
+
+export type EvidenceTag = "verified" | "claimed" | "estimated" | "unknown";
+
+export interface TaggedField<T = unknown> {
+  value: T | null;
+  evidence: EvidenceTag;
+}
+
+/** Mirrors backend BusinessProfile: block → field → TaggedField. */
+export type IntakeProfile = Record<string, Record<string, TaggedField>>;
+
+export interface InvestorProfile {
+  monthly_expenses: number | null;
+  emergency_fund: number | null;
+  capital_is_borrowed: boolean | null;
+  horizon_months: number | null;
+  net_worth: number | null;
+  consumer_debt_interest_pct: number | null;
+  available_hours_per_week: number | null;
+  knows_sector: boolean | null;
+}
+
+export interface IntakeQuestion {
+  field: string;
+  question: string;
+  priority: number;
+}
+
+export interface VetoFlag {
+  code: string;
+  target: "business" | "stocks" | "both";
+  reason: string;
+  hard: boolean;
+}
+
+export interface QualityCheck {
+  name: string;
+  passed: boolean | null;
+  weight: number;
+  detail: string;
+}
+
+export interface QualitySubScore {
+  code: string;
+  label: string;
+  score: number | null;
+  checks: QualityCheck[];
+  unknown_fields: string[];
+}
+
+export interface DevilsAdvocateFinding {
+  code: string;
+  title: string;
+  severity: "info" | "warning" | "critical";
+  finding: string;
+}
+
+export interface Layer0Result {
+  status: "insufficient_data" | "allocated";
+  allocation: { cash: number; stocks: number; business: number } | null;
+  confidence: number;
+  confidence_label: "LOW" | "MEDIUM" | "HIGH";
+  completeness: number;
+  completeness_tier: "insufficient" | "partial" | "ok";
+  questions: IntakeQuestion[];
+  veto_flags: VetoFlag[];
+  business_score: number | null;
+  stock_score: number | null;
+  baseline_score: number | null;
+  quality: { subscores: QualitySubScore[]; q5_purpose: string; hard_rejects: string[]; aggregate: number | null } | null;
+  devils_advocate: DevilsAdvocateFinding[];
+  why_not_all_stocks: string;
+  why_not_all_business: string;
+  rejected_reasons: string[];
+  narration: string;
+  business_id: string | null;
+  business_name: string | null;
+}
+
+export interface GateCheck {
+  name: string;
+  status: "pass" | "fail" | "unknown";
+  detail: string;
+  threshold: string;
+  observed: string;
+}
+
+export interface StockVerdict {
+  ticker: string;
+  band: "strong_buy" | "buy" | "watchlist" | "avoid" | "reject" | "no_verdict";
+  score: number | null;
+  horizon: string;
+  invalidation_condition: string;
+  components: Record<string, number | null>;
+  gate_status: "pass" | "fail" | "conditional";
+  manipulation_risk: "low" | "medium" | "high";
+  evidence_gaps: string[];
+  detail: string[];
+  as_of: string;
+}
+
+export interface StockEngineResult {
+  verdicts: Record<string, StockVerdict>;
+  eligible_tickers: string[];
+  macro: { score: number | null; detail: string[]; as_of: string };
+  as_of: string;
+}
+
+export interface AnalyzeResponse {
+  layer0: Layer0Result;
+  stock_engine: StockEngineResult | null;
+}
+
 export interface RegulationDoc {
   id: string;
   source: string;
@@ -253,6 +369,33 @@ export const api = {
   listBusinesses: (workspaceId: string, token: string): Promise<Business[]> =>
     jsonFetch<Business[]>(
       `/api/v1/business?workspace_id=${workspaceId}`, { method: "GET" }, token,
+    ),
+
+  getIntakeProfile: (businessId: string, token: string): Promise<IntakeProfile> =>
+    jsonFetch<IntakeProfile>(`/api/v1/allocation/intake/${businessId}`, { method: "GET" }, token),
+
+  putIntakeProfile: (businessId: string, profile: IntakeProfile, token: string): Promise<IntakeProfile> =>
+    jsonFetch<IntakeProfile>(
+      `/api/v1/allocation/intake/${businessId}`,
+      { method: "PUT", body: JSON.stringify(profile) }, token,
+    ),
+
+  getInvestorProfile: (workspaceId: string, token: string): Promise<InvestorProfile> =>
+    jsonFetch<InvestorProfile>(`/api/v1/allocation/investor/${workspaceId}`, { method: "GET" }, token),
+
+  putInvestorProfile: (workspaceId: string, profile: InvestorProfile, token: string): Promise<InvestorProfile> =>
+    jsonFetch<InvestorProfile>(
+      `/api/v1/allocation/investor/${workspaceId}`,
+      { method: "PUT", body: JSON.stringify(profile) }, token,
+    ),
+
+  analyzeAllocation: (
+    body: { workspace_id: string; business_id?: string; tickers?: string[]; amount?: number },
+    token: string,
+  ): Promise<AnalyzeResponse> =>
+    jsonFetch<AnalyzeResponse>(
+      "/api/v1/allocation/analyze",
+      { method: "POST", body: JSON.stringify(body) }, token,
     ),
 
   createBusiness: (

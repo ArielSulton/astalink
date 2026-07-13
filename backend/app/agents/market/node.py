@@ -66,12 +66,34 @@ def _narrate(snapshots: list[TickerSnapshot]) -> str:
 
 @track_node_duration("n2a_market")
 def market_node(state: AgentState) -> AgentState:
-    tickers = state.get("entities", {}).get("tickers") or []
+    entities = state.get("entities", {})
+    tickers = entities.get("tickers") or []
     snapshots = [_build_ticker_snapshot(t) for t in tickers]
     narration = _narrate(snapshots) if snapshots else ""
     snapshot = MarketSnapshot(tickers=snapshots, narration=narration)
 
-    return {
-        "entities": {**state.get("entities", {}),
-                     "market_snapshot": snapshot.model_dump()},
-    }
+    update = {"market_snapshot": snapshot.model_dump()}
+
+    # Layer 1 stock engine (A1-A4 + synthesizer) — only when Layer 0 already
+    # allocated >0% to stocks (this node isn't reached otherwise for
+    # allocation intents). Verdict REJECT/AVOID tickers are excluded from the
+    # optimizer via eligible_tickers.
+    if state.get("layer0_result"):
+        from app.agents.market.stock_engine import run_stock_engine
+
+        try:
+            amount = float(entities.get("amount") or 0) or None
+        except (TypeError, ValueError):
+            amount = None
+        try:
+            engine = run_stock_engine(
+                tickers,
+                news_by_ticker={s.ticker: s.news for s in snapshots},
+                total_amount_idr=amount,
+            )
+            update["stock_engine"] = engine
+            update["eligible_tickers"] = engine["eligible_tickers"]
+        except Exception as exc:
+            log.error("market_node: stock engine failed: %s", exc)
+
+    return {"entities": {**entities, **update}}

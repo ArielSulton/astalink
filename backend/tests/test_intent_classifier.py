@@ -4,6 +4,7 @@ from app.agents.intents import Intent
 def test_intent_enum_has_all_required_values() -> None:
     expected = {
         "ALLOCATE_STOCKS",
+        "ALLOCATE_CAPITAL",
         "EVALUATE_BUSINESS",
         "RISK_REVIEW",
         "PORTFOLIO_STATUS",

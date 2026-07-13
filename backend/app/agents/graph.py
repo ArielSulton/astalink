@@ -17,6 +17,7 @@ from app.agents.qa import qa_node
 from app.agents.rejection import rejection_handler
 from app.agents.summary import summary_node
 from app.agents.state import AgentState, LegalStatus, UserApproval
+from app.agents.allocation.node import layer0_node
 from app.agents.business.node import business_node
 from app.agents.market.node import market_node
 from app.agents.risk.node import risk_node
@@ -44,7 +45,11 @@ def _route_after_intent(
     EVALUATE_BUSINESS / RISK_REVIEW only need their own analyst; they end at
     the summary node instead of falling through the optimizer/legal loop
     (which used to produce a wrong "rejected legally" reply for them).
-    PORTFOLIO_STATUS has no pipeline yet — the summary node answers honestly."""
+    PORTFOLIO_STATUS has no pipeline yet — the summary node answers honestly.
+
+    Allocation intents (ALLOCATE_STOCKS / ALLOCATE_CAPITAL) go through Layer 0
+    (l0_allocation) FIRST: whether the money should go to stocks at all is
+    decided before any stock analysis runs."""
     if state.get("_needs_clarification"):
         return END
     intent = state.get("intent")
@@ -56,6 +61,19 @@ def _route_after_intent(
         return ["n2c_risk"]
     if intent == Intent.PORTFOLIO_STATUS.value:
         return "n9_summary"
+    return "l0_allocation"
+
+
+def _route_after_layer0(state: AgentState) -> str | Sequence[str]:
+    """Layer 1 (the stock engine fan-out) runs ONLY if Layer 0 allocated
+    >0% to stocks. INSUFFICIENT_DATA and 0%-stock allocations are terminal:
+    l0_allocation already appended the user-facing message."""
+    result = state.get("layer0_result") or {}
+    if result.get("status") == "insufficient_data":
+        return END
+    allocation = result.get("allocation") or {}
+    if not allocation.get("stocks"):
+        return END
     return ["n2a_market", "n2b_business", "n2c_risk"]
 
 
@@ -95,6 +113,7 @@ def build_graph():
     g = StateGraph(AgentState)
 
     g.add_node("n1_intent", intent_node)
+    g.add_node("l0_allocation", layer0_node)
     g.add_node("n2a_market", market_node)
     g.add_node("n2b_business", business_node)
     g.add_node("n2c_risk", risk_node)
@@ -116,10 +135,18 @@ def build_graph():
     g.add_conditional_edges(
         "n1_intent",
         _route_after_intent,
-        ["n2a_market", "n2b_business", "n2c_risk", "n8_qa", "n9_summary", END],
+        ["l0_allocation", "n2b_business", "n2c_risk", "n8_qa", "n9_summary", END],
     )
     g.add_edge("n8_qa", END)
     g.add_edge("n9_summary", END)
+
+    # Layer 0 gates Layer 1: the stock fan-out only runs when Layer 0
+    # allocated >0% to stocks; otherwise the run ends with L0's own message.
+    g.add_conditional_edges(
+        "l0_allocation",
+        _route_after_layer0,
+        ["n2a_market", "n2b_business", "n2c_risk", END],
+    )
 
     # Join: analysts → optimizer for the allocation flow (LangGraph implicitly
     # waits for all activated preds). Business/risk detour to the summary node
