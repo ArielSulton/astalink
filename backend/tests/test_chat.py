@@ -58,6 +58,9 @@ def test_chat_endpoint_delegates_to_main_pipeline(client: TestClient) -> None:
     assert initial_state["_workspace_id"] == "ws-1"
     assert initial_state["entities"]["workspace_id"] == "ws-1"
     assert call_kwargs["config"]["configurable"]["thread_id"].startswith("user-123:")
+    # _thread_id must be the SAME value the graph is invoked under, so
+    # intent_node can persist it to audit_log for approvals.py to resume with.
+    assert initial_state["_thread_id"] == call_kwargs["config"]["configurable"]["thread_id"]
 
 
 def test_chat_endpoint_returns_500_when_pipeline_produces_no_messages(client: TestClient) -> None:

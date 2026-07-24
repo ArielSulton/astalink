@@ -48,6 +48,35 @@ from unittest.mock import MagicMock, patch
 from langchain_core.messages import HumanMessage
 
 
+def test_record_audit_persists_thread_id_for_approvals_resume() -> None:
+    """Live incident: approvals.py used to resume graph runs under `audit_id`
+    as the thread_id, which never matches the real thread any entry point
+    (chat.py/agent.py/whatsapp.py) actually invoked under — silently starting
+    a fresh, empty run instead of resuming the paused one. audit_log must
+    carry the real thread_id so approvals.py can look it up."""
+    from unittest.mock import MagicMock
+
+    from app.agents.intent.node import _record_audit
+    from app.agents.intent.schemas import IntentDecision
+    from app.agents.intents import Intent
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+    state["_user_id"] = "user-1"
+    state["_thread_id"] = "user-1:thread-abc"
+
+    decision = IntentDecision(intent=Intent.ALLOCATE_STOCKS,
+                              entities={"amount": 10_000_000}, confidence=0.9)
+
+    fake_admin = MagicMock()
+    with patch("app.agents.intent.node.get_admin_client", return_value=fake_admin):
+        _record_audit(state, decision)
+
+    upsert_payload = fake_admin.table.return_value.upsert.call_args[0][0]
+    assert upsert_payload["thread_id"] == "user-1:thread-abc"
+
+
 def test_intent_node_returns_state_update_with_intent_and_entities() -> None:
     from app.agents.intent.node import intent_node
     from app.agents.intent.schemas import IntentDecision

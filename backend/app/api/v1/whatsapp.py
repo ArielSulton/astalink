@@ -110,6 +110,7 @@ def _process_message(msg: dict[str, Any]) -> None:
     initial["entities"] = {"workspace_id": binding["workspace_id"]}
     initial["_user_id"] = binding["user_id"]
     initial["_workspace_id"] = binding["workspace_id"]
+    initial["_thread_id"] = thread_id
     allocation_plan = None
     try:
         final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})

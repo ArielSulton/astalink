@@ -97,6 +97,9 @@ def _record_audit(state: AgentState, decision: IntentDecision) -> None:
             "workspace_id": state.get("entities", {}).get("workspace_id")
                             or state.get("_workspace_id"),  # set by API entry point
             "user_id": state.get("_user_id"),
+            "thread_id": state.get("_thread_id"),  # set by API entry point; lets
+                                                    # approvals.py resume this
+                                                    # exact paused graph run
         }).execute()
     except Exception as exc:
         log.error("intent_node: audit_log upsert failed: %s", exc)

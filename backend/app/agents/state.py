@@ -49,6 +49,12 @@ class AgentState(TypedDict, total=False):
     # StateGraph(AgentState) only tracks channels present in this schema.
     _user_id: str | None
     _workspace_id: str | None
+    # The LangGraph thread_id this run was invoked under (chat.py/agent.py/
+    # whatsapp.py each build a different format) — persisted to audit_log by
+    # intent_node so approvals.py can resume the SAME paused run instead of
+    # guessing (it used to reuse audit_id, which never matches any real
+    # thread and silently started a fresh, empty run on approve/reject).
+    _thread_id: str | None
 
     # Conversation
     messages: list[BaseMessage]

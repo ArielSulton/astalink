@@ -62,17 +62,33 @@ async def get_approval(audit_id: str, user: dict = Depends(get_current_user)) ->
     )
 
 
+def _thread_id_for(audit: dict) -> str:
+    """The thread_id this run was actually invoked under (chat.py/agent.py/
+    whatsapp.py each build a different format). Resuming under any other
+    value — audit_id included — silently starts a fresh, empty graph run
+    instead of resuming the real paused one, with no exception raised."""
+    thread_id = audit.get("thread_id")
+    if not thread_id:
+        raise HTTPException(
+            status_code=409,
+            detail="This audit has no recorded thread_id and cannot be resumed "
+                    "(pre-dates the thread_id fix). Please resubmit the request.",
+        )
+    return thread_id
+
+
 @router.post("/{audit_id}/approve", status_code=200)
 async def approve(audit_id: str, body: ApprovalAction, user: dict = Depends(get_current_user)):
     if not body.pin:
         raise HTTPException(status_code=400, detail="pin required")
-    _load_audit(audit_id, user["sub"])
+    audit = _load_audit(audit_id, user["sub"])
     verify_user_pin(user["sub"], body.pin)
+    thread_id = _thread_id_for(audit)
 
     from langgraph.types import Command
     final = graph.invoke(
         Command(resume={"approval": "approved"}),
-        config={"configurable": {"thread_id": audit_id}},
+        config={"configurable": {"thread_id": thread_id}},
     )
     get_admin_client().table("audit_log").update({
         "status": "approved",
@@ -83,11 +99,12 @@ async def approve(audit_id: str, body: ApprovalAction, user: dict = Depends(get_
 
 @router.post("/{audit_id}/reject", status_code=200)
 async def reject(audit_id: str, body: ApprovalAction, user: dict = Depends(get_current_user)):
-    _load_audit(audit_id, user["sub"])
+    audit = _load_audit(audit_id, user["sub"])
+    thread_id = _thread_id_for(audit)
     from langgraph.types import Command
     graph.invoke(
         Command(resume={"approval": "rejected", "reason": body.reason or ""}),
-        config={"configurable": {"thread_id": audit_id}},
+        config={"configurable": {"thread_id": thread_id}},
     )
     get_admin_client().table("audit_log").update({
         "status": "rejected",

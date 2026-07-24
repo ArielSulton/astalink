@@ -60,3 +60,7 @@ def test_run_agent_allows_owned_workspace(client: TestClient) -> None:
 
     assert resp.status_code == 200
     mock_graph.assert_called_once()
+    # _thread_id must match the config thread_id so intent_node can persist
+    # it to audit_log for approvals.py to resume the same run later.
+    initial_state, call_kwargs = mock_graph.call_args[0][0], mock_graph.call_args.kwargs
+    assert initial_state["_thread_id"] == call_kwargs["config"]["configurable"]["thread_id"]

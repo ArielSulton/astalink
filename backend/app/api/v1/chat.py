@@ -48,6 +48,7 @@ async def chat(
                            HumanMessage(content=request.message)]
     initial["_user_id"] = user_sub
     initial["_workspace_id"] = request.workspace_id
+    initial["_thread_id"] = thread_id
     initial["entities"] = {"workspace_id": request.workspace_id}
 
     final_state = graph.invoke(

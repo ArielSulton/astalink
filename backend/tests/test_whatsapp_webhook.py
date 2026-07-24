@@ -83,6 +83,11 @@ def test_webhook_post_dedupes_replays(client: TestClient, monkeypatch) -> None:
     assert r1.status_code == 200 and r2.status_code == 200
     assert invoke_mock.call_count == 1, "graph must run exactly once for a replayed message_id"
 
+    # _thread_id must match the config thread_id so intent_node can persist
+    # it to audit_log for approvals.py to resume the same run later.
+    initial_state, call_kwargs = invoke_mock.call_args[0][0], invoke_mock.call_args.kwargs
+    assert initial_state["_thread_id"] == call_kwargs["config"]["configurable"]["thread_id"]
+
 
 def _post_wa_message(client: TestClient, monkeypatch, *, message_id: str, text: str,
                      final_state: dict) -> str:

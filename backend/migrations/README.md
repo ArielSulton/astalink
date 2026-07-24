@@ -36,3 +36,4 @@ of scope for Phase 0.
 | `0011_workspace_cash_balance.sql` | Sandbox virtual cash balance per workspace (seeded at Rp 1,000,000,000) |
 | `0012_allocation_layer0.sql` | Layer 0 capital-allocation inputs: `business_intake_profiles`, `investor_profiles` |
 | `0013_holdings.sql` | Sandbox portfolio `holdings` (weighted-avg cost) + `transactions` extended (`workspace_id`, `price`, `realized_pnl`; plan/audit nullable) for manual sells |
+| `0014_audit_log_thread_id.sql` | `audit_log.thread_id` — the real LangGraph thread_id each run was invoked under, so Approvals can resume the same paused run instead of the wrong `audit_id` |
