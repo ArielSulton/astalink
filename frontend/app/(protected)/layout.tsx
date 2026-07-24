@@ -12,9 +12,9 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   return (
     <TooltipProvider>
       <WorkspaceProvider>
-        <SidebarProvider>
+        <SidebarProvider className="h-svh">
           <AppSidebar />
-          <SidebarInset>
+          <SidebarInset className="min-h-0">
             <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
@@ -22,7 +22,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                 Astalink Console
               </span>
             </header>
-            <div className="flex-1 overflow-auto">{children}</div>
+            <div className="flex-1 overflow-auto min-h-0">{children}</div>
           </SidebarInset>
         </SidebarProvider>
       </WorkspaceProvider>
