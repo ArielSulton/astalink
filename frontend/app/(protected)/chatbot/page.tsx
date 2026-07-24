@@ -9,6 +9,7 @@ import { ChatMarkdown } from "@/components/chat-markdown";
 import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import { useWorkspace } from "@/components/workspace-context";
 import {
+  allocatedReplyIds,
   appendMessage,
   createConversation,
   deleteConversation,
@@ -52,6 +53,7 @@ function extractAmount(text: string): number | null {
 }
 
 interface Message {
+  id?: string | null;
   role: "user" | "assistant";
   content: string;
   auditId?: string | null;
@@ -69,6 +71,10 @@ export default function ChatbotPage() {
   const [buyModalOpen, setBuyModalOpen] = useState(false);
   const [buyTickers, setBuyTickers] = useState<string[]>(["BBCA"]);
   const [buyAmount, setBuyAmount] = useState<number | null>(null);
+  // Which reply the open modal belongs to, and the replies already executed —
+  // an executed recommendation must not keep offering its allocate button.
+  const [buyForMessageId, setBuyForMessageId] = useState<string | null>(null);
+  const [allocatedIds, setAllocatedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,12 +87,14 @@ export default function ChatbotPage() {
     const rows = await getMessages(conv.id);
     setMessages(
       rows.map((r) => ({
+        id: r.id,
         role: r.role,
         content: r.content,
         auditId: r.audit_id,
         requiresApproval: r.requires_approval,
       })),
     );
+    setAllocatedIds(allocatedReplyIds(rows));
   }, []);
 
   // Load this user's chatbot rooms for the workspace; open the most recent.
@@ -95,6 +103,7 @@ export default function ChatbotPage() {
       setRooms([]);
       setActiveId(null);
       setMessages([]);
+      setAllocatedIds(new Set());
       setThreadId(undefined);
       return;
     }
@@ -107,6 +116,7 @@ export default function ChatbotPage() {
       else {
         setActiveId(null);
         setMessages([]);
+        setAllocatedIds(new Set());
         setThreadId(undefined);
       }
     })();
@@ -121,6 +131,7 @@ export default function ChatbotPage() {
     setActiveId(conv.id);
     setThreadId(undefined);
     setMessages([]);
+    setAllocatedIds(new Set());
   }
 
   async function removeRoom(id: string) {
@@ -132,25 +143,38 @@ export default function ChatbotPage() {
       else {
         setActiveId(null);
         setMessages([]);
+        setAllocatedIds(new Set());
         setThreadId(undefined);
       }
     }
   }
 
-  const openAllocationModal = (content: string, requestText?: string) => {
+  const openAllocationModal = (
+    content: string,
+    requestText: string | undefined,
+    messageId: string | null | undefined,
+  ) => {
     const tickers = extractTickers(content);
     setBuyTickers(tickers);
     setBuyAmount(requestText ? extractAmount(requestText) : null);
+    setBuyForMessageId(messageId ?? null);
     setBuyModalOpen(true);
   };
 
   const handleAllocationSuccess = async (ticker: string, amount: number, cashRemaining: number) => {
     setBuyModalOpen(false);
+    const target = buyForMessageId;
+    if (target) setAllocatedIds((prev) => new Set(prev).add(target));
     const confirmMsg = `✓ **Alokasi Berhasil!** Mengalokasikan **${idr(amount)}** ke saham **${ticker}**.\n- Saldo kas tersisa: **${idr(cashRemaining)}**\n- Transaksi telah dicatat di tabel **Riwayat Transaksi** dan posisi diperbarui di halaman **Portofolio**.`;
-    setMessages((prev) => [...prev, { role: "assistant", content: confirmMsg }]);
-    if (activeId) {
-      await appendMessage(activeId, { role: "assistant", content: confirmMsg });
-    }
+    // metadata.allocated_for is what marks the original reply as executed on reload.
+    const id = activeId
+      ? await appendMessage(activeId, {
+          role: "assistant",
+          content: confirmMsg,
+          metadata: target ? { allocated_for: target } : {},
+        })
+      : null;
+    setMessages((prev) => [...prev, { id, role: "assistant", content: confirmMsg }]);
   };
 
   async function sendMessage() {
@@ -183,9 +207,20 @@ export default function ChatbotPage() {
         session.access_token,
       );
       setThreadId(res.thread_id);
+      // Persisted first so the reply carries its row id — the allocate CTA
+      // needs it to record that this specific reply was executed.
+      const msgId = cid
+        ? await appendMessage(cid, {
+            role: "assistant",
+            content: res.message,
+            auditId: res.audit_id,
+            requiresApproval: res.requires_approval,
+          })
+        : null;
       setMessages((prev) => [
         ...prev,
         {
+          id: msgId,
           role: "assistant",
           content: res.message,
           auditId: res.audit_id,
@@ -194,12 +229,6 @@ export default function ChatbotPage() {
       ]);
       if (cid) {
         const rid = cid;
-        await appendMessage(rid, {
-          role: "assistant",
-          content: res.message,
-          auditId: res.audit_id,
-          requiresApproval: res.requires_approval,
-        });
         await updateConversation(rid, {
           thread_id: res.thread_id,
           ...(firstTurn ? { title: titleFrom(text) } : {}),
@@ -287,6 +316,7 @@ export default function ChatbotPage() {
 
           {messages.map((m, i) => {
             const precedingUser = i > 0 ? messages[i - 1] : null;
+            const isAllocated = !!m.id && allocatedIds.has(m.id);
             const isAllocationReply =
               m.role === "assistant" &&
               precedingUser?.role === "user" &&
@@ -306,7 +336,22 @@ export default function ChatbotPage() {
                     {/* Report + approval action — only on replies to an actual
                        "alokasikan dana" request; other intents (explain, risk
                        review, etc.) have nothing here to approve. */}
-                    {isAllocationReply && (
+                    {isAllocationReply && isAllocated && (
+                      <div className="w-full flex items-center gap-2 border-t border-border/60 pt-3">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                        <span className="text-[11px] text-emerald-400">
+                          Sudah dieksekusi — dana dialokasikan dari rekomendasi ini.
+                        </span>
+                        <Link
+                          href="/portfolio"
+                          className="text-[11px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                        >
+                          Lihat portofolio
+                        </Link>
+                      </div>
+                    )}
+
+                    {isAllocationReply && !isAllocated && (
                       <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
                         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -314,7 +359,7 @@ export default function ChatbotPage() {
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
                           <button
-                            onClick={() => openAllocationModal(m.content, precedingUser?.content)}
+                            onClick={() => openAllocationModal(m.content, precedingUser?.content, m.id)}
                             className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-md"
                           >
                             <PlusCircle className="w-3.5 h-3.5" />

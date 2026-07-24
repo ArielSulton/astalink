@@ -83,6 +83,8 @@ export async function getOrCreateDashboardConversation(
   return createConversation(workspaceId, "dashboard", "Asisten AI");
 }
 
+/** Inserts a message and returns its id, which callers need to link a later
+ *  "this recommendation was executed" marker back to the reply it belongs to. */
 export async function appendMessage(
   conversationId: string,
   msg: {
@@ -92,20 +94,40 @@ export async function appendMessage(
     requiresApproval?: boolean;
     metadata?: Record<string, unknown>;
   },
-): Promise<void> {
+): Promise<string | null> {
   const sb = createClient();
-  await sb.from("chat_messages").insert({
-    conversation_id: conversationId,
-    role: msg.role,
-    content: msg.content,
-    audit_id: msg.auditId ?? null,
-    requires_approval: msg.requiresApproval ?? false,
-    metadata: msg.metadata ?? {},
-  });
+  const { data } = await sb
+    .from("chat_messages")
+    .insert({
+      conversation_id: conversationId,
+      role: msg.role,
+      content: msg.content,
+      audit_id: msg.auditId ?? null,
+      requires_approval: msg.requiresApproval ?? false,
+      metadata: msg.metadata ?? {},
+    })
+    .select("id")
+    .single();
   await sb
     .from("chat_conversations")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", conversationId);
+  return (data as { id: string } | null)?.id ?? null;
+}
+
+/**
+ * Ids of replies whose allocation the user already executed. Derived from the
+ * confirmation messages themselves (`metadata.allocated_for`) rather than a
+ * flag on the original reply: chat_messages has insert/select/delete RLS
+ * policies but no update policy, so an append is the only write that survives.
+ */
+export function allocatedReplyIds(rows: ChatMessageRow[]): Set<string> {
+  const ids = new Set<string>();
+  for (const r of rows) {
+    const target = r.metadata?.allocated_for;
+    if (typeof target === "string") ids.add(target);
+  }
+  return ids;
 }
 
 export async function updateConversation(

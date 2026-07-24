@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Bot, LineChart, Loader2, PlusCircle, Send, Sparkles, Trash2, Wallet } from "lucide-react";
+import { ArrowRight, Bot, CheckCircle2, LineChart, Loader2, PlusCircle, Send, Sparkles, Trash2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/ui/page-header";
@@ -31,6 +31,7 @@ import { TickerCard } from "@/components/ticker-card";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import {
+  allocatedReplyIds,
   appendMessage,
   deleteConversation,
   getMessages,
@@ -171,27 +172,34 @@ function AssistantBubble({ content }: { content: string }) {
   );
 }
 
-type AiMessage = { role: "user" | "assistant"; content: string; result?: AgentRunResponse | null };
+type AiMessage = {
+  id?: string | null;
+  role: "user" | "assistant";
+  content: string;
+  result?: AgentRunResponse | null;
+};
 
 function rowToAiMessage(r: {
+  id: string;
   role: "user" | "assistant";
   content: string;
   metadata: Record<string, unknown>;
 }): AiMessage {
   if (r.role === "assistant") {
-    return { role: "assistant", content: r.content, result: (r.metadata?.result as AgentRunResponse | undefined) ?? null };
+    return { id: r.id, role: "assistant", content: r.content, result: (r.metadata?.result as AgentRunResponse | undefined) ?? null };
   }
-  return { role: "user", content: r.content };
+  return { id: r.id, role: "user", content: r.content };
 }
 
 function AiThread({
-  messages, loading, compact, workspaceId, onAllocated,
+  messages, loading, compact, workspaceId, allocatedIds, onAllocated,
 }: {
   messages: AiMessage[];
   loading: boolean;
   compact?: boolean;
   workspaceId: string | null;
-  onAllocated: () => void;
+  allocatedIds: Set<string>;
+  onAllocated: (messageId: string | null | undefined, ticker: string, amount: number) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -205,7 +213,8 @@ function AiThread({
               aiAnswer={m.content || null}
               compact={compact}
               workspaceId={workspaceId}
-              onAllocated={onAllocated}
+              allocated={!!m.id && allocatedIds.has(m.id)}
+              onAllocated={(ticker, amount) => onAllocated(m.id, ticker, amount)}
             />
           </div>
         ) : (
@@ -232,13 +241,16 @@ function AiResultView({
   aiAnswer,
   compact = false,
   workspaceId,
+  allocated,
   onAllocated,
 }: {
   result: AgentRunResponse;
   aiAnswer: string | null;
   compact?: boolean;
   workspaceId: string | null;
-  onAllocated: () => void;
+  /** True once the user executed the buy for this reply — the CTA is done. */
+  allocated: boolean;
+  onAllocated: (ticker: string, amount: number) => void;
 }) {
   const [buyOpen, setBuyOpen] = useState(false);
   const isRejected = ["rejected", "rejected_after_max_revisions"].includes(result.legal_status ?? "");
@@ -299,7 +311,23 @@ function AiResultView({
         </>
       )}
 
-      {!isRejected && result.allocation_plan && result.user_approval === null && (
+      {allocated && (
+        <>
+          <Separator className="bg-border" />
+          <div className="flex items-start gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3.5 py-2.5">
+            <CheckCircle2 className="size-4 shrink-0 text-emerald-400 mt-0.5" />
+            <p className="text-xs leading-relaxed text-emerald-300">
+              Dana dari rekomendasi ini sudah dialokasikan — transaksi tercatat dan
+              posisi diperbarui.{" "}
+              <Link href="/portfolio" className="underline underline-offset-2 hover:text-emerald-200">
+                Lihat portofolio
+              </Link>
+            </p>
+          </div>
+        </>
+      )}
+
+      {!isRejected && result.allocation_plan && result.user_approval === null && !allocated && (
         <>
           <Separator className="bg-border" />
           <div className="space-y-2">
@@ -332,9 +360,9 @@ function AiResultView({
           suggestedTickers={suggestedTickers}
           suggestedAmount={suggestedAmount}
           onClose={() => setBuyOpen(false)}
-          onSuccess={() => {
+          onSuccess={(ticker, amount) => {
             setBuyOpen(false);
-            onAllocated();
+            onAllocated(ticker, amount);
           }}
         />
       )}
@@ -355,6 +383,9 @@ export default function DashboardPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
+  // Ids of replies whose allocation was already executed — their "Setujui &
+  // Alokasikan Dana" CTA is spent and must not come back after a reload.
+  const [allocatedIds, setAllocatedIds] = useState<Set<string>>(new Set());
   const [convId, setConvId] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   // Bumped after a successful "Setujui & Alokasikan Dana" from the AI panel
@@ -407,6 +438,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!workspaceId) {
       setAiMessages([]);
+      setAllocatedIds(new Set());
       setConvId(null);
       return;
     }
@@ -416,7 +448,10 @@ export default function DashboardPage() {
       if (cancelled || !conv) return;
       setConvId(conv.id);
       const rows = await getMessages(conv.id);
-      if (!cancelled) setAiMessages(rows.map(rowToAiMessage));
+      if (!cancelled) {
+        setAiMessages(rows.map(rowToAiMessage));
+        setAllocatedIds(allocatedReplyIds(rows));
+      }
     })();
     return () => { cancelled = true; };
   }, [workspaceId]);
@@ -453,16 +488,18 @@ export default function DashboardPage() {
         [...res.messages].reverse().find((m) => m.type === "AIMessage")?.content ?? "";
       const ls = res.legal_status ?? "";
       const rejected = ["rejected", "rejected_after_max_revisions"].includes(ls);
-      setAiMessages((prev) => [...prev, { role: "assistant", content: answer, result: res }]);
-      if (cid) {
-        await appendMessage(cid, {
-          role: "assistant",
-          content: answer,
-          auditId: res.audit_id,
-          requiresApproval: !!res.allocation_plan && res.user_approval === null && !rejected,
-          metadata: { result: res },
-        });
-      }
+      // Persist first so the reply carries its row id: the id is what a later
+      // "already allocated" marker points at.
+      const msgId = cid
+        ? await appendMessage(cid, {
+            role: "assistant",
+            content: answer,
+            auditId: res.audit_id,
+            requiresApproval: !!res.allocation_plan && res.user_approval === null && !rejected,
+            metadata: { result: res },
+          })
+        : null;
+      setAiMessages((prev) => [...prev, { id: msgId, role: "assistant", content: answer, result: res }]);
       if (rejected) {
         toast.error(`Ditolak secara legal: ${ls}`);
       } else if (!res.allocation_plan) {
@@ -482,9 +519,33 @@ export default function DashboardPage() {
     }
   }
 
+  // A successful buy retires that reply's CTA and leaves a confirmation in the
+  // thread. The marker rides on the confirmation row (metadata.allocated_for)
+  // so it survives a reload without needing an update policy on chat_messages.
+  async function handleAllocated(
+    messageId: string | null | undefined,
+    ticker: string,
+    amount: number,
+  ) {
+    setRefreshKey((k) => k + 1);
+    if (messageId) setAllocatedIds((prev) => new Set(prev).add(messageId));
+    const confirm =
+      `✓ **Alokasi berhasil** — ${fmtIdr(amount)} masuk ke **${ticker}**. ` +
+      `Transaksi tercatat dan posisi di halaman Portofolio sudah diperbarui.`;
+    const id = convId
+      ? await appendMessage(convId, {
+          role: "assistant",
+          content: confirm,
+          metadata: messageId ? { allocated_for: messageId } : {},
+        })
+      : null;
+    setAiMessages((prev) => [...prev, { id, role: "assistant", content: confirm }]);
+  }
+
   async function clearDashboard() {
     const id = convId;
     setAiMessages([]);
+    setAllocatedIds(new Set());
     setConvId(null);
     if (id) await deleteConversation(id);
   }
@@ -648,7 +709,8 @@ export default function DashboardPage() {
                     loading={loading}
                     compact
                     workspaceId={workspaceId}
-                    onAllocated={() => setRefreshKey((k) => k + 1)}
+                    allocatedIds={allocatedIds}
+                    onAllocated={handleAllocated}
                   />
                 ) : (
                   <AiIdleState loading={loading} />
@@ -702,7 +764,8 @@ export default function DashboardPage() {
               loading={loading}
               compact
               workspaceId={workspaceId}
-              onAllocated={() => setRefreshKey((k) => k + 1)}
+              allocatedIds={allocatedIds}
+              onAllocated={handleAllocated}
             />
           ) : (
             <AiIdleState loading={loading} />
