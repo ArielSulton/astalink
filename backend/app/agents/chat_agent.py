@@ -9,6 +9,7 @@ of its own."""
 from __future__ import annotations
 
 from app.agents.intents import Intent
+from app.agents.report import build_allocation_report
 from app.agents.state import AgentState, LegalStatus, UserApproval
 
 
@@ -17,8 +18,12 @@ def _last_text(messages: list) -> str:
     return getattr(last, "content", "") or ""
 
 
-def build_chat_reply(state: AgentState) -> str:
+def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
     """Turn a finished/paused pipeline run into one chat message.
+
+    style="report" (web chat) formats allocation runs into the full markdown
+    report from app.agents.report; the default "plain" keeps the short
+    single-sentence replies (WhatsApp renders no markdown).
 
     Priority mirrors what the user needs to see first:
     1. N1 couldn't classify the message — relay its clarification question.
@@ -62,6 +67,15 @@ def build_chat_reply(state: AgentState) -> str:
     )
     if state.get("intent") in informational and messages:
         return _last_text(messages)
+
+    # Report style sits AFTER the three guards above (clarification,
+    # no_tickers, informational) so stale allocation state on a continued
+    # thread can never hijack a non-allocation reply — and BEFORE the legal
+    # branches, which remain the plain-style fallback.
+    if style == "report":
+        report = build_allocation_report(state)
+        if report:
+            return report
 
     if legal_status in (LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS):
         return (

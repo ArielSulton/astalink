@@ -82,6 +82,14 @@ export interface AgentRunResponse {
   errors: { node: string; reason: string }[];
 }
 
+export interface ChatResponse {
+  message: string;
+  thread_id: string;
+  audit_id?: string | null;
+  requires_approval?: boolean;
+  intent?: string | null;
+}
+
 export interface PricePoint {
   date: string;
   close: number;
@@ -332,8 +340,8 @@ export const api = {
   chat: (
     body: { message: string; workspace_id: string; thread_id?: string },
     token: string,
-  ): Promise<{ message: string; thread_id: string }> =>
-    jsonFetch<{ message: string; thread_id: string }>(
+  ): Promise<ChatResponse> =>
+    jsonFetch<ChatResponse>(
       "/api/v1/chat/",
       { method: "POST", body: JSON.stringify(body) },
       token,

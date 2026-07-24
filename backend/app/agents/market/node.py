@@ -31,7 +31,9 @@ def _last_or_none(arr: np.ndarray) -> float | None:
     return None if np.isnan(val) else val
 
 
-def _build_ticker_snapshot(ticker: str) -> TickerSnapshot:
+def build_ticker_snapshot(ticker: str) -> TickerSnapshot:
+    """Price + indicator + news snapshot for one ticker. Public: also used by
+    the QA node to ground brainstorming answers in live data."""
     closes = fetch_close_prices(ticker)
     if len(closes) == 0:
         return TickerSnapshot(ticker=ticker, news=fetch_news(ticker))
@@ -68,7 +70,7 @@ def _narrate(snapshots: list[TickerSnapshot]) -> str:
 def market_node(state: AgentState) -> AgentState:
     entities = state.get("entities", {})
     tickers = entities.get("tickers") or []
-    snapshots = [_build_ticker_snapshot(t) for t in tickers]
+    snapshots = [build_ticker_snapshot(t) for t in tickers]
     narration = _narrate(snapshots) if snapshots else ""
     snapshot = MarketSnapshot(tickers=snapshots, narration=narration)
 

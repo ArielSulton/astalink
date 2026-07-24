@@ -39,8 +39,21 @@ Map the user message to one of:
 - evaluate_business: user wants their own business valued
 - risk_review: user wants risk metrics on existing holdings
 - portfolio_status: user is asking about current holdings/positions
-- explain: user wants an explanation of a concept/term
-- unknown: cannot determine
+- explain: DEFAULT for every non-actionable message that expects a substantive
+  answer — explanations of concepts/terms, general finance or business
+  questions, brainstorming and open discussion (market outlook, comparing
+  sectors, opinions like "menurutmu bagaimana prospek bank digital?"),
+  follow-up questions about a previous answer or analysis, and casual
+  conversation. Extract `tickers` when specific stocks are mentioned.
+- unknown: cannot determine at all
+
+Only choose allocate_stocks/allocate_capital when the user actually asks to
+allocate/invest money (usually with an amount); asking ABOUT a stock, sector,
+or idea is explain, not an allocation. Examples:
+- "menurutmu prospek BBCA gimana?" -> explain (entities.tickers=["BBCA"])
+- "lagi mikir mau buka usaha kopi, worth it nggak?" -> explain
+- "alokasikan 10 juta ke BBCA dan TLKM" -> allocate_stocks
+- "50 juta ini mending buat saham atau modal warung saya?" -> allocate_capital
 
 Extract relevant entities (amount, tickers, sector, risk_profile, business_name,
 etc.) into the `entities` dict. For evaluate_business, `business_name` should be
