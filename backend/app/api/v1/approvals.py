@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.agents.graph import graph
 from app.api.deps import get_current_user, verify_user_pin
 from app.core.supabase_admin import get_admin_client
 from app.models.approvals import (
@@ -62,52 +61,35 @@ async def get_approval(audit_id: str, user: dict = Depends(get_current_user)) ->
     )
 
 
-def _thread_id_for(audit: dict) -> str:
-    """The thread_id this run was actually invoked under (chat.py/agent.py/
-    whatsapp.py each build a different format). Resuming under any other
-    value — audit_id included — silently starts a fresh, empty graph run
-    instead of resuming the real paused one, with no exception raised."""
-    thread_id = audit.get("thread_id")
-    if not thread_id:
-        raise HTTPException(
-            status_code=409,
-            detail="This audit has no recorded thread_id and cannot be resumed "
-                    "(pre-dates the thread_id fix). Please resubmit the request.",
-        )
-    return thread_id
-
-
 @router.post("/{audit_id}/approve", status_code=200)
 async def approve(audit_id: str, body: ApprovalAction, user: dict = Depends(get_current_user)):
+    """Advisory mode: the pipeline already ran to completion and produced its
+    report — there is no paused graph run left to resume (n6_hitl/n7_execute
+    aren't wired into graph.py). This endpoint therefore does NOT place any
+    order; it only records that the user reviewed and agrees with the
+    recommendation. The only code path that writes to `transactions` and
+    updates holdings is the explicit buy flow the chat/portfolio UI calls
+    (POST /portfolio/{workspace_id}/buy) — direct the user there to act on
+    this recommendation."""
     if not body.pin:
         raise HTTPException(status_code=400, detail="pin required")
-    audit = _load_audit(audit_id, user["sub"])
+    _load_audit(audit_id, user["sub"])
     verify_user_pin(user["sub"], body.pin)
-    thread_id = _thread_id_for(audit)
 
-    from langgraph.types import Command
-    final = graph.invoke(
-        Command(resume={"approval": "approved"}),
-        config={"configurable": {"thread_id": thread_id}},
-    )
     get_admin_client().table("audit_log").update({
-        "status": "approved",
+        "status": "acknowledged",
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }).eq("audit_id", audit_id).execute()
-    return {"audit_id": audit_id, "transactions": final.get("transactions", [])}
+    return {"audit_id": audit_id, "status": "acknowledged"}
 
 
 @router.post("/{audit_id}/reject", status_code=200)
 async def reject(audit_id: str, body: ApprovalAction, user: dict = Depends(get_current_user)):
-    audit = _load_audit(audit_id, user["sub"])
-    thread_id = _thread_id_for(audit)
-    from langgraph.types import Command
-    graph.invoke(
-        Command(resume={"approval": "rejected", "reason": body.reason or ""}),
-        config={"configurable": {"thread_id": thread_id}},
-    )
+    """See `approve` — advisory mode, so there's no pending order to cancel
+    either. Just records the user's decision."""
+    _load_audit(audit_id, user["sub"])
     get_admin_client().table("audit_log").update({
-        "status": "rejected",
+        "status": "declined",
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }).eq("audit_id", audit_id).execute()
-    return {"audit_id": audit_id}
+    return {"audit_id": audit_id, "status": "declined"}

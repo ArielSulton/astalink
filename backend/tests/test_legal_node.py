@@ -42,6 +42,44 @@ def test_legal_node_writes_status_and_citations_into_agentstate() -> None:
     assert new_substate["legal_citations"][0]["pasal"] == "3"
     fake_admin.table.assert_called()  # audit_log write happened
 
+    # A PARTIAL decision is one of the two statuses under which graph.py's
+    # _route_after_legal ends the run with a plan — GET /approvals must be
+    # able to find it, which only works if this write flips the status.
+    update_call = fake_admin.table.return_value.update.call_args
+    assert update_call.args[0]["status"] == "awaiting_approval"
+
+
+def test_legal_node_rejected_does_not_mark_awaiting_approval() -> None:
+    """REJECTED mid-revision-loop has nothing yet for the user to approve —
+    audit_log.status must stay untouched (not flip to awaiting_approval)."""
+    state = new_state()
+    state["allocation_plan"] = {
+        "weights": [{"ticker": "GGRM", "weight": 1.0}], "cash": 10_000_000,
+    }
+    fake_chunks = [
+        Chunk(text="Investor Ritel dilarang membeli saham rokok.",
+              source="OJK", pasal="3", ayat="1", doc_hash="h", chunk_id="OJK-3-1-_-0"),
+    ]
+    fake_decision = LegalDecision(
+        status=LegalStatus.REJECTED, reasoning="Dilarang.",
+        citations=[Citation(source="OJK", pasal="3", ayat="1",
+                            chunk_id="OJK-3-1-_-0", span="dilarang membeli")],
+        alternative_actions=["Ganti ke ETF konsumsi non-rokok."],
+    )
+    fake_retriever = MagicMock()
+    fake_retriever.retrieve.return_value = fake_chunks
+    fake_admin = MagicMock()
+
+    with patch("app.agents.legal.node.get_hybrid_retriever", return_value=fake_retriever), \
+         patch("app.agents.legal.node._generate_decision", return_value=fake_decision), \
+         patch("app.agents.legal.node.grade_decision", return_value=fake_decision), \
+         patch("app.agents.legal.node.get_admin_client", return_value=fake_admin):
+        new_substate = legal_node(state)
+
+    assert new_substate["legal_status"] == LegalStatus.REJECTED
+    update_call = fake_admin.table.return_value.update.call_args
+    assert "status" not in update_call.args[0]
+
 
 def test_legal_node_falls_back_to_rejected_on_retrieval_failure() -> None:
     """If retrieval crashes or returns empty, we MUST NOT pass through to a

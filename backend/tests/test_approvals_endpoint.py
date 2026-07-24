@@ -51,30 +51,26 @@ def test_get_approval_returns_full_plan(client: TestClient) -> None:
     assert body["plan_json"] is not None
 
 
-def _fake_audit_admin(audit_id: str, user_sub: str, thread_id: str | None) -> MagicMock:
+def _fake_audit_admin(audit_id: str, user_sub: str) -> MagicMock:
     fake_admin = MagicMock()
     fake_admin.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
         data={"audit_id": audit_id, "status": "awaiting_approval", "workspace_id": "w",
-              "user_id": user_sub, "thread_id": thread_id}
+              "user_id": user_sub}
     )
     return fake_admin
 
 
-def test_approve_resumes_using_audits_stored_thread_id_not_audit_id(client: TestClient) -> None:
-    """Live incident: approve/reject used to resume the graph under
-    thread_id=audit_id, which never matches the real thread any entry point
-    invoked under (chat.py/agent.py/whatsapp.py each build a different
-    format) — silently starting a fresh, empty run instead of resuming the
-    real paused one. Must resume under the audit's stored thread_id."""
+def test_approve_records_acknowledgement_without_resuming_any_graph(client: TestClient) -> None:
+    """Advisory mode: n6_hitl/n7_execute aren't wired into graph.py, so there
+    is never a paused run to resume. approve() must not touch the graph at
+    all — it only flips audit_log.status to record the user's decision."""
     user = {"sub": str(uuid.uuid4())}
     audit_id = "audit-1"
-    real_thread_id = "user-xyz:thread-real"
-    fake_admin = _fake_audit_admin(audit_id, user["sub"], real_thread_id)
+    fake_admin = _fake_audit_admin(audit_id, user["sub"])
 
     with patch("app.api.deps.verify_token", return_value=user), \
          patch("app.api.v1.approvals.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.approvals.verify_user_pin"), \
-         patch("app.api.v1.approvals.graph.invoke", return_value={"transactions": []}) as mock_invoke:
+         patch("app.api.v1.approvals.verify_user_pin"):
         resp = client.post(
             f"/api/v1/approvals/{audit_id}/approve",
             json={"pin": "1234"},
@@ -82,19 +78,18 @@ def test_approve_resumes_using_audits_stored_thread_id_not_audit_id(client: Test
         )
 
     assert resp.status_code == 200
-    mock_invoke.assert_called_once()
-    assert mock_invoke.call_args.kwargs["config"]["configurable"]["thread_id"] == real_thread_id
+    assert resp.json() == {"audit_id": audit_id, "status": "acknowledged"}
+    fake_admin.table.return_value.update.assert_called_once()
+    assert fake_admin.table.return_value.update.call_args[0][0]["status"] == "acknowledged"
 
 
-def test_reject_resumes_using_audits_stored_thread_id_not_audit_id(client: TestClient) -> None:
+def test_reject_records_decline_without_resuming_any_graph(client: TestClient) -> None:
     user = {"sub": str(uuid.uuid4())}
     audit_id = "audit-2"
-    real_thread_id = "wa-628-w1"
-    fake_admin = _fake_audit_admin(audit_id, user["sub"], real_thread_id)
+    fake_admin = _fake_audit_admin(audit_id, user["sub"])
 
     with patch("app.api.deps.verify_token", return_value=user), \
-         patch("app.api.v1.approvals.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.approvals.graph.invoke", return_value={}) as mock_invoke:
+         patch("app.api.v1.approvals.get_admin_client", return_value=fake_admin):
         resp = client.post(
             f"/api/v1/approvals/{audit_id}/reject",
             json={},
@@ -102,28 +97,22 @@ def test_reject_resumes_using_audits_stored_thread_id_not_audit_id(client: TestC
         )
 
     assert resp.status_code == 200
-    mock_invoke.assert_called_once()
-    assert mock_invoke.call_args.kwargs["config"]["configurable"]["thread_id"] == real_thread_id
+    assert resp.json() == {"audit_id": audit_id, "status": "declined"}
+    fake_admin.table.return_value.update.assert_called_once()
+    assert fake_admin.table.return_value.update.call_args[0][0]["status"] == "declined"
 
 
-def test_approve_without_recorded_thread_id_returns_409(client: TestClient) -> None:
-    """An audit_log row created before the thread_id fix (or if the write
-    somehow failed) has no thread_id — resuming under any guessed value
-    would silently create an unrelated empty run, so this must fail loudly
-    instead of pretending to succeed."""
+def test_approve_without_pin_returns_400(client: TestClient) -> None:
     user = {"sub": str(uuid.uuid4())}
     audit_id = "audit-3"
-    fake_admin = _fake_audit_admin(audit_id, user["sub"], None)
+    fake_admin = _fake_audit_admin(audit_id, user["sub"])
 
     with patch("app.api.deps.verify_token", return_value=user), \
-         patch("app.api.v1.approvals.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.approvals.verify_user_pin"), \
-         patch("app.api.v1.approvals.graph.invoke") as mock_invoke:
+         patch("app.api.v1.approvals.get_admin_client", return_value=fake_admin):
         resp = client.post(
             f"/api/v1/approvals/{audit_id}/approve",
-            json={"pin": "1234"},
+            json={},
             headers={"Authorization": "Bearer x"},
         )
 
-    assert resp.status_code == 409
-    mock_invoke.assert_not_called()
+    assert resp.status_code == 400

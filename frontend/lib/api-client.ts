@@ -262,7 +262,7 @@ export interface DevilsAdvocateFinding {
 }
 
 export interface Layer0Result {
-  status: "insufficient_data" | "allocated";
+  status: "insufficient_data" | "recommended";
   allocation: { cash: number; stocks: number; business: number } | null;
   confidence: number;
   confidence_label: "LOW" | "MEDIUM" | "HIGH";
@@ -355,14 +355,18 @@ export const api = {
     ),
   getApproval: (auditId: string, token: string) =>
     jsonFetch<ApprovalDetail>(`/api/v1/approvals/${auditId}`, { method: "GET" }, token),
+  // Advisory mode: this only records that the user reviewed and agrees
+  // with the recommendation — it does NOT place any order. Real execution
+  // is the buy flow (api.buyHolding), the only path that writes to
+  // transactions and updates holdings.
   approve: (auditId: string, pin: string, token: string) =>
-    jsonFetch<{ audit_id: string; transactions: unknown[] }>(
+    jsonFetch<{ audit_id: string; status: string }>(
       `/api/v1/approvals/${auditId}/approve`,
       { method: "POST", body: JSON.stringify({ pin }) },
       token,
     ),
   reject: (auditId: string, reason: string, token: string) =>
-    jsonFetch<{ audit_id: string }>(
+    jsonFetch<{ audit_id: string; status: string }>(
       `/api/v1/approvals/${auditId}/reject`,
       { method: "POST", body: JSON.stringify({ reason }) },
       token,

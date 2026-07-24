@@ -122,12 +122,20 @@ def _generate_decision(plan: dict[str, Any], chunks: list[Chunk]) -> LegalDecisi
 
 
 def _persist(audit_id: str, plan: dict[str, Any], decision: LegalDecision) -> None:
-    """Write the decision to audit_log and allocation_plans via service-role."""
+    """Write the decision to audit_log and allocation_plans via service-role.
+
+    audit_log.status flips to "awaiting_approval" exactly when APPROVED/
+    PARTIAL — the same condition under which graph.py's _route_after_legal
+    ends the run with a plan for the user to act on. That's what makes rows
+    show up in GET /approvals (list_approvals filters on this status); a
+    REJECTED decision mid-revision-loop leaves status untouched since there's
+    nothing yet to approve."""
     client = get_admin_client()
+    audit_update: dict[str, Any] = {"payload": {"legal": decision.model_dump()}}
+    if decision.status in (LegalStatus.APPROVED, LegalStatus.PARTIAL):
+        audit_update["status"] = "awaiting_approval"
     try:
-        client.table("audit_log").update(
-            {"payload": {"legal": decision.model_dump()}},
-        ).eq("audit_id", audit_id).execute()
+        client.table("audit_log").update(audit_update).eq("audit_id", audit_id).execute()
         client.table("allocation_plans").insert({
             "audit_id": audit_id,
             "plan_json": plan,

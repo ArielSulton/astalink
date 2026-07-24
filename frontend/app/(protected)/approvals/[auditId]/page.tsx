@@ -149,19 +149,25 @@ export default function ApprovalDetailPage() {
       </section>
 
       {/* ── Actions ── */}
+      <p className="text-xs text-muted-foreground leading-relaxed bg-secondary border border-border rounded-xl p-3">
+        AstaLink beroperasi dalam mode advisory: menyetujui di sini hanya mencatat bahwa
+        Anda meninjau dan setuju dengan rekomendasi ini — <strong>tidak ada transaksi yang
+        otomatis dieksekusi</strong>. Untuk benar-benar mengalokasikan dana, gunakan tombol
+        &ldquo;Setujui &amp; Alokasikan Dana&rdquo; di halaman chat atau Portofolio.
+      </p>
       <div className="flex gap-4">
         <button
           onClick={reject}
           className="flex-1 py-3 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 hover:border-border/60 transition-all duration-200"
         >
-          Reject
+          Tolak
         </button>
         <button
           onClick={() => setPinOpen(true)}
           className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
           disabled={isRejected}
         >
-          Approve dengan PIN
+          Setujui Analisis (PIN)
         </button>
       </div>
 
