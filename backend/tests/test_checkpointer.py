@@ -28,9 +28,9 @@ def test_get_checkpointer_uses_postgres_url(monkeypatch) -> None:
     pool_ctor.assert_called_once_with(
         conninfo="postgresql://u:p@h:5432/postgres",
         kwargs=cp._CONNECTION_KWARGS,
-        min_size=1,
-        max_size=5,
+        check=pool_ctor.check_connection,
         open=True,
+        **cp._POOL_KWARGS,
     )
     saver_ctor.assert_called_once_with(fake_pool)
 

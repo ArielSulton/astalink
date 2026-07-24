@@ -38,6 +38,18 @@ _pool: Any = None
 # (psycopg's own docs: 0 means "prepare immediately", None means "never").
 _CONNECTION_KWARGS = {"autocommit": True, "prepare_threshold": None}
 
+# Borrowing a connection from the pool is not enough on its own: Supavisor
+# can silently close a connection on its end while it's sitting idle in our
+# pool, and ConnectionPool does NOT validate a connection at checkout time
+# by default — it hands out whatever it has, and the first real query on it
+# fails with something like psycopg.errors.InternalError_ (EDBHANDLEREXITED)
+# "connection to database closed". `check=ConnectionPool.check_connection`
+# runs a cheap liveness probe on checkout and transparently swaps in a fresh
+# connection if the pooled one is dead. `max_idle` proactively recycles
+# connections that have sat idle for a while, so we're less likely to reach
+# for one Supavisor already killed in the first place.
+_POOL_KWARGS = {"min_size": 1, "max_size": 5, "max_idle": 300}
+
 
 def get_checkpointer():
     global _saver, _pool
@@ -50,9 +62,9 @@ def get_checkpointer():
             _pool = ConnectionPool(
                 conninfo=settings.SUPABASE_DB_URL,
                 kwargs=_CONNECTION_KWARGS,
-                min_size=1,
-                max_size=5,
+                check=ConnectionPool.check_connection,
                 open=True,
+                **_POOL_KWARGS,
             )
             saver = PostgresSaver(_pool)
             # Idempotent, version-tracked schema migrations (checkpoint_migrations
