@@ -48,10 +48,14 @@ def verify_user_pin(user_sub: str, pin: str) -> None:
     HTTPException on every failure mode (no PIN set → 400, locked → 423,
     invalid → 401). Shared by the approvals and portfolio routers so the
     lockout state machine lives in exactly one place."""
-    pin_row = (
+    # NB: no `.single()` here — it raises PGRST116 (→ 500) when the user has
+    # no PIN row yet, masking the real "PIN not set" case. Take the first row
+    # of a limited select instead so an absent PIN returns a clean 400.
+    pin_rows = (
         get_admin_client().table("pin_codes").select("*")
-        .eq("user_id", user_sub).single().execute()
+        .eq("user_id", user_sub).limit(1).execute()
     ).data
+    pin_row = pin_rows[0] if pin_rows else None
     if not pin_row:
         raise HTTPException(status_code=400, detail="PIN not set; register one first")
 
