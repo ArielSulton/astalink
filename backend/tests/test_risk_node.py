@@ -29,3 +29,30 @@ def test_risk_node_computes_var_and_mvo_for_provided_tickers() -> None:
     assert risk["metrics"]["var_95"] > 0
     assert set(risk["suggested_weights"]) == {"BBCA", "BMRI"}
     assert abs(sum(risk["suggested_weights"].values()) - 1.0) < 1e-3
+
+
+def test_risk_node_handles_single_ticker_without_crashing() -> None:
+    """Live incident reproduction: np.cov() on a single-row array degenerates
+    to a 0-d scalar (not a 1x1 matrix), which used to crash the cov_map
+    dict-comprehension in risk_node with 'IndexError: invalid index to
+    scalar variable' whenever a risk review named exactly one ticker."""
+    state = new_state()
+    state["entities"] = {"tickers": ["BBCA"]}
+
+    rng = np.random.default_rng(0)
+    fake_closes = {
+        "BBCA": np.exp(np.cumsum(rng.normal(0.0005, 0.01, 252))) * 8000,
+    }
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="Risiko BBCA moderat.")
+
+    with patch("app.agents.risk.node.fetch_close_prices",
+               side_effect=lambda t, **kw: fake_closes[t]), \
+         patch("app.agents.risk.node.get_chat_model", return_value=fake_llm):
+        update = risk_node(state)
+
+    risk = update["entities"]["risk_metrics"]
+    assert set(risk["suggested_weights"]) == {"BBCA"}
+    assert risk["suggested_weights"]["BBCA"] == 1.0
+    assert risk["covariance"]["BBCA"]["BBCA"] > 0

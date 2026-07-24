@@ -49,7 +49,11 @@ def risk_node(state: AgentState) -> AgentState:
     aligned = np.vstack([r[-min(len(r) for r in rets.values()):] for r in rets.values()])
 
     expected_returns = aligned.mean(axis=1) * 252
-    cov = np.cov(aligned) * 252
+    # np.cov() degenerates to a 0-d scalar (not a 1x1 matrix) when there's
+    # only one ticker (e.g. "review risiko BBCA" with no other ticker) —
+    # atleast_2d makes both mean_variance_optimize and the cov_map indexing
+    # below work the same way regardless of ticker count; a no-op otherwise.
+    cov = np.atleast_2d(np.cov(aligned) * 252)
     weights = mean_variance_optimize(
         expected_returns=expected_returns, cov=cov, risk_aversion=2.0,
     )
