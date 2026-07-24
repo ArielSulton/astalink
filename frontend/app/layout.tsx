@@ -47,7 +47,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className={cn("font-sans dark", oxanium.variable, plusJakarta.variable)}>
+    <html lang="id" data-scroll-behavior="smooth" className={cn("font-sans dark", oxanium.variable, plusJakarta.variable)}>
       <body>
         {children}
         <Toaster />
