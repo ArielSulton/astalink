@@ -62,6 +62,11 @@ def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
 
     try:
         df = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
+        # Today's row can carry Close=NaN while the IDX session is still
+        # open (yfinance posts volume-so-far before the close prints) — an
+        # unfiltered NaN propagates into last_close and every indicator
+        # computed off it. Drop it like a day that hasn't happened yet.
+        df = df[df["Close"].notna()]
     except Exception as exc:
         log.error("yfinance price_series: failed for %s: %s", ticker, exc)
         return {"series": [], "last_close": None, "prev_close": None,
@@ -123,6 +128,8 @@ def fetch_close_prices(ticker: str, period: str = "1y") -> np.ndarray:
 
     try:
         df = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+        # Same still-open-session NaN as fetch_price_series_with_indicators.
+        df = df[df["Close"].notna()]
     except Exception as exc:
         log.error("yfinance: fetch failed for %s: %s", ticker, exc)
         return np.array([])

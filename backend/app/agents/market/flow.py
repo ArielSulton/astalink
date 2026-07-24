@@ -109,6 +109,11 @@ def fetch_flow_score(ticker: str) -> FlowScore:
         return entry[0]
     try:
         df = yf.Ticker(yf_ticker).history(period="6mo", auto_adjust=True)
+        # Today's row can carry Close=NaN while the IDX session is still
+        # open — an unfiltered NaN poisons np.diff/polyfit downstream and
+        # turns obv_signal into NaN, which then survives the `is not None`
+        # filter in compute_flow_score and forces the verdict to REJECT.
+        df = df[df["Close"].notna()] if df is not None else df
     except Exception as exc:
         log.error("flow: fetch failed for %s: %s", ticker, exc)
         df = None

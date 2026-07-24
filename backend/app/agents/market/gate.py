@@ -270,6 +270,12 @@ def fetch_liquidity_data(ticker: str,
             spread = (ask - bid) / ((ask + bid) / 2)
 
         hist = t.history(period="3mo", auto_adjust=True)
+        # Today's row can land with Close=NaN while the IDX session is still
+        # open (yfinance posts volume-so-far before the close prints) — an
+        # unfiltered NaN poisons every downstream sum/mean, turning ADV into
+        # NaN and failing the >= threshold check for even the most liquid
+        # tickers. Drop it like a day that hasn't happened yet.
+        hist = hist[hist["Close"].notna()]
         if not hist.empty and len(hist) >= 2:
             tail = hist.tail(window + 1)
             closes = tail["Close"].tolist()
