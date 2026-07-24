@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Send, Trash2, PlusCircle, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { api, type PortfolioResponse } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import { useWorkspace } from "@/components/workspace-context";
 import {
   appendMessage,
@@ -33,6 +34,23 @@ function extractTickers(text: string): string[] {
   return found.length > 0 ? found : ["BBCA"];
 }
 
+// Only the "alokasikan dana" phrasing should trigger the full
+// report-plus-approval treatment on the reply bubble — other intents
+// (explain, risk review, etc.) don't have an allocation to approve.
+function isAllocationRequest(text: string): boolean {
+  return /alokasikan\s+dana/i.test(text);
+}
+
+function extractAmount(text: string): number | null {
+  const jutaMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:juta|jt)\b/i);
+  if (jutaMatch) return Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1_000_000);
+  const milyarMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:miliar|milyar)\b/i);
+  if (milyarMatch) return Math.round(parseFloat(milyarMatch[1].replace(",", ".")) * 1_000_000_000);
+  const rawMatch = text.match(/\b(\d{1,3}(?:\.\d{3})+|\d{6,})\b/);
+  if (rawMatch) return parseInt(rawMatch[1].replace(/\./g, ""), 10);
+  return null;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -50,6 +68,7 @@ export default function ChatbotPage() {
   const [loading, setLoading] = useState(false);
   const [buyModalOpen, setBuyModalOpen] = useState(false);
   const [buyTickers, setBuyTickers] = useState<string[]>(["BBCA"]);
+  const [buyAmount, setBuyAmount] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -118,9 +137,10 @@ export default function ChatbotPage() {
     }
   }
 
-  const openAllocationModal = (content: string) => {
+  const openAllocationModal = (content: string, requestText?: string) => {
     const tickers = extractTickers(content);
     setBuyTickers(tickers);
+    setBuyAmount(requestText ? extractAmount(requestText) : null);
     setBuyModalOpen(true);
   };
 
@@ -210,44 +230,6 @@ export default function ChatbotPage() {
 
   return (
     <div className="flex h-full bg-background">
-      {/* Rooms sidebar (desktop) */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-card/30">
-        <div className="p-3 border-b border-border">
-          <button
-            onClick={newRoom}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all"
-          >
-            <MessageSquarePlus className="w-4 h-4" /> Percakapan baru
-          </button>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
-          {rooms.length === 0 && (
-            <p className="text-[11px] text-muted-foreground/70 px-3 py-4 text-center">
-              Belum ada percakapan.
-            </p>
-          )}
-          {rooms.map((r) => (
-            <div
-              key={r.id}
-              onClick={() => loadRoom(r)}
-              className={`group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors ${
-                r.id === activeId ? "bg-secondary" : "hover:bg-secondary/50"
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate text-xs text-foreground">{r.title}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); removeRoom(r.id); }}
-                aria-label="Hapus percakapan"
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-400 transition-all"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </aside>
-
       {/* Active room */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Header */}
@@ -303,38 +285,56 @@ export default function ChatbotPage() {
             </div>
           )}
 
-          {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              {m.role === "user" ? (
-                <div className="max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-tr-none">
-                  {m.content}
-                </div>
-              ) : (
-                <div className="max-w-[85%] flex flex-col items-start gap-2">
-                  <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
-                    <ChatMarkdown content={m.content} />
+          {messages.map((m, i) => {
+            const precedingUser = i > 0 ? messages[i - 1] : null;
+            const isAllocationReply =
+              m.role === "assistant" &&
+              precedingUser?.role === "user" &&
+              isAllocationRequest(precedingUser.content);
+
+            return (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "user" ? (
+                  <div className="max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-tr-none">
+                    {m.content}
                   </div>
-                  {/* Allocation action button on assistant messages */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => openAllocationModal(m.content)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-md"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      Alokasikan Dana Ke Portofolio
-                    </button>
-                    <Link
-                      href="/portfolio"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 transition-all"
-                    >
-                      <Wallet className="w-3.5 h-3.5" />
-                      Lihat Portofolio
-                    </Link>
+                ) : (
+                  <div className="max-w-[85%] flex flex-col items-start gap-2">
+                    <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
+                      <ChatMarkdown content={m.content} />
+                    </div>
+                    {/* Report + approval action — only on replies to an actual
+                       "alokasikan dana" request; other intents (explain, risk
+                       review, etc.) have nothing here to approve. */}
+                    {isAllocationReply && (
+                      <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Laporan pertimbangan siap — setujui untuk eksekusi
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            onClick={() => openAllocationModal(m.content, precedingUser?.content)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-md"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5" />
+                            Setujui &amp; Alokasikan Dana
+                          </button>
+                          <Link
+                            href="/portfolio"
+                            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 transition-all"
+                          >
+                            <Wallet className="w-3.5 h-3.5" />
+                            Lihat Portofolio
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
 
           {loading && (
             <div className="flex justify-start">
@@ -382,10 +382,49 @@ export default function ChatbotPage() {
         </div>
       </div>
 
+      {/* Rooms sidebar (desktop) */}
+      <aside className="hidden md:flex w-64 shrink-0 flex-col border-l border-border bg-card/30">
+        <div className="p-3 border-b border-border">
+          <button
+            onClick={newRoom}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all"
+          >
+            <MessageSquarePlus className="w-4 h-4" /> Percakapan baru
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
+          {rooms.length === 0 && (
+            <p className="text-[11px] text-muted-foreground/70 px-3 py-4 text-center">
+              Belum ada percakapan.
+            </p>
+          )}
+          {rooms.map((r) => (
+            <div
+              key={r.id}
+              onClick={() => loadRoom(r)}
+              className={`group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+                r.id === activeId ? "bg-secondary" : "hover:bg-secondary/50"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 truncate text-xs text-foreground">{r.title}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); removeRoom(r.id); }}
+                aria-label="Hapus percakapan"
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-400 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </aside>
+
       {buyModalOpen && workspaceId && (
-        <ChatBuyModal
+        <AllocationBuyModal
           workspaceId={workspaceId}
           suggestedTickers={buyTickers}
+          suggestedAmount={buyAmount}
           onClose={() => setBuyModalOpen(false)}
           onSuccess={handleAllocationSuccess}
         />
@@ -393,178 +432,3 @@ export default function ChatbotPage() {
     </div>
   );
 }
-
-function ChatBuyModal({
-  workspaceId, suggestedTickers, onClose, onSuccess,
-}: {
-  workspaceId: string;
-  suggestedTickers: string[];
-  onClose: () => void;
-  onSuccess: (ticker: string, amount: number, cashRemaining: number) => void;
-}) {
-  const [selectedTicker, setSelectedTicker] = useState(suggestedTickers[0] || "BBCA");
-  const [amountStr, setAmountStr] = useState("10000000"); // default 10 Juta
-  const [availableCash, setAvailableCash] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
-  const [fetchingCash, setFetchingCash] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const sb = createClient();
-        const { data: { session } } = await sb.auth.getSession();
-        if (!session) return;
-        const port = await api.getPortfolio(workspaceId, session.access_token);
-        setAvailableCash(port.cash_balance);
-      } catch {
-        setError("Gagal mengambil saldo kas.");
-      } finally {
-        setFetchingCash(false);
-      }
-    })();
-  }, [workspaceId]);
-
-  const amountNum = Number(amountStr);
-  const valid = selectedTicker.trim().length >= 3 && amountNum > 0 && amountNum <= availableCash;
-
-  const presetAmounts = [
-    { label: "5 Juta", val: 5000000 },
-    { label: "10 Juta", val: 10000000 },
-    { label: "25 Juta", val: 25000000 },
-    { label: "50 Juta", val: 50000000 },
-  ];
-
-  async function submit() {
-    if (!valid) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-
-      const res = await api.buyHolding(
-        workspaceId,
-        { ticker: selectedTicker.toUpperCase().trim(), amount: amountNum },
-        session.access_token,
-      );
-
-      toast.success(
-        `Alokasi ${idr(res.allocated_amount)} ke ${res.ticker} berhasil! Saldo kas berkurang.`,
-      );
-      onSuccess(res.ticker, res.allocated_amount, res.cash_balance);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal mengalokasikan dana.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        className="bg-glass border border-border shadow-[0_20px_60px_rgba(0,0,0,0.5)] rounded-2xl p-6 w-full max-w-md backdrop-blur-xl relative z-10 space-y-4 text-foreground"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div>
-          <h2 className="font-bold text-lg tracking-tight text-foreground flex items-center gap-2">
-            <PlusCircle className="h-5 w-5 text-emerald-400" />
-            Alokasikan Dana Ke Portofolio
-          </h2>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Saldo Kas Tersedia: {fetchingCash ? (
-              <span className="animate-pulse font-mono">Memuat…</span>
-            ) : (
-              <strong className="text-foreground font-mono">{idr(availableCash)}</strong>
-            )}
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-            Pilih Saham Rekomendasi / Ticker
-          </label>
-          <div className="flex gap-2 mb-2 flex-wrap">
-            {suggestedTickers.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setSelectedTicker(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                  selectedTicker === t
-                    ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
-                    : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            value={selectedTicker}
-            onChange={(e) => setSelectedTicker(e.target.value.toUpperCase())}
-            placeholder="Ketik ticker custom, misal: BBCA"
-            className="w-full font-mono uppercase font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all text-xs"
-          />
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-            Nominal Alokasi (Rupiah)
-          </label>
-          <input
-            type="number"
-            value={amountStr}
-            onChange={(e) => setAmountStr(e.target.value)}
-            placeholder="Nominal alokasi dalam Rp"
-            className="w-full font-mono font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all text-xs mb-2"
-          />
-          <div className="flex items-center gap-2 flex-wrap">
-            {presetAmounts.map((p) => (
-              <button
-                key={p.val}
-                type="button"
-                onClick={() => setAmountStr(String(p.val))}
-                className="text-[11px] font-mono px-2.5 py-1 rounded-lg border border-border bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {amountNum > availableCash && !fetchingCash && (
-          <p className="text-xs text-rose-400 font-medium">
-            ⚠ Nominal alokasi melebihi saldo kas yang tersedia.
-          </p>
-        )}
-
-        {error && <p className="text-xs text-rose-400 font-medium">{error}</p>}
-
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 transition-all"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            disabled={!valid || loading || fetchingCash}
-            onClick={submit}
-            className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
-          >
-            {loading ? "Mengalokasikan…" : "Alokasikan Dana"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-

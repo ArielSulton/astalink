@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Bot, LineChart, Loader2, Send, Sparkles, Trash2, Wallet } from "lucide-react";
+import { ArrowRight, Bot, LineChart, Loader2, PlusCircle, Send, Sparkles, Trash2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/ui/page-header";
@@ -29,6 +29,7 @@ import dynamic from "next/dynamic";
 const PriceChart = dynamic(() => import("@/components/price-chart").then(m => ({ default: m.PriceChart })), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono">Memuat chart…</div> });
 import { TickerCard } from "@/components/ticker-card";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import {
   appendMessage,
   deleteConversation,
@@ -183,7 +184,15 @@ function rowToAiMessage(r: {
   return { role: "user", content: r.content };
 }
 
-function AiThread({ messages, loading, compact }: { messages: AiMessage[]; loading: boolean; compact?: boolean }) {
+function AiThread({
+  messages, loading, compact, workspaceId, onAllocated,
+}: {
+  messages: AiMessage[];
+  loading: boolean;
+  compact?: boolean;
+  workspaceId: string | null;
+  onAllocated: () => void;
+}) {
   return (
     <div className="space-y-5">
       {messages.map((m, i) =>
@@ -191,7 +200,13 @@ function AiThread({ messages, loading, compact }: { messages: AiMessage[]; loadi
           <UserBubble key={i} content={m.content} />
         ) : m.result ? (
           <div key={i} className="animate-fade-in">
-            <AiResultView result={m.result} aiAnswer={m.content || null} compact={compact} />
+            <AiResultView
+              result={m.result}
+              aiAnswer={m.content || null}
+              compact={compact}
+              workspaceId={workspaceId}
+              onAllocated={onAllocated}
+            />
           </div>
         ) : (
           <AssistantBubble key={i} content={m.content} />
@@ -216,12 +231,26 @@ function AiResultView({
   result,
   aiAnswer,
   compact = false,
+  workspaceId,
+  onAllocated,
 }: {
   result: AgentRunResponse;
   aiAnswer: string | null;
   compact?: boolean;
+  workspaceId: string | null;
+  onAllocated: () => void;
 }) {
+  const [buyOpen, setBuyOpen] = useState(false);
   const isRejected = ["rejected", "rejected_after_max_revisions"].includes(result.legal_status ?? "");
+
+  const rankedWeights = [...(result.allocation_plan?.weights ?? [])]
+    .filter((w) => w.weight > 0)
+    .sort((a, b) => b.weight - a.weight);
+  const suggestedTickers = rankedWeights.length ? rankedWeights.map((w) => w.ticker) : ["BBCA"];
+  const suggestedAmount = rankedWeights.length && result.allocation_plan
+    ? result.allocation_plan.cash * rankedWeights[0].weight
+    : null;
+
   return (
     <div className="space-y-4">
       {(result.intent || result.legal_status) && (
@@ -273,13 +302,41 @@ function AiResultView({
       {!isRejected && result.allocation_plan && result.user_approval === null && (
         <>
           <Separator className="bg-border" />
-          <Link
-            href={`/approvals/${result.audit_id}`}
-            className="block w-full text-center py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all duration-200"
-          >
-            Tinjau &amp; Setujui
-          </Link>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Ini baru rekomendasi — belum ada dana yang berpindah. Alokasikan langsung di
+              sini, atau tinjau dulu detail kepatuhan legalnya.
+            </p>
+            <button
+              type="button"
+              disabled={!workspaceId}
+              onClick={() => setBuyOpen(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Setujui &amp; Alokasikan Dana
+            </button>
+            <Link
+              href={`/approvals/${result.audit_id}`}
+              className="block w-full text-center py-2 rounded-xl border border-border bg-secondary text-foreground text-xs font-semibold hover:bg-secondary/80 transition-all duration-200"
+            >
+              Tinjau Detail Kepatuhan Legal
+            </Link>
+          </div>
         </>
+      )}
+
+      {buyOpen && workspaceId && (
+        <AllocationBuyModal
+          workspaceId={workspaceId}
+          suggestedTickers={suggestedTickers}
+          suggestedAmount={suggestedAmount}
+          onClose={() => setBuyOpen(false)}
+          onSuccess={() => {
+            setBuyOpen(false);
+            onAllocated();
+          }}
+        />
       )}
     </div>
   );
@@ -300,6 +357,9 @@ export default function DashboardPage() {
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
   const [convId, setConvId] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Bumped after a successful "Setujui & Alokasikan Dana" from the AI panel
+  // so the cash balance / portfolio strip refetch and reflect the new buy.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     api
@@ -323,7 +383,7 @@ export default function DashboardPage() {
       .then(({ data }) => {
         setCashBalance(data?.cash_balance != null ? Number(data.cash_balance) : null);
       });
-  }, [workspaceId]);
+  }, [workspaceId, refreshKey]);
 
   // Sandbox portfolio summary (holdings + P&L) for the dashboard strip.
   useEffect(() => {
@@ -341,7 +401,7 @@ export default function DashboardPage() {
         setPortfolio(null);
       }
     })();
-  }, [workspaceId, aiMessages.length]);
+  }, [workspaceId, aiMessages.length, refreshKey]);
 
   // Persisted per-user AI assistant history (surface='dashboard').
   useEffect(() => {
@@ -583,7 +643,13 @@ export default function DashboardPage() {
 
               <div className="flex-1 overflow-y-auto px-5 py-4">
                 {hasThread ? (
-                  <AiThread messages={aiMessages} loading={loading} compact />
+                  <AiThread
+                    messages={aiMessages}
+                    loading={loading}
+                    compact
+                    workspaceId={workspaceId}
+                    onAllocated={() => setRefreshKey((k) => k + 1)}
+                  />
                 ) : (
                   <AiIdleState loading={loading} />
                 )}
@@ -631,7 +697,13 @@ export default function DashboardPage() {
 
         <SidebarContent className="px-4 py-4">
           {hasThread ? (
-            <AiThread messages={aiMessages} loading={loading} compact />
+            <AiThread
+              messages={aiMessages}
+              loading={loading}
+              compact
+              workspaceId={workspaceId}
+              onAllocated={() => setRefreshKey((k) => k + 1)}
+            />
           ) : (
             <AiIdleState loading={loading} />
           )}
