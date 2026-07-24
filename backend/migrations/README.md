@@ -34,3 +34,4 @@ of scope for Phase 0.
 | `0009_whatsapp.sql` | WhatsApp binding + dedup + pending-code tables |
 | `0010_businesses.sql` | User-owned businesses + per-period financial records (aset/omset/profit) |
 | `0011_workspace_cash_balance.sql` | Sandbox virtual cash balance per workspace (seeded at Rp 1,000,000,000) |
+| `0012_allocation_layer0.sql` | Layer 0 capital-allocation inputs: `business_intake_profiles`, `investor_profiles` |
