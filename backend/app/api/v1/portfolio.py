@@ -12,13 +12,19 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.execution.schemas import OrderSide
 from app.api.deps import get_current_user, verify_user_pin
-from app.core.holdings import apply_sell, get_holding
+from app.core.holdings import apply_buy, apply_sell, get_holding
 from app.core.holdings import realized_pnl as calc_realized
 from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
-from app.core.wallet import credit_workspace_balance, get_workspace_balance
+from app.core.wallet import (
+    credit_workspace_balance,
+    debit_workspace_balance,
+    get_workspace_balance,
+)
 from app.integrations.broker import SandboxBroker
 from app.models.portfolio import (
+    BuyRequest,
+    BuyResponse,
     HoldingView,
     PortfolioResponse,
     SellRequest,
@@ -71,8 +77,8 @@ async def get_portfolio(
             total_mv += mv
             total_upnl += upnl
         holdings.append(HoldingView(
-            ticker=r["ticker"], quantity=qty, avg_cost=avg, last_price=price,
-            market_value=mv, unrealized_pnl=upnl, unrealized_pnl_pct=upnl_pct,
+            ticker=r["ticker"], quantity=qty, avg_cost=avg, cost_basis=cost_basis,
+            last_price=price, market_value=mv, unrealized_pnl=upnl, unrealized_pnl_pct=upnl_pct,
         ))
 
     cash = get_workspace_balance(sb, workspace_id) or 0.0
@@ -94,6 +100,98 @@ async def get_portfolio(
         total_unrealized_pnl=total_upnl if any_priced else None,
         total_realized_pnl=total_realized,
         total_equity=(cash + total_mv) if any_priced else None,
+    )
+
+
+@router.post("/buy", response_model=BuyResponse)
+async def buy_holding(
+    workspace_id: str,
+    body: BuyRequest,
+    user: dict = Depends(get_current_user),
+) -> BuyResponse:
+    if body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Nominal alokasi/pembelian harus > 0")
+
+    ticker = body.ticker.upper().strip()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Ticker saham tidak boleh kosong")
+
+    sb = get_admin_client()
+    assert_workspace_owned(sb, workspace_id, user["sub"])
+
+    if body.pin:
+        verify_user_pin(user["sub"], body.pin)
+
+    current_cash = get_workspace_balance(sb, workspace_id) or 0.0
+    if current_cash < body.amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Saldo kas tidak mencukupi. Saldo saat ini: Rp {current_cash:,.0f}, dibutuhkan: Rp {body.amount:,.0f}"
+        )
+
+    price = _last_price(ticker)
+    if price is None or price <= 0:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Harga terkini untuk {ticker} tidak tersedia. Pastikan ticker valid."
+        )
+
+    qty = body.amount / price
+
+    # 1. Debit workspace balance
+    new_cash = debit_workspace_balance(sb, workspace_id, body.amount)
+    if new_cash is None:
+        raise HTTPException(status_code=409, detail="Gagal mengurangkan saldo kas (konkuensi data). Silakan coba lagi.")
+
+    # 2. Place broker sandbox order
+    SandboxBroker().place_order(
+        ticker=ticker, qty=qty, side=OrderSide.BUY, account_id=workspace_id,
+    )
+
+    # 3. Apply buy position update to holdings table
+    holding_data = apply_buy(sb, workspace_id, ticker, qty, price)
+
+    # 4. Insert buy transaction log
+    try:
+        sb.table("transactions").insert({
+            "workspace_id": workspace_id,
+            "ticker": ticker,
+            "side": OrderSide.BUY.value,
+            "quantity": qty,
+            "price": price,
+            "status": "filled",
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+            "payload": {"account_id": workspace_id, "amount_idr": body.amount, "manual": True},
+        }).execute()
+    except Exception as exc:
+        log.warning("portfolio: buy transaction insert failed: %s", exc)
+
+    # Construct resulting HoldingView
+    res_qty = float(holding_data["quantity"])
+    res_avg = float(holding_data["avg_cost"])
+    cost_basis = res_qty * res_avg
+    mv = res_qty * price
+    upnl = mv - cost_basis
+    upnl_pct = (upnl / cost_basis) if cost_basis else 0.0
+
+    holding_view = HoldingView(
+        ticker=ticker,
+        quantity=res_qty,
+        avg_cost=res_avg,
+        cost_basis=cost_basis,
+        last_price=price,
+        market_value=mv,
+        unrealized_pnl=upnl,
+        unrealized_pnl_pct=upnl_pct,
+    )
+
+    return BuyResponse(
+        ticker=ticker,
+        allocated_amount=body.amount,
+        quantity=qty,
+        buy_price=price,
+        cash_balance=new_cash,
+        holding=holding_view,
     )
 
 

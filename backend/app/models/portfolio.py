@@ -10,10 +10,11 @@ class HoldingView(BaseModel):
     ticker: str
     quantity: float
     avg_cost: float
+    cost_basis: float                          # Modal investasi awal (quantity * avg_cost)
     last_price: float | None = None
     market_value: float | None = None
     unrealized_pnl: float | None = None
-    unrealized_pnl_pct: float | None = None
+    unrealized_pnl_pct: float | None = None   # Persentase kenaikan/penurunan ((last_price - avg_cost) / avg_cost)
 
 
 class PortfolioResponse(BaseModel):
@@ -24,6 +25,21 @@ class PortfolioResponse(BaseModel):
     total_unrealized_pnl: float | None = None
     total_realized_pnl: float = 0.0
     total_equity: float | None = None   # cash + market value (None if unpriced)
+
+
+class BuyRequest(BaseModel):
+    ticker: str
+    amount: float                      # Total Rp yang dialokasikan/diinvestasikan (misal 10,000,000)
+    pin: str | None = None
+
+
+class BuyResponse(BaseModel):
+    ticker: str
+    allocated_amount: float
+    quantity: float
+    buy_price: float
+    cash_balance: float
+    holding: HoldingView
 
 
 class SellRequest(BaseModel):
@@ -39,3 +55,4 @@ class SellResponse(BaseModel):
     realized_pnl: float
     remaining_quantity: float
     cash_balance: float
+

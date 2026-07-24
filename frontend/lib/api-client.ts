@@ -97,6 +97,7 @@ export interface HoldingView {
   ticker: string;
   quantity: number;
   avg_cost: number;
+  cost_basis: number;
   last_price: number | null;
   market_value: number | null;
   unrealized_pnl: number | null;
@@ -111,6 +112,21 @@ export interface PortfolioResponse {
   total_unrealized_pnl: number | null;
   total_realized_pnl: number;
   total_equity: number | null;
+}
+
+export interface BuyRequest {
+  ticker: string;
+  amount: number;
+  pin?: string;
+}
+
+export interface BuyResponse {
+  ticker: string;
+  allocated_amount: number;
+  quantity: number;
+  buy_price: number;
+  cash_balance: number;
+  holding: HoldingView;
 }
 
 export interface SellResponse {
@@ -466,6 +482,16 @@ export const api = {
   getPortfolio: (workspaceId: string, token: string): Promise<PortfolioResponse> =>
     jsonFetch<PortfolioResponse>(
       `/api/v1/portfolio?workspace_id=${workspaceId}`, { method: "GET" }, token,
+    ),
+  buyHolding: (
+    workspaceId: string,
+    body: BuyRequest,
+    token: string,
+  ): Promise<BuyResponse> =>
+    jsonFetch<BuyResponse>(
+      `/api/v1/portfolio/buy?workspace_id=${workspaceId}`,
+      { method: "POST", body: JSON.stringify(body) },
+      token,
     ),
   sellHolding: (
     ticker: string,
