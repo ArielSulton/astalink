@@ -1,0 +1,28 @@
+# Override: run the Next.js frontend as a production build (next build -> node server.js)
+# instead of `next dev`, while keeping the rest of the non-prod stack from
+# docker-compose.yml. Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.fe-prod.yml up --build -d
+services:
+  frontend:
+    build:
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_BACKEND_URL: http://localhost:${BACKEND_PORT:-8000}
+    environment:
+      NODE_ENV: production
+    # Drop the dev bind mounts (./frontend:/app, node_modules, .next) so they
+    # don't shadow the compiled standalone image.
+    volumes: !reset []
+    # Host DNS is flaky (EAI_AGAIN); use public resolvers so middleware's
+    # supabase.auth.getUser() fetch to *.supabase.co stops failing intermittently.
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+
+  backend:
+    # Same DNS fix for the backend's Supabase REST/admin calls.
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1

@@ -65,6 +65,11 @@ class AgentState(TypedDict, total=False):
     # a stale True can't leak in from an earlier turn on the same thread.
     _needs_clarification: bool
 
+    # L0 — Layer 0 capital allocation (cash/stocks/business). Written once
+    # by l0_allocation; None until that node runs. Includes the terminal
+    # INSUFFICIENT_DATA output — a valid result, not an error.
+    layer0_result: dict[str, Any] | None
+
     # N2/N5 — Allocation
     allocation_plan: dict[str, Any] | None
     revision_count: int
@@ -92,6 +97,7 @@ def new_state() -> AgentState:
         messages=[],
         intent=None,
         entities={},
+        layer0_result=None,
         allocation_plan=None,
         revision_count=0,
         legal_status=None,

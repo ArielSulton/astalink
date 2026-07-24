@@ -100,13 +100,16 @@ def _process_message(msg: dict[str, Any]) -> None:
                   body=f"Halo! Untuk memulai AstaLink, silakan daftar dan link nomor Anda: {link}")
         return
 
+    thread_id = f"wa-{phone}-{binding['workspace_id']}"
+
+    from app.api.v1.chat import load_thread_history
+
     initial = new_state()
-    initial["messages"] = [HumanMessage(content=text)]
+    initial["messages"] = [*load_thread_history(thread_id),
+                           HumanMessage(content=text)]
     initial["entities"] = {"workspace_id": binding["workspace_id"]}
     initial["_user_id"] = binding["user_id"]
     initial["_workspace_id"] = binding["workspace_id"]
-
-    thread_id = f"wa-{phone}-{binding['workspace_id']}"
     allocation_plan = None
     try:
         final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})

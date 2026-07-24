@@ -13,6 +13,7 @@ import {
   History,
   LayoutDashboard,
   Newspaper,
+  PieChart,
   Receipt,
   Scale,
   Settings,
@@ -59,6 +60,7 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     label: "Portfolio",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/allocation", label: "Alokasi Modal", icon: PieChart },
       { href: "/chatbot", label: "AI Chatbot", icon: Bot },
       { href: "/assets", label: "Asset View", icon: Briefcase },
       { href: "/transactions", label: "Transactions", icon: Receipt },

@@ -8,6 +8,10 @@ from enum import StrEnum
 
 class Intent(StrEnum):
     ALLOCATE_STOCKS = "allocate_stocks"
+    # "should this money go to stocks or my/a business?" — runs the full
+    # Layer 0 capital-allocation flow (intake, vetoes, quality, DA) before
+    # any stock analysis
+    ALLOCATE_CAPITAL = "allocate_capital"
     EVALUATE_BUSINESS = "evaluate_business"
     RISK_REVIEW = "risk_review"
     PORTFOLIO_STATUS = "portfolio_status"

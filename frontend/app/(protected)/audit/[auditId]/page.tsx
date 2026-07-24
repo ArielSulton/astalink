@@ -1,26 +1,55 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { api, type AuditDetail } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { AllocationChart } from "@/components/allocation-chart";
-import { Target, ShieldCheck, Scale, CheckCircle2, Receipt } from "lucide-react";
+import { Target, ShieldCheck, Scale, CheckCircle2, Receipt, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function AuditDetailPage() {
   const { auditId } = useParams<{ auditId: string }>();
   const [detail, setDetail] = useState<AuditDetail | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    let stale = false;
+    setDetail(null);
+    setFetchError(null);
     const load = async () => {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-      setDetail(await api.getAudit(auditId, session.access_token));
+      try {
+        const sb = createClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session || stale) return;
+        const res = await api.getAudit(auditId, session.access_token);
+        if (!stale) setDetail(res);
+      } catch (e) {
+        // Stale deep links (deleted run, another user's audit_id) land here as 404.
+        if (!stale) setFetchError(e instanceof Error ? e.message : "Gagal memuat");
+      }
     };
     load();
+    return () => { stale = true; };
   }, [auditId]);
+
+  if (fetchError) {
+    return (
+      <main className="p-8 max-w-3xl mx-auto bg-background min-h-screen text-foreground space-y-4">
+        <div className="bg-card border border-rose-500/20 rounded-2xl p-8 text-center text-sm text-rose-400">
+          Gagal memuat jejak audit: {fetchError.startsWith("404") ? "tidak ditemukan atau bukan milik Anda." : fetchError}
+        </div>
+        <Link
+          href="/audit"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Kembali ke Jejak Audit
+        </Link>
+      </main>
+    );
+  }
 
   if (!detail) {
     return (

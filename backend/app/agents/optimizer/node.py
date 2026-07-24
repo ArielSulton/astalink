@@ -54,7 +54,13 @@ def _constraints_from_risk_profile(risk_profile: str | None) -> tuple[float, flo
 
 def _build_inputs(state: AgentState) -> OptimizerInputs:
     ents = state.get("entities", {})
-    tickers = list(ents.get("tickers", []))
+    # The Layer 1 stock engine narrows tickers to those that passed the A3
+    # gate + verdict bands; fall back to the raw ticker list when the engine
+    # didn't run (non-allocation paths, tests, engine failure).
+    if ents.get("eligible_tickers") is not None:
+        tickers = list(ents["eligible_tickers"])
+    else:
+        tickers = list(ents.get("tickers", []))
 
     # Naive prior: 8% annual return per ticker. Real prod would derive μ from
     # price history (Phase 3's risk_node already does this for the cov side).
@@ -88,6 +94,13 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
         cash = min(requested, balance)
     else:
         cash = balance
+
+    # Layer 0 decides how much of the money goes to stocks AT ALL — the
+    # optimizer only ever distributes that slice, never the full amount.
+    layer0 = state.get("layer0_result") or {}
+    stocks_fraction = (layer0.get("allocation") or {}).get("stocks")
+    if stocks_fraction is not None:
+        cash = cash * float(stocks_fraction)
 
     return OptimizerInputs(
         tickers=tickers,

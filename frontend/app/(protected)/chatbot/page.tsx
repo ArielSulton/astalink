@@ -1,14 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Bot, CheckCircle2, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { useWorkspace } from "@/components/workspace-context";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  auditId?: string | null;
+  requiresApproval?: boolean;
 }
 
 const THREAD_KEY = "astalink_chat_thread_id";
@@ -52,7 +56,15 @@ export default function ChatbotPage() {
       );
       setThreadId(res.thread_id);
       localStorage.setItem(THREAD_KEY, res.thread_id);
-      setMessages((prev) => [...prev, { role: "assistant", content: res.message }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: res.message,
+          auditId: res.audit_id,
+          requiresApproval: res.requires_approval,
+        },
+      ]);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -114,15 +126,26 @@ export default function ChatbotPage() {
             key={i}
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
-            <div
-              className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                m.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-tr-none"
-                  : "bg-glass text-foreground border border-border rounded-tl-none"
-              }`}
-            >
-              {m.content}
-            </div>
+            {m.role === "user" ? (
+              <div className="max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-tr-none">
+                {m.content}
+              </div>
+            ) : (
+              <div className="max-w-[75%] flex flex-col items-start gap-2">
+                <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
+                  <ChatMarkdown content={m.content} />
+                </div>
+                {m.requiresApproval && m.auditId && (
+                  <Link
+                    href={`/approvals/${m.auditId}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Tinjau &amp; Setujui di Approvals
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         ))}
 
