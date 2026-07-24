@@ -106,7 +106,7 @@ export default function AssetsPage() {
               Alokasi Portofolio
             </h2>
             {weights.length > 0 ? (
-              <AllocationChart weights={weights} />
+              <AllocationChart weights={weights} cash={detail?.plan_json?.cash} totalFunds={detail?.plan_json?.total_funds} />
             ) : (
               <p className="text-sm text-muted-foreground">Tidak ada alokasi saham.</p>
             )}

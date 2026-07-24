@@ -18,17 +18,35 @@ function colorFor(ticker: string, index: number) {
   return TICKER_COLORS[ticker] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 }
 
+function fmtIdrShort(n: number): string {
+  if (n >= 1e9) return `Rp ${(n / 1e9).toLocaleString("id-ID", { maximumFractionDigits: 1 })} M`;
+  if (n >= 1e6) return `Rp ${(n / 1e6).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
+  if (n >= 1e3) return `Rp ${(n / 1e3).toLocaleString("id-ID", { maximumFractionDigits: 0 })} rb`;
+  return `Rp ${n.toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
+}
+
 export function AllocationChart({
   weights,
+  cash,
+  totalFunds,
   compact = false,
 }: {
   weights: { ticker: string; weight: number }[];
+  /** IDR earmarked for the stock sleeve (plan.cash). Enables Rupiah amounts. */
+  cash?: number | null;
+  /** Total funds owned (workspace balance). Enables the "vs owned" ratio. */
+  totalFunds?: number | null;
   compact?: boolean;
 }) {
-  const investedPct = Math.min(
-    100,
-    weights.reduce((sum, w) => sum + w.weight * 100, 0),
-  );
+  const sumWeights = weights.reduce((sum, w) => sum + w.weight, 0);
+
+  // Real money mode: show the ratio of invested Rupiah vs funds owned, not
+  // the internal stock-sleeve percentages (which always sum to ~100%).
+  const hasMoney = cash != null && totalFunds != null && totalFunds > 0;
+  const investedIdr = cash != null ? sumWeights * cash : null;
+  const investedPct = hasMoney
+    ? Math.min(100, (investedIdr! / totalFunds!) * 100)
+    : Math.min(100, sumWeights * 100);
 
   // Donut segments on a circumference-100 circle (r = 15.915), starting at 12 o'clock.
   let cursor = 0;
@@ -66,11 +84,16 @@ export function AllocationChart({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-mono font-bold text-foreground text-lg leading-none tabular-nums">
-            {investedPct.toFixed(0)}%
+            {investedPct.toFixed(hasMoney ? 1 : 0)}%
           </span>
           <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider mt-1">
-            Saham
+            {hasMoney ? "dari dana" : "Saham"}
           </span>
+          {hasMoney && (
+            <span className="text-[8px] text-muted-foreground/70 font-mono tabular-nums mt-0.5">
+              {fmtIdrShort(investedIdr!)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -103,9 +126,16 @@ export function AllocationChart({
                 />
               </div>
 
-              <span className="w-16 text-right font-mono font-bold text-foreground text-sm tabular-nums">
-                {(w.weight * 100).toFixed(1)}%
-              </span>
+              <div className="w-24 text-right shrink-0">
+                {cash != null && (
+                  <span className="block font-mono font-bold text-foreground text-sm tabular-nums">
+                    {fmtIdrShort(w.weight * cash)}
+                  </span>
+                )}
+                <span className={`font-mono tabular-nums ${cash != null ? "text-[10px] text-muted-foreground" : "text-sm font-bold text-foreground"}`}>
+                  {(hasMoney ? (w.weight * cash!) / totalFunds! * 100 : w.weight * 100).toFixed(1)}%
+                </span>
+              </div>
             </li>
           );
         })}

@@ -12,8 +12,10 @@ class WeightLeg(BaseModel):
 
 class AllocationPlan(BaseModel):
     weights: list[WeightLeg]
-    cash: float
+    cash: float                       # IDR earmarked for the stock sleeve
     cash_buffer: float = Field(default=0.0)
+    total_funds: float | None = None  # workspace balance — denominator for
+    # the "invested vs funds owned" ratio the UI shows; None when unknown
     narration: str = ""
     relaxations_applied: list[str] = Field(default_factory=list)
 
@@ -42,3 +44,5 @@ class OptimizerInputs(BaseModel):
     max_per_asset: float = 0.4
     min_cash_buffer: float = 0.05
     risk_aversion: float = 2.0
+    total_funds: float | None = None  # workspace balance, carried for
+    # reporting only (the ratio the UI shows); the solver ignores it

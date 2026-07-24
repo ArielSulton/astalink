@@ -67,9 +67,18 @@ def risk_node(state: AgentState) -> AgentState:
     narration = extract_text(llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
                             HumanMessage(content=body)]).content)
 
+    ticker_list = list(series.keys())
+    er_map = {t: float(er) for t, er in zip(ticker_list, expected_returns)}
+    cov_map = {
+        ti: {tj: float(cov[i][j]) for j, tj in enumerate(ticker_list)}
+        for i, ti in enumerate(ticker_list)
+    }
+
     assessment = RiskAssessment(
         metrics=metrics,
-        suggested_weights=dict(zip(series.keys(), [float(w) for w in weights])),
+        suggested_weights=dict(zip(ticker_list, [float(w) for w in weights])),
+        expected_returns=er_map,
+        covariance=cov_map,
         narration=narration,
     )
     return {"entities": {**state.get("entities", {}),

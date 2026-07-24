@@ -83,7 +83,7 @@ export default function AuditDetailPage() {
           <ShieldCheck className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Alokasi</h2>
         </div>
-        {plan ? <AllocationChart weights={plan.weights} /> : <p className="text-sm text-muted-foreground">Tidak ada data alokasi.</p>}
+        {plan ? <AllocationChart weights={plan.weights} cash={plan.cash} totalFunds={plan.total_funds} /> : <p className="text-sm text-muted-foreground">Tidak ada data alokasi.</p>}
         {plan?.narration && (
           <p className="mt-4 text-sm text-muted-foreground leading-relaxed bg-secondary border border-border rounded-xl p-4">
             {plan.narration}

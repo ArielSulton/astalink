@@ -41,6 +41,54 @@ the input."""
 _CONSERVATIVE_KEYWORDS = ("konservatif", "rendah", "low", "conservative")
 _AGGRESSIVE_KEYWORDS = ("agresif", "tinggi", "high", "aggressive")
 
+# Fallbacks used only when real data is unavailable (non-allocation paths,
+# tests, or tickers with too little price history). When risk_node did run,
+# its historical μ/Σ are used instead — see _expected_returns / _covariance.
+_DEFAULT_EXPECTED_RETURN = 0.08
+_DEFAULT_VARIANCE = 0.04
+# ± annualized-return tilt applied at the verdict-score extremes (0 → −tilt,
+# 100 → +tilt), so a strong A1-A4 verdict pulls weight toward that ticker.
+_SCORE_TILT = 0.10
+
+
+def _expected_returns(tickers: list[str], ents: dict) -> list[float]:
+    """Historical μ (from risk_node) tilted by the A1-A4 verdict score.
+
+    base μ comes from risk_metrics.expected_returns (annualized, real);
+    absent tickers fall back to a flat prior. The verdict score (0-100, 50
+    neutral) then shifts μ by up to ±_SCORE_TILT so differentiated market
+    signals — not a uniform prior — drive the weights."""
+    hist_mu = (ents.get("risk_metrics") or {}).get("expected_returns") or {}
+    verdicts = (ents.get("stock_engine") or {}).get("verdicts") or {}
+    out: list[float] = []
+    for t in tickers:
+        mu = float(hist_mu.get(t, _DEFAULT_EXPECTED_RETURN))
+        score = (verdicts.get(t) or {}).get("score")
+        if score is not None:
+            mu += ((float(score) - 50.0) / 50.0) * _SCORE_TILT
+        out.append(mu)
+    return out
+
+
+def _covariance(tickers: list[str], ents: dict) -> list[list[float]]:
+    """Real annualized covariance from risk_node, subset to `tickers`.
+
+    Tickers risk_node had no data for get a diagonal-variance fallback and
+    zero cross-covariance — keeping the matrix block-PSD for the solver."""
+    cov_map = (ents.get("risk_metrics") or {}).get("covariance") or {}
+    n = len(tickers)
+    if not cov_map:
+        return (np.eye(n) * _DEFAULT_VARIANCE).tolist()
+    matrix: list[list[float]] = []
+    for ti in tickers:
+        row_src = cov_map.get(ti, {})
+        row = [
+            float(row_src.get(tj, _DEFAULT_VARIANCE if ti == tj else 0.0))
+            for tj in tickers
+        ]
+        matrix.append(row)
+    return matrix
+
 
 def _constraints_from_risk_profile(risk_profile: str | None) -> tuple[float, float]:
     """Returns (max_per_asset, min_cash_buffer)."""
@@ -62,13 +110,11 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
     else:
         tickers = list(ents.get("tickers", []))
 
-    # Naive prior: 8% annual return per ticker. Real prod would derive μ from
-    # price history (Phase 3's risk_node already does this for the cov side).
-    er = [0.08] * len(tickers)
-
-    # Identity-scaled covariance fallback (variance 0.04 = 20% std dev annual).
-    n = len(tickers)
-    cov = (np.eye(n) * 0.04).tolist()
+    # Real market signals: μ from price history (risk_node) tilted by the
+    # A1-A4 verdict score, and covariance from price history — both fall back
+    # to flat priors only when risk_node had no usable data.
+    er = _expected_returns(tickers, ents)
+    cov = _covariance(tickers, ents)
 
     citations = state.get("legal_citations") or []
     max_per_asset, min_cash_buffer = _constraints_from_risk_profile(ents.get("risk_profile"))
@@ -112,6 +158,7 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
         sector_caps=sector_caps_from_citations(citations),
         max_per_asset=max_per_asset,
         min_cash_buffer=min_cash_buffer,
+        total_funds=balance if balance is not None else cash,
     )
 
 
@@ -148,6 +195,7 @@ def optimizer_node(state: AgentState) -> AgentState:
         weights=legs,
         cash=inputs.cash,
         cash_buffer=cash_buffer,
+        total_funds=inputs.total_funds,
         narration=narration,
         relaxations_applied=relaxations,
     )

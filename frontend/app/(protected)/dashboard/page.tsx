@@ -193,7 +193,7 @@ function AiResultView({
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
               Alokasi Portofolio
             </p>
-            <AllocationChart weights={result.allocation_plan.weights} compact={compact} />
+            <AllocationChart weights={result.allocation_plan.weights} cash={result.allocation_plan.cash} totalFunds={result.allocation_plan.total_funds} compact={compact} />
             {result.allocation_plan.narration && (
               <p className="text-sm text-muted-foreground leading-relaxed bg-secondary border border-border rounded-xl p-3.5">
                 {result.allocation_plan.narration}

@@ -17,6 +17,7 @@ export interface ApprovalDetail {
     weights: { ticker: string; weight: number }[];
     cash: number;
     cash_buffer: number;
+    total_funds: number | null;
     narration: string;
     relaxations_applied: string[];
   } | null;
@@ -43,6 +44,7 @@ export interface AuditDetail {
     weights: { ticker: string; weight: number }[];
     cash: number;
     cash_buffer: number;
+    total_funds: number | null;
     narration: string;
     relaxations_applied: string[];
   } | null;
@@ -73,6 +75,7 @@ export interface AgentRunResponse {
     weights: { ticker: string; weight: number }[];
     cash: number;
     cash_buffer: number;
+    total_funds: number | null;
     narration: string;
     relaxations_applied: string[];
   } | null;
