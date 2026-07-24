@@ -4,14 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.graph import graph
-from app.api.deps import get_current_user
-from app.core.pin import (
-    LockoutError,
-    is_locked,
-    register_failed_attempt,
-    reset_attempts,
-    verify_pin,
-)
+from app.api.deps import get_current_user, verify_user_pin
 from app.core.supabase_admin import get_admin_client
 from app.models.approvals import (
     ApprovalAction,
@@ -69,47 +62,12 @@ async def get_approval(audit_id: str, user: dict = Depends(get_current_user)) ->
     )
 
 
-def _check_pin(user_sub: str, pin: str) -> None:
-    """Verify PIN with lockout. Raises HTTPException on any failure mode."""
-    pin_row = (
-        get_admin_client().table("pin_codes").select("*")
-        .eq("user_id", user_sub).single().execute()
-    ).data
-    if not pin_row:
-        raise HTTPException(status_code=400, detail="PIN not set; register one first")
-
-    state = {
-        "attempts": pin_row.get("attempts", 0),
-        "locked_until": pin_row.get("locked_until"),
-        "last_failed_at": pin_row.get("last_failed_at"),
-    }
-    if is_locked(state):
-        raise HTTPException(status_code=423, detail="account locked")
-
-    if not verify_pin(pin, pin_row["hashed_pin"]):
-        try:
-            register_failed_attempt(state)
-        except LockoutError:
-            pass
-        get_admin_client().table("pin_codes").update({
-            "attempts": state["attempts"],
-            "locked_until": state["locked_until"].isoformat() if state["locked_until"] else None,
-            "last_failed_at": state["last_failed_at"].isoformat() if state["last_failed_at"] else None,
-        }).eq("user_id", user_sub).execute()
-        raise HTTPException(status_code=401, detail="invalid PIN")
-
-    reset_attempts(state)
-    get_admin_client().table("pin_codes").update({
-        "attempts": 0, "locked_until": None, "last_failed_at": None,
-    }).eq("user_id", user_sub).execute()
-
-
 @router.post("/{audit_id}/approve", status_code=200)
 async def approve(audit_id: str, body: ApprovalAction, user: dict = Depends(get_current_user)):
     if not body.pin:
         raise HTTPException(status_code=400, detail="pin required")
     _load_audit(audit_id, user["sub"])
-    _check_pin(user["sub"], body.pin)
+    verify_user_pin(user["sub"], body.pin)
 
     from langgraph.types import Command
     final = graph.invoke(

@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Bot, Loader2, Send, Sparkles, Wallet } from "lucide-react";
+import { ArrowRight, Bot, LineChart, Loader2, Send, Sparkles, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/ui/page-header";
@@ -27,8 +28,9 @@ import { AllocationChart } from "@/components/allocation-chart";
 import dynamic from "next/dynamic";
 const PriceChart = dynamic(() => import("@/components/price-chart").then(m => ({ default: m.PriceChart })), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono">Memuat chart…</div> });
 import { TickerCard } from "@/components/ticker-card";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { createClient } from "@/lib/supabase/client";
-import { api, type AgentRunResponse, type TickerChartData } from "@/lib/api-client";
+import { api, type AgentRunResponse, type PortfolioResponse, type TickerChartData } from "@/lib/api-client";
 
 const DEFAULT_WATCHLIST = ["BBCA.JK", "TLKM.JK", "ASII.JK", "BBRI.JK"];
 
@@ -116,21 +118,54 @@ function AiComposer({
   );
 }
 
+function fmtIdr(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return "Rp " + n.toLocaleString("id-ID", { maximumFractionDigits: 0 });
+}
+
+function fmtSigned(n: number | null | undefined): string {
+  if (n == null) return "—";
+  const s = Math.abs(n).toLocaleString("id-ID", { maximumFractionDigits: 0 });
+  return (n >= 0 ? "+Rp " : "-Rp ") + s;
+}
+
+function MiniStat({ label, value, tone }: { label: string; value: string; tone?: number | null }) {
+  const toneClass = tone == null ? "text-foreground" : tone >= 0 ? "text-emerald-400" : "text-rose-400";
+  return (
+    <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+      <p className="text-[9px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1">
+        {label}
+      </p>
+      <p className={`font-mono text-sm font-bold tabular-nums leading-none ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
 function AiResultView({
   result,
   aiAnswer,
+  userQuery,
   isRejected,
   onApprove,
   compact = false,
 }: {
   result: AgentRunResponse;
   aiAnswer: string | null;
+  userQuery: string | null;
   isRejected: boolean;
   onApprove: () => void;
   compact?: boolean;
 }) {
   return (
     <div className="space-y-4">
+      {userQuery && (
+        <div className="flex justify-end">
+          <p className="max-w-[85%] text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-xl rounded-tr-none px-3.5 py-2.5">
+            {userQuery}
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         {result.intent && (
           <Badge variant="outline" className="font-mono text-xs text-muted-foreground bg-secondary border-border">
@@ -145,9 +180,9 @@ function AiResultView({
           <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25 mt-0.5">
             <Bot className="size-3.5 text-chart-2" />
           </div>
-          <p className="flex-1 min-w-0 text-sm leading-relaxed whitespace-pre-wrap text-foreground bg-secondary border border-border rounded-xl rounded-tl-none px-3.5 py-2.5">
-            {aiAnswer}
-          </p>
+          <div className="flex-1 min-w-0 text-sm leading-relaxed text-foreground bg-secondary border border-border rounded-xl rounded-tl-none px-3.5 py-2.5">
+            <ChatMarkdown content={aiAnswer} />
+          </div>
         </div>
       )}
 
@@ -208,9 +243,11 @@ export default function DashboardPage() {
 
   const { workspaceId } = useWorkspace();
   const [cashBalance, setCashBalance] = useState<number | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AgentRunResponse | null>(null);
+  const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -237,6 +274,24 @@ export default function DashboardPage() {
       });
   }, [workspaceId]);
 
+  // Sandbox portfolio summary (holdings + P&L) for the dashboard strip.
+  useEffect(() => {
+    if (!workspaceId) {
+      setPortfolio(null);
+      return;
+    }
+    (async () => {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      try {
+        setPortfolio(await api.getPortfolio(workspaceId, session.access_token));
+      } catch {
+        setPortfolio(null);
+      }
+    })();
+  }, [workspaceId, result]);
+
   const selectedData = watchlist.find((t) => t.ticker === selectedTicker) ?? null;
 
   async function handleRun() {
@@ -246,11 +301,14 @@ export default function DashboardPage() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { router.push("/login"); return; }
 
+    const query = message.trim();
     setLoading(true);
     setResult(null);
+    setLastQuery(query);
+    setMessage("");
     try {
       const res = await api.runAgent(
-        { message: message.trim(), workspace_id: workspaceId },
+        { message: query, workspace_id: workspaceId },
         session.access_token,
       );
       setResult(res);
@@ -292,6 +350,47 @@ export default function DashboardPage() {
     >
       {/* ── Main content ── */}
       <SidebarInset className="bg-background">
+        {/* Portfolio summary strip */}
+        {portfolio && portfolio.holdings.length > 0 && (
+          <div className="border-b border-border px-6 py-4 bg-card/20 animate-fade-in">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <LineChart className="size-4 text-chart-2" />
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground font-mono">
+                  Portofolio
+                </span>
+              </div>
+              <Link
+                href="/portfolio"
+                className="inline-flex items-center gap-1 text-xs font-medium text-chart-2 hover:underline"
+              >
+                Lihat <ArrowRight className="size-3" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <MiniStat label="Total Ekuitas" value={fmtIdr(portfolio.total_equity)} />
+              <MiniStat label="Kas" value={fmtIdr(portfolio.cash_balance)} />
+              <MiniStat label="Unrealized P&L" value={fmtSigned(portfolio.total_unrealized_pnl)}
+                tone={portfolio.total_unrealized_pnl} />
+              <MiniStat label="Realized P&L" value={fmtSigned(portfolio.total_realized_pnl)}
+                tone={portfolio.total_realized_pnl} />
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {portfolio.holdings.slice(0, 6).map((h) => (
+                <span key={h.ticker}
+                  className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-secondary border border-border text-muted-foreground">
+                  {h.ticker}
+                </span>
+              ))}
+              {portfolio.holdings.length > 6 && (
+                <span className="text-[10px] font-mono text-muted-foreground/60 px-1 py-0.5">
+                  +{portfolio.holdings.length - 6}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Market Watch Header */}
         <div className="border-b border-border px-6 py-5 bg-card/40">
           <PageHeader eyebrow="Market Watch" title="IDX Blue Chips" className="mb-5">
@@ -390,6 +489,7 @@ export default function DashboardPage() {
                     <AiResultView
                       result={result}
                       aiAnswer={aiAnswer}
+                      userQuery={lastQuery}
                       isRejected={isRejected}
                       onApprove={handleApprove}
                       compact
@@ -435,6 +535,7 @@ export default function DashboardPage() {
               <AiResultView
                 result={result}
                 aiAnswer={aiAnswer}
+                userQuery={lastQuery}
                 isRejected={isRejected}
                 onApprove={handleApprove}
                 compact

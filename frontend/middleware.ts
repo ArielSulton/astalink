@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
     "/transactions",
     "/settings",
     "/assets",
+    "/portfolio",
     "/chatbot",
     "/legal-docs",
     "/news",

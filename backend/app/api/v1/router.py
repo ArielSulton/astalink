@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import agent, allocation, audit, auth, business, chat, health, legal, market
 from app.api.v1 import approvals as approvals_router
 from app.api.v1 import pin as pin_router
+from app.api.v1 import portfolio as portfolio_router
 from app.api.v1 import whatsapp as wa_router
 from app.api.v1 import workspaces as workspaces_router
 
@@ -20,3 +21,4 @@ api_router.include_router(wa_router.router, prefix="/whatsapp", tags=["whatsapp"
 api_router.include_router(workspaces_router.router, prefix="/workspaces", tags=["workspaces"])
 api_router.include_router(business.router, prefix="/business", tags=["business"])
 api_router.include_router(allocation.router, prefix="/allocation", tags=["allocation"])
+api_router.include_router(portfolio_router.router, prefix="/portfolio", tags=["portfolio"])

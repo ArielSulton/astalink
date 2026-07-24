@@ -17,6 +17,7 @@ import {
   Receipt,
   Scale,
   Settings,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -62,6 +63,7 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/allocation", label: "Alokasi Modal", icon: PieChart },
       { href: "/chatbot", label: "AI Chatbot", icon: Bot },
+      { href: "/portfolio", label: "Portofolio", icon: Wallet },
       { href: "/assets", label: "Asset View", icon: Briefcase },
       { href: "/transactions", label: "Transactions", icon: Receipt },
     ],

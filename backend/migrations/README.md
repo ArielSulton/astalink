@@ -35,3 +35,4 @@ of scope for Phase 0.
 | `0010_businesses.sql` | User-owned businesses + per-period financial records (aset/omset/profit) |
 | `0011_workspace_cash_balance.sql` | Sandbox virtual cash balance per workspace (seeded at Rp 1,000,000,000) |
 | `0012_allocation_layer0.sql` | Layer 0 capital-allocation inputs: `business_intake_profiles`, `investor_profiles` |
+| `0013_holdings.sql` | Sandbox portfolio `holdings` (weighted-avg cost) + `transactions` extended (`workspace_id`, `price`, `realized_pnl`; plan/audit nullable) for manual sells |

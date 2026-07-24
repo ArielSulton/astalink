@@ -55,3 +55,30 @@ def debit_workspace_balance(sb, workspace_id: str, amount: float) -> float | Non
         .execute()
     )
     return new_balance if res.data else None
+
+
+def credit_workspace_balance(sb, workspace_id: str, amount: float) -> float | None:
+    """Atomically increment cash_balance by `amount` (e.g. sell proceeds).
+
+    Mirror of `debit_workspace_balance`: the `.eq("cash_balance", current)`
+    compare-and-swap on the UPDATE's WHERE clause makes a concurrent write
+    (that changed the balance since we read it) fail cleanly — `res.data`
+    comes back empty and we return None instead of crediting against a stale
+    read. Returns the new balance on success, or None if the workspace
+    doesn't exist or the compare-and-swap lost the race."""
+    if amount <= 0:
+        raise ValueError("amount must be > 0")
+
+    current = get_workspace_balance(sb, workspace_id)
+    if current is None:
+        return None
+
+    new_balance = current + amount
+    res = (
+        sb.table("workspaces")
+        .update({"cash_balance": new_balance})
+        .eq("id", workspace_id)
+        .eq("cash_balance", current)
+        .execute()
+    )
+    return new_balance if res.data else None

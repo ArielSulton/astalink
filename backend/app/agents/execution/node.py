@@ -10,6 +10,7 @@ from typing import Any
 
 from app.agents.execution.schemas import BrokerOrder, OrderSide
 from app.agents.state import AgentState, UserApproval
+from app.core.holdings import apply_buy
 from app.core.metrics import record_execution, track_node_duration
 from app.core.supabase_admin import get_admin_client
 from app.core.wallet import debit_workspace_balance
@@ -126,15 +127,26 @@ def execution_node(state: AgentState) -> AgentState:
             get_admin_client().table("transactions").insert({
                 "allocation_plan_id": plan_id,
                 "audit_id": audit_id,
+                "workspace_id": workspace_id,
                 "ticker": ticker,
                 "side": side.value,
                 "quantity": qty,
+                "price": last_close,
                 "broker_ref": order.broker_ref,
                 "status": order.status,
                 "payload": order.payload,
             }).execute()
         except Exception as exc:
             log.warning("execution: transactions insert race: %s", exc)
+
+        # Accumulate the position so the portfolio view reflects the buy.
+        # Only reached for genuinely new fills (already-filled tickers are
+        # skipped above), so this never double-counts on re-runs.
+        if workspace_id and order.status == "filled":
+            try:
+                apply_buy(get_admin_client(), workspace_id, ticker, qty, last_close)
+            except Exception as exc:
+                log.warning("execution: holdings upsert failed for %s: %s", ticker, exc)
 
         transactions.append({
             "ticker": ticker, "side": side.value, "quantity": qty,

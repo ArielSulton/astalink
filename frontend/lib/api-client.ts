@@ -90,6 +90,36 @@ export interface ChatResponse {
   intent?: string | null;
 }
 
+export interface HoldingView {
+  ticker: string;
+  quantity: number;
+  avg_cost: number;
+  last_price: number | null;
+  market_value: number | null;
+  unrealized_pnl: number | null;
+  unrealized_pnl_pct: number | null;
+}
+
+export interface PortfolioResponse {
+  workspace_id: string;
+  cash_balance: number;
+  holdings: HoldingView[];
+  total_market_value: number | null;
+  total_unrealized_pnl: number | null;
+  total_realized_pnl: number;
+  total_equity: number | null;
+}
+
+export interface SellResponse {
+  ticker: string;
+  sold_quantity: number;
+  sell_price: number;
+  proceeds: number;
+  realized_pnl: number;
+  remaining_quantity: number;
+  cash_balance: number;
+}
+
 export interface PricePoint {
   date: string;
   close: number;
@@ -426,6 +456,22 @@ export const api = {
   ): Promise<FinancialRecord> =>
     jsonFetch<FinancialRecord>(
       `/api/v1/business/${businessId}/financials`,
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
+
+  getPortfolio: (workspaceId: string, token: string): Promise<PortfolioResponse> =>
+    jsonFetch<PortfolioResponse>(
+      `/api/v1/portfolio?workspace_id=${workspaceId}`, { method: "GET" }, token,
+    ),
+  sellHolding: (
+    ticker: string,
+    workspaceId: string,
+    body: { quantity: number; pin: string },
+    token: string,
+  ): Promise<SellResponse> =>
+    jsonFetch<SellResponse>(
+      `/api/v1/portfolio/${ticker}/sell?workspace_id=${workspaceId}`,
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),
