@@ -5,7 +5,9 @@ import { api, type ApprovalDetail } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { PinModal } from "@/components/pin-modal";
 import { AllocationChart } from "@/components/allocation-chart";
-import { ShieldCheck, Scale } from "lucide-react";
+import { ShieldCheck, Scale, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -15,15 +17,25 @@ export default function ApprovalDetailPage() {
   const [detail, setDetail] = useState<ApprovalDetail | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    let stale = false;
+    setDetail(null);
+    setFetchError(null);
     const load = async () => {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-      setDetail(await api.getApproval(auditId, session.access_token));
+      try {
+        const sb = createClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session || stale) return;
+        const res = await api.getApproval(auditId, session.access_token);
+        if (!stale) setDetail(res);
+      } catch (err) {
+        if (!stale) setFetchError(err instanceof Error ? err.message : "Gagal memuat");
+      }
     };
     load();
+    return () => { stale = true; };
   }, [auditId]);
 
   const submitPin = async (pin: string) => {
@@ -43,9 +55,30 @@ export default function ApprovalDetailPage() {
     const sb = createClient();
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
-    await api.reject(auditId, "User rejected", session.access_token);
-    router.push("/approvals");
+    try {
+      await api.reject(auditId, "User rejected", session.access_token);
+      router.push("/approvals");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menolak");
+    }
   };
+
+  if (fetchError) {
+    return (
+      <main className="p-8 max-w-3xl mx-auto bg-background min-h-screen text-foreground space-y-4">
+        <div className="bg-card border border-rose-500/20 rounded-2xl p-8 text-center text-sm text-rose-400">
+          Gagal memuat detail approval: {fetchError.includes("404") ? "Data approval tidak ditemukan atau sudah kadaluarsa." : fetchError}
+        </div>
+        <Link
+          href="/approvals"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Kembali ke Daftar Approval
+        </Link>
+      </main>
+    );
+  }
 
   if (!detail) {
     return (

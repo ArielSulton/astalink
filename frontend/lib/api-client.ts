@@ -326,15 +326,24 @@ export interface RegulationDoc {
 }
 
 async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
-  const res = await fetch(`${BACKEND}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(init?.headers || {}),
-    },
-  });
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(init?.headers || {}),
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Gagal terhubung ke backend server (${BACKEND}): ${msg}`);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${text}`);
+  }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }

@@ -14,16 +14,24 @@ export default function ApprovalsInbox() {
 
   useEffect(() => {
     if (!workspaceId) return;
+    let stale = false;
     const fetchData = async () => {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-      const res = await api.listApprovals(workspaceId, session.access_token);
-      setItems(res.approvals);
+      try {
+        const sb = createClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session || stale) return;
+        const res = await api.listApprovals(workspaceId, session.access_token);
+        if (!stale) setItems(res.approvals);
+      } catch {
+        // Silently ignore background polling network errors
+      }
     };
     fetchData();
     const t = setInterval(fetchData, 5_000);
-    return () => clearInterval(t);
+    return () => {
+      stale = true;
+      clearInterval(t);
+    };
   }, [workspaceId]);
 
   return (
