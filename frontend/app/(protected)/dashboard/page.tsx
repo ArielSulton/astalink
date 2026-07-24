@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Bot, LineChart, Loader2, Send, Sparkles, Wallet } from "lucide-react";
+import { ArrowRight, Bot, LineChart, Loader2, Send, Sparkles, Trash2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/ui/page-header";
@@ -29,6 +29,12 @@ import dynamic from "next/dynamic";
 const PriceChart = dynamic(() => import("@/components/price-chart").then(m => ({ default: m.PriceChart })), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono">Memuat chart…</div> });
 import { TickerCard } from "@/components/ticker-card";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import {
+  appendMessage,
+  deleteConversation,
+  getMessages,
+  getOrCreateDashboardConversation,
+} from "@/lib/chat-history";
 import { createClient } from "@/lib/supabase/client";
 import { api, type AgentRunResponse, type PortfolioResponse, type TickerChartData } from "@/lib/api-client";
 
@@ -141,50 +147,95 @@ function MiniStat({ label, value, tone }: { label: string; value: string; tone?:
   );
 }
 
+function UserBubble({ content }: { content: string }) {
+  return (
+    <div className="flex justify-end">
+      <p className="max-w-[85%] text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-xl rounded-tr-none px-3.5 py-2.5">
+        {content}
+      </p>
+    </div>
+  );
+}
+
+function AssistantBubble({ content }: { content: string }) {
+  return (
+    <div className="flex gap-2.5">
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25 mt-0.5">
+        <Bot className="size-3.5 text-chart-2" />
+      </div>
+      <div className="flex-1 min-w-0 text-sm leading-relaxed text-foreground bg-secondary border border-border rounded-xl rounded-tl-none px-3.5 py-2.5">
+        <ChatMarkdown content={content} />
+      </div>
+    </div>
+  );
+}
+
+type AiMessage = { role: "user" | "assistant"; content: string; result?: AgentRunResponse | null };
+
+function rowToAiMessage(r: {
+  role: "user" | "assistant";
+  content: string;
+  metadata: Record<string, unknown>;
+}): AiMessage {
+  if (r.role === "assistant") {
+    return { role: "assistant", content: r.content, result: (r.metadata?.result as AgentRunResponse | undefined) ?? null };
+  }
+  return { role: "user", content: r.content };
+}
+
+function AiThread({ messages, loading, compact }: { messages: AiMessage[]; loading: boolean; compact?: boolean }) {
+  return (
+    <div className="space-y-5">
+      {messages.map((m, i) =>
+        m.role === "user" ? (
+          <UserBubble key={i} content={m.content} />
+        ) : m.result ? (
+          <div key={i} className="animate-fade-in">
+            <AiResultView result={m.result} aiAnswer={m.content || null} compact={compact} />
+          </div>
+        ) : (
+          <AssistantBubble key={i} content={m.content} />
+        ),
+      )}
+      {loading && (
+        <div className="flex justify-start">
+          <div className="bg-secondary border border-border rounded-xl rounded-tl-none px-5 py-4">
+            <div className="flex gap-1.5 items-center">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AiResultView({
   result,
   aiAnswer,
-  userQuery,
-  isRejected,
-  onApprove,
   compact = false,
 }: {
   result: AgentRunResponse;
   aiAnswer: string | null;
-  userQuery: string | null;
-  isRejected: boolean;
-  onApprove: () => void;
   compact?: boolean;
 }) {
+  const isRejected = ["rejected", "rejected_after_max_revisions"].includes(result.legal_status ?? "");
   return (
     <div className="space-y-4">
-      {userQuery && (
-        <div className="flex justify-end">
-          <p className="max-w-[85%] text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-xl rounded-tr-none px-3.5 py-2.5">
-            {userQuery}
-          </p>
+      {(result.intent || result.legal_status) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {result.intent && (
+            <Badge variant="outline" className="font-mono text-xs text-muted-foreground bg-secondary border-border">
+              {result.intent}
+            </Badge>
+          )}
+          {result.legal_status && <StatusBadge status={result.legal_status} />}
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {result.intent && (
-          <Badge variant="outline" className="font-mono text-xs text-muted-foreground bg-secondary border-border">
-            {result.intent}
-          </Badge>
-        )}
-        {result.legal_status && <StatusBadge status={result.legal_status} />}
-      </div>
-
-      {aiAnswer && (
-        <div className="flex gap-2.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25 mt-0.5">
-            <Bot className="size-3.5 text-chart-2" />
-          </div>
-          <div className="flex-1 min-w-0 text-sm leading-relaxed text-foreground bg-secondary border border-border rounded-xl rounded-tl-none px-3.5 py-2.5">
-            <ChatMarkdown content={aiAnswer} />
-          </div>
-        </div>
-      )}
+      {aiAnswer && <AssistantBubble content={aiAnswer} />}
 
       {result.allocation_plan && (
         <>
@@ -222,12 +273,12 @@ function AiResultView({
       {!isRejected && result.allocation_plan && result.user_approval === null && (
         <>
           <Separator className="bg-border" />
-          <button
-            onClick={onApprove}
-            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all duration-200"
+          <Link
+            href={`/approvals/${result.audit_id}`}
+            className="block w-full text-center py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all duration-200"
           >
             Tinjau &amp; Setujui
-          </button>
+          </Link>
         </>
       )}
     </div>
@@ -246,8 +297,8 @@ export default function DashboardPage() {
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AgentRunResponse | null>(null);
-  const [lastQuery, setLastQuery] = useState<string | null>(null);
+  const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
+  const [convId, setConvId] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -290,7 +341,25 @@ export default function DashboardPage() {
         setPortfolio(null);
       }
     })();
-  }, [workspaceId, result]);
+  }, [workspaceId, aiMessages.length]);
+
+  // Persisted per-user AI assistant history (surface='dashboard').
+  useEffect(() => {
+    if (!workspaceId) {
+      setAiMessages([]);
+      setConvId(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const conv = await getOrCreateDashboardConversation(workspaceId);
+      if (cancelled || !conv) return;
+      setConvId(conv.id);
+      const rows = await getMessages(conv.id);
+      if (!cancelled) setAiMessages(rows.map(rowToAiMessage));
+    })();
+    return () => { cancelled = true; };
+  }, [workspaceId]);
 
   const selectedData = watchlist.find((t) => t.ticker === selectedTicker) ?? null;
 
@@ -302,46 +371,65 @@ export default function DashboardPage() {
     if (!session) { router.push("/login"); return; }
 
     const query = message.trim();
-    setLoading(true);
-    setResult(null);
-    setLastQuery(query);
     setMessage("");
+    setLoading(true);
+    setAiMessages((prev) => [...prev, { role: "user", content: query }]);
+
+    // Ensure the dashboard conversation exists, then persist the user turn.
+    let cid = convId;
+    if (!cid) {
+      const conv = await getOrCreateDashboardConversation(workspaceId);
+      cid = conv?.id ?? null;
+      setConvId(cid);
+    }
+    if (cid) await appendMessage(cid, { role: "user", content: query });
+
     try {
       const res = await api.runAgent(
         { message: query, workspace_id: workspaceId },
         session.access_token,
       );
-      setResult(res);
+      const answer =
+        [...res.messages].reverse().find((m) => m.type === "AIMessage")?.content ?? "";
       const ls = res.legal_status ?? "";
-      if (["rejected", "rejected_after_max_revisions"].includes(ls)) {
+      const rejected = ["rejected", "rejected_after_max_revisions"].includes(ls);
+      setAiMessages((prev) => [...prev, { role: "assistant", content: answer, result: res }]);
+      if (cid) {
+        await appendMessage(cid, {
+          role: "assistant",
+          content: answer,
+          auditId: res.audit_id,
+          requiresApproval: !!res.allocation_plan && res.user_approval === null && !rejected,
+          metadata: { result: res },
+        });
+      }
+      if (rejected) {
         toast.error(`Ditolak secara legal: ${ls}`);
       } else if (!res.allocation_plan) {
-        // Q&A / clarification run — nothing to approve, just an answer.
         toast.success("Jawaban siap.");
       } else if (res.user_approval === null) {
-        toast.info("Menunggu approval Anda — periksa halaman Approvals atau gunakan tombol Tinjau & Setujui.");
+        toast.info("Menunggu approval Anda — gunakan tombol Tinjau & Setujui.");
       } else {
         toast.success("Analisis selesai — silakan tinjau alokasi.");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menghubungi agen.");
+      const fail = "Maaf, terjadi kesalahan. Coba lagi.";
+      setAiMessages((prev) => [...prev, { role: "assistant", content: fail }]);
+      if (cid) await appendMessage(cid, { role: "assistant", content: fail });
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleApprove() {
-    if (!result) return;
-    router.push(`/approvals/${result.audit_id}`);
+  async function clearDashboard() {
+    const id = convId;
+    setAiMessages([]);
+    setConvId(null);
+    if (id) await deleteConversation(id);
   }
 
-  const isRejected = ["rejected", "rejected_after_max_revisions"].includes(
-    result?.legal_status ?? ""
-  );
-
-  const aiAnswer = result
-    ? [...result.messages].reverse().find((m) => m.type === "AIMessage")?.content ?? null
-    : null;
+  const hasThread = aiMessages.length > 0;
 
   return (
     <SidebarProvider
@@ -462,7 +550,7 @@ export default function DashboardPage() {
             className="fixed bottom-5 right-5 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_12px_32px_-8px_rgba(0,0,0,0.55)] hover:bg-primary/90 active:scale-95 transition-all duration-200"
           >
             {loading ? <Loader2 className="size-6 animate-spin" /> : <Sparkles className="size-6" />}
-            {result && !mobileOpen && (
+            {hasThread && !mobileOpen && (
               <span className="absolute -top-0.5 -right-0.5 size-3.5 rounded-full bg-chart-2 border-2 border-background animate-pulse" />
             )}
           </button>
@@ -470,38 +558,39 @@ export default function DashboardPage() {
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetContent side="bottom" className="h-[85svh] rounded-t-2xl p-0 gap-0 bg-background">
               <SheetHeader className="border-b border-border px-5 py-4 pr-12">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-chart-2/10 border border-chart-2/25">
-                    <Sparkles className="size-4 text-chart-2" />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-chart-2/10 border border-chart-2/25">
+                      <Sparkles className="size-4 text-chart-2" />
+                    </div>
+                    <div className="min-w-0">
+                      <SheetTitle className="text-sm font-bold tracking-tight">Asisten AI</SheetTitle>
+                      <SheetDescription className="text-xs truncate">
+                        Analisis alokasi &amp; tanya-jawab IDX
+                      </SheetDescription>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <SheetTitle className="text-sm font-bold tracking-tight">Asisten AI</SheetTitle>
-                    <SheetDescription className="text-xs truncate">
-                      Analisis alokasi &amp; tanya-jawab IDX
-                    </SheetDescription>
-                  </div>
+                  {hasThread && (
+                    <button
+                      onClick={clearDashboard}
+                      className="shrink-0 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 font-medium py-1 px-2.5 rounded-lg hover:bg-secondary transition-all"
+                    >
+                      <Trash2 className="size-3.5" /> Clear
+                    </button>
+                  )}
                 </div>
               </SheetHeader>
 
               <div className="flex-1 overflow-y-auto px-5 py-4">
-                {result ? (
-                  <div className="animate-fade-in">
-                    <AiResultView
-                      result={result}
-                      aiAnswer={aiAnswer}
-                      userQuery={lastQuery}
-                      isRejected={isRejected}
-                      onApprove={handleApprove}
-                      compact
-                    />
-                  </div>
+                {hasThread ? (
+                  <AiThread messages={aiMessages} loading={loading} compact />
                 ) : (
                   <AiIdleState loading={loading} />
                 )}
               </div>
 
               <div className="border-t border-border p-4 space-y-3">
-                {!result && <AiSuggestions onPick={setMessage} />}
+                {!hasThread && <AiSuggestions onPick={setMessage} />}
                 <AiComposer message={message} setMessage={setMessage} loading={loading} onRun={handleRun} />
               </div>
             </SheetContent>
@@ -516,38 +605,40 @@ export default function DashboardPage() {
         className="sticky top-0 hidden h-[calc(100svh-3rem)] border-l border-border lg:flex"
       >
         <SidebarHeader className="border-b border-sidebar-border px-4 py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-chart-2/10 border border-chart-2/25">
-              <Sparkles className="size-4 text-chart-2" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-chart-2/10 border border-chart-2/25">
+                <Sparkles className="size-4 text-chart-2" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-sidebar-foreground font-bold text-sm tracking-tight">Asisten AI</h2>
+                <p className="text-muted-foreground text-xs truncate">
+                  Analisis alokasi &amp; tanya-jawab IDX
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="text-sidebar-foreground font-bold text-sm tracking-tight">Asisten AI</h2>
-              <p className="text-muted-foreground text-xs truncate">
-                Analisis alokasi &amp; tanya-jawab IDX
-              </p>
-            </div>
+            {hasThread && (
+              <button
+                onClick={clearDashboard}
+                title="Bersihkan percakapan"
+                className="shrink-0 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 font-medium py-1 px-2.5 rounded-lg hover:bg-secondary transition-all"
+              >
+                <Trash2 className="size-3.5" /> Clear
+              </button>
+            )}
           </div>
         </SidebarHeader>
 
         <SidebarContent className="px-4 py-4">
-          {result ? (
-            <div className="animate-fade-in">
-              <AiResultView
-                result={result}
-                aiAnswer={aiAnswer}
-                userQuery={lastQuery}
-                isRejected={isRejected}
-                onApprove={handleApprove}
-                compact
-              />
-            </div>
+          {hasThread ? (
+            <AiThread messages={aiMessages} loading={loading} compact />
           ) : (
             <AiIdleState loading={loading} />
           )}
         </SidebarContent>
 
         <SidebarFooter className="border-t border-sidebar-border p-4 gap-3">
-          {!result && <AiSuggestions onPick={setMessage} />}
+          {!hasThread && <AiSuggestions onPick={setMessage} />}
           <AiComposer message={message} setMessage={setMessage} loading={loading} onRun={handleRun} />
         </SidebarFooter>
       </Sidebar>

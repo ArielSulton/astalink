@@ -37,3 +37,4 @@ of scope for Phase 0.
 | `0012_allocation_layer0.sql` | Layer 0 capital-allocation inputs: `business_intake_profiles`, `investor_profiles` |
 | `0013_holdings.sql` | Sandbox portfolio `holdings` (weighted-avg cost) + `transactions` extended (`workspace_id`, `price`, `realized_pnl`; plan/audit nullable) for manual sells |
 | `0014_audit_log_thread_id.sql` | `audit_log.thread_id` — the real LangGraph thread_id each run was invoked under, so Approvals can resume the same paused run instead of the wrong `audit_id` |
+| `0015_chat_history.sql` | Per-user persistent chat history: `chat_conversations` (dashboard single-room + chatbot multi-room) + `chat_messages`, RLS-scoped to the owner |

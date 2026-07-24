@@ -1,12 +1,22 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CheckCircle2, Send, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { useWorkspace } from "@/components/workspace-context";
+import {
+  appendMessage,
+  createConversation,
+  deleteConversation,
+  getMessages,
+  listConversations,
+  titleFrom,
+  updateConversation,
+  type ChatConversation,
+} from "@/lib/chat-history";
 
 interface Message {
   role: "user" | "assistant";
@@ -15,24 +25,81 @@ interface Message {
   requiresApproval?: boolean;
 }
 
-const THREAD_KEY = "astalink_chat_thread_id";
-
 export default function ChatbotPage() {
+  const { workspaceId } = useWorkspace();
+  const [rooms, setRooms] = useState<ChatConversation[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [threadId, setThreadId] = useState<string | undefined>(undefined);
-  const { workspaceId } = useWorkspace();
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(THREAD_KEY);
-    if (saved) setThreadId(saved);
-  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  const loadRoom = useCallback(async (conv: ChatConversation) => {
+    setActiveId(conv.id);
+    setThreadId(conv.thread_id ?? undefined);
+    const rows = await getMessages(conv.id);
+    setMessages(
+      rows.map((r) => ({
+        role: r.role,
+        content: r.content,
+        auditId: r.audit_id,
+        requiresApproval: r.requires_approval,
+      })),
+    );
+  }, []);
+
+  // Load this user's chatbot rooms for the workspace; open the most recent.
+  useEffect(() => {
+    if (!workspaceId) {
+      setRooms([]);
+      setActiveId(null);
+      setMessages([]);
+      setThreadId(undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const list = await listConversations(workspaceId, "chatbot");
+      if (cancelled) return;
+      setRooms(list);
+      if (list.length) await loadRoom(list[0]);
+      else {
+        setActiveId(null);
+        setMessages([]);
+        setThreadId(undefined);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workspaceId, loadRoom]);
+
+  async function newRoom() {
+    if (!workspaceId) { toast.error("Pilih workspace terlebih dahulu."); return; }
+    const conv = await createConversation(workspaceId, "chatbot");
+    if (!conv) return;
+    setRooms((prev) => [conv, ...prev]);
+    setActiveId(conv.id);
+    setThreadId(undefined);
+    setMessages([]);
+  }
+
+  async function removeRoom(id: string) {
+    await deleteConversation(id);
+    const next = rooms.filter((r) => r.id !== id);
+    setRooms(next);
+    if (id === activeId) {
+      if (next.length) await loadRoom(next[0]);
+      else {
+        setActiveId(null);
+        setMessages([]);
+        setThreadId(undefined);
+      }
+    }
+  }
 
   async function sendMessage() {
     const text = input.trim();
@@ -40,14 +107,24 @@ export default function ChatbotPage() {
     if (!workspaceId) { toast.error("Pilih workspace terlebih dahulu."); return; }
 
     const sb = createClient();
-    const {
-      data: { session },
-    } = await sb.auth.getSession();
+    const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
+
+    // Ensure an active room (lazily create one titled from the first line).
+    let cid = activeId;
+    const firstTurn = messages.length === 0;
+    if (!cid) {
+      const conv = await createConversation(workspaceId, "chatbot", titleFrom(text));
+      if (!conv) return;
+      cid = conv.id;
+      setRooms((prev) => [conv, ...prev]);
+      setActiveId(conv.id);
+    }
 
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
+    if (cid) await appendMessage(cid, { role: "user", content: text });
 
     try {
       const res = await api.chat(
@@ -55,7 +132,6 @@ export default function ChatbotPage() {
         session.access_token,
       );
       setThreadId(res.thread_id);
-      localStorage.setItem(THREAD_KEY, res.thread_id);
       setMessages((prev) => [
         ...prev,
         {
@@ -65,132 +141,205 @@ export default function ChatbotPage() {
           requiresApproval: res.requires_approval,
         },
       ]);
+      if (cid) {
+        const rid = cid;
+        await appendMessage(rid, {
+          role: "assistant",
+          content: res.message,
+          auditId: res.audit_id,
+          requiresApproval: res.requires_approval,
+        });
+        await updateConversation(rid, {
+          thread_id: res.thread_id,
+          ...(firstTurn ? { title: titleFrom(text) } : {}),
+        });
+        setRooms((prev) =>
+          [...prev]
+            .map((r) =>
+              r.id === rid
+                ? {
+                    ...r,
+                    thread_id: res.thread_id,
+                    title: firstTurn ? titleFrom(text) : r.title,
+                    updated_at: new Date().toISOString(),
+                  }
+                : r,
+            )
+            .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+        );
+      }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Maaf, terjadi kesalahan. Coba lagi." },
-      ]);
+      const fail = "Maaf, terjadi kesalahan. Coba lagi.";
+      setMessages((prev) => [...prev, { role: "assistant", content: fail }]);
+      if (cid) await appendMessage(cid, { role: "assistant", content: fail });
     } finally {
       setLoading(false);
     }
   }
 
-  function clearThread() {
-    localStorage.removeItem(THREAD_KEY);
-    setThreadId(undefined);
-    setMessages([]);
-  }
-
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/40 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-chart-2/10 flex items-center justify-center border border-chart-2/20">
-            <Bot className="h-4 w-4 text-chart-2" />
-          </div>
-          <div>
-            <span className="text-foreground font-bold text-sm block">Astalink AI</span>
-            <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> Online
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="flex h-full bg-background">
+      {/* Rooms sidebar (desktop) */}
+      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-card/30">
+        <div className="p-3 border-b border-border">
           <button
-            onClick={clearThread}
-            className="text-xs text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 font-medium py-1 px-2.5 rounded-lg hover:bg-secondary"
+            onClick={newRoom}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            Percakapan baru
+            <MessageSquarePlus className="w-4 h-4" /> Percakapan baru
           </button>
         </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-5">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-card border border-border flex items-center justify-center mb-2">
-              <Bot className="h-7 w-7 text-chart-2" />
-            </div>
-            <h3 className="text-foreground font-bold text-sm tracking-tight">Tanya Astalink AI</h3>
-            <p className="text-muted-foreground text-xs max-w-xs leading-relaxed">
-              Tanya apa saja tentang investasi, regulasi OJK/UUPM, atau kondisi pasar saham IDX.
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
+          {rooms.length === 0 && (
+            <p className="text-[11px] text-muted-foreground/70 px-3 py-4 text-center">
+              Belum ada percakapan.
             </p>
-          </div>
-        )}
+          )}
+          {rooms.map((r) => (
+            <div
+              key={r.id}
+              onClick={() => loadRoom(r)}
+              className={`group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+                r.id === activeId ? "bg-secondary" : "hover:bg-secondary/50"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 truncate text-xs text-foreground">{r.title}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); removeRoom(r.id); }}
+                aria-label="Hapus percakapan"
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-400 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </aside>
 
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            {m.role === "user" ? (
-              <div className="max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-tr-none">
-                {m.content}
-              </div>
-            ) : (
-              <div className="max-w-[75%] flex flex-col items-start gap-2">
-                <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
-                  <ChatMarkdown content={m.content} />
-                </div>
-                {m.requiresApproval && m.auditId && (
-                  <Link
-                    href={`/approvals/${m.auditId}`}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Tinjau &amp; Setujui di Approvals
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-glass border border-border rounded-2xl rounded-tl-none px-5 py-4">
-              <div className="flex gap-1.5 items-center">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </div>
+      {/* Active room */}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-border bg-card/40 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-chart-2/10 flex items-center justify-center border border-chart-2/20 shrink-0">
+              <Bot className="h-4 w-4 text-chart-2" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-foreground font-bold text-sm block truncate">Astalink AI</span>
+              <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> Online
+              </span>
             </div>
           </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
 
-      {/* Input */}
-      <div className="px-6 py-4 border-t border-border bg-card/40 shrink-0">
-        <div className="flex gap-3 items-end max-w-4xl mx-auto">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
-            placeholder="Ketik pesan… (Enter untuk kirim, Shift+Enter untuk baris baru)"
-            rows={1}
-            className="flex-1 resize-none bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
-            style={{ maxHeight: "128px" }}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={!input.trim() || loading}
-            className="shrink-0 h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          {/* Mobile room switcher */}
+          <div className="flex md:hidden items-center gap-2">
+            <select
+              value={activeId ?? ""}
+              onChange={(e) => {
+                const r = rooms.find((x) => x.id === e.target.value);
+                if (r) loadRoom(r);
+              }}
+              className="max-w-[130px] text-xs bg-secondary border border-border rounded-lg px-2 py-1.5 text-foreground focus:outline-none"
+            >
+              <option value="" disabled>Percakapan…</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>{r.title}</option>
+              ))}
+            </select>
+            <button
+              onClick={newRoom}
+              aria-label="Percakapan baru"
+              className="shrink-0 flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+            >
+              <MessageSquarePlus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-5">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-card border border-border flex items-center justify-center mb-2">
+                <Bot className="h-7 w-7 text-chart-2" />
+              </div>
+              <h3 className="text-foreground font-bold text-sm tracking-tight">Tanya Astalink AI</h3>
+              <p className="text-muted-foreground text-xs max-w-xs leading-relaxed">
+                Tanya apa saja tentang investasi, regulasi OJK/UUPM, atau kondisi pasar saham IDX.
+              </p>
+            </div>
+          )}
+
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              {m.role === "user" ? (
+                <div className="max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-tr-none">
+                  {m.content}
+                </div>
+              ) : (
+                <div className="max-w-[75%] flex flex-col items-start gap-2">
+                  <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
+                    <ChatMarkdown content={m.content} />
+                  </div>
+                  {m.requiresApproval && m.auditId && (
+                    <Link
+                      href={`/approvals/${m.auditId}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Tinjau &amp; Setujui di Approvals
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-glass border border-border rounded-2xl rounded-tl-none px-5 py-4">
+                <div className="flex gap-1.5 items-center">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input */}
+        <div className="px-6 py-4 border-t border-border bg-card/40 shrink-0">
+          <div className="flex gap-3 items-end max-w-4xl mx-auto">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder="Ketik pesan… (Enter untuk kirim, Shift+Enter untuk baris baru)"
+              rows={1}
+              className="flex-1 resize-none bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
+              style={{ maxHeight: "128px" }}
+            />
+            <button
+              onClick={sendMessage}
+              disabled={!input.trim() || loading}
+              className="shrink-0 h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
