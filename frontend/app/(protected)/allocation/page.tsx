@@ -140,7 +140,7 @@ export default function AllocationPage() {
       )}
 
       {/* ------------- View 1: allocation (the answer) ------------- */}
-      {layer0?.status === "allocated" && layer0.allocation && (
+      {layer0?.status === "recommended" && layer0.allocation && (
         <>
           {/* Bias warning strip — dismissible, but regenerated on every run */}
           {!biasDismissed && layer0.business_id && (

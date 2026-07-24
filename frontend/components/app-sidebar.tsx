@@ -13,7 +13,6 @@ import {
   History,
   LayoutDashboard,
   Newspaper,
-  PieChart,
   Receipt,
   Scale,
   Settings,
@@ -61,7 +60,10 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     label: "Portfolio",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/allocation", label: "Alokasi Modal", icon: PieChart },
+      // "Alokasi Modal" (/allocation) intentionally dropped from nav — its
+      // analysis overlaps almost entirely with the chat's Layer 0 report.
+      // Route + API stay live for backward compatibility (direct links,
+      // bookmarks); just not surfaced as a first-class page anymore.
       { href: "/chatbot", label: "AI Chatbot", icon: Bot },
       { href: "/portfolio", label: "Portofolio", icon: Wallet },
       { href: "/transactions", label: "Transactions", icon: Receipt },
