@@ -136,6 +136,7 @@ export default function PortfolioPage() {
                       <th className="px-4 py-3 text-right">Harga Awal</th>
                       <th className="px-4 py-3 text-right">Harga Sekarang</th>
                       <th className="px-4 py-3 text-right">Nilai Pasar</th>
+                      <th className="px-4 py-3 text-right">Porsi Portofolio</th>
                       <th className="px-4 py-3 text-right">Persentase Kenaikan / Retur</th>
                       <th className="px-4 py-3 text-right">Aksi</th>
                     </tr>
@@ -144,6 +145,9 @@ export default function PortfolioPage() {
                     {data.holdings.map((h) => {
                       const pct = h.unrealized_pnl_pct != null ? h.unrealized_pnl_pct * 100 : null;
                       const isGain = pct != null && pct >= 0;
+                      const portfolioShare = (data.total_equity && h.market_value)
+                        ? ((h.market_value / data.total_equity) * 100).toFixed(1) + "%"
+                        : "—";
                       return (
                         <tr key={h.ticker} className="border-b border-border/60 last:border-0 hover:bg-secondary/20 transition-colors">
                           <td className="px-5 py-4">
@@ -163,6 +167,11 @@ export default function PortfolioPage() {
                           </td>
                           <td className="px-4 py-4 text-right font-mono tabular-nums font-bold">
                             {idr(h.market_value)}
+                          </td>
+                          <td className="px-4 py-4 text-right font-mono tabular-nums font-medium text-xs">
+                            <span className="px-2 py-1 rounded bg-secondary border border-border text-foreground font-bold">
+                              {portfolioShare}
+                            </span>
                           </td>
                           <td className="px-4 py-4 text-right">
                             <div className={`inline-flex flex-col items-end ${pnlClass(h.unrealized_pnl)}`}>

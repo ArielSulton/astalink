@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Send, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Send, Trash2, PlusCircle, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api-client";
+import { api, type PortfolioResponse } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { useWorkspace } from "@/components/workspace-context";
@@ -17,6 +17,21 @@ import {
   updateConversation,
   type ChatConversation,
 } from "@/lib/chat-history";
+
+function idr(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return "Rp " + n.toLocaleString("id-ID", { maximumFractionDigits: 0 });
+}
+
+function extractTickers(text: string): string[] {
+  const matches = text.match(/\b[A-Z]{4}\b/g) || [];
+  const validCommon = new Set([
+    "BBCA", "TLKM", "ASII", "BMRI", "BBNI", "UNVR", "ICBP", "INDF", "GOTO", "AMRT",
+    "CPIN", "KLBF", "MDKA", "PGAS", "PTBA", "SMGR", "TPIA", "BREN", "CUAN", "ADRO"
+  ]);
+  const found = Array.from(new Set(matches)).filter(t => validCommon.has(t));
+  return found.length > 0 ? found : ["BBCA"];
+}
 
 interface Message {
   role: "user" | "assistant";
@@ -33,6 +48,8 @@ export default function ChatbotPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [buyModalOpen, setBuyModalOpen] = useState(false);
+  const [buyTickers, setBuyTickers] = useState<string[]>(["BBCA"]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -101,6 +118,21 @@ export default function ChatbotPage() {
     }
   }
 
+  const openAllocationModal = (content: string) => {
+    const tickers = extractTickers(content);
+    setBuyTickers(tickers);
+    setBuyModalOpen(true);
+  };
+
+  const handleAllocationSuccess = async (ticker: string, amount: number, cashRemaining: number) => {
+    setBuyModalOpen(false);
+    const confirmMsg = `✓ **Alokasi Berhasil!** Mengalokasikan **${idr(amount)}** ke saham **${ticker}**.\n- Saldo kas tersisa: **${idr(cashRemaining)}**\n- Transaksi telah dicatat di tabel **Riwayat Transaksi** dan posisi diperbarui di halaman **Portofolio**.`;
+    setMessages((prev) => [...prev, { role: "assistant", content: confirmMsg }]);
+    if (activeId) {
+      await appendMessage(activeId, { role: "assistant", content: confirmMsg });
+    }
+  };
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || loading) return;
@@ -110,7 +142,6 @@ export default function ChatbotPage() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
 
-    // Ensure an active room (lazily create one titled from the first line).
     let cid = activeId;
     const firstTurn = messages.length === 0;
     if (!cid) {
@@ -267,7 +298,7 @@ export default function ChatbotPage() {
               </div>
               <h3 className="text-foreground font-bold text-sm tracking-tight">Tanya Astalink AI</h3>
               <p className="text-muted-foreground text-xs max-w-xs leading-relaxed">
-                Tanya apa saja tentang investasi, regulasi OJK/UUPM, atau kondisi pasar saham IDX.
+                Tanya apa saja tentang rekomendasi investasi, alokasi modal, regulasi OJK/UUPM, atau analisis saham.
               </p>
             </div>
           )}
@@ -279,19 +310,27 @@ export default function ChatbotPage() {
                   {m.content}
                 </div>
               ) : (
-                <div className="max-w-[75%] flex flex-col items-start gap-2">
+                <div className="max-w-[85%] flex flex-col items-start gap-2">
                   <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
                     <ChatMarkdown content={m.content} />
                   </div>
-                  {m.requiresApproval && m.auditId && (
-                    <Link
-                      href={`/approvals/${m.auditId}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+                  {/* Allocation action button on assistant messages */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => openAllocationModal(m.content)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-md"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Tinjau &amp; Setujui di Approvals
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Alokasikan Dana Ke Portofolio
+                    </button>
+                    <Link
+                      href="/portfolio"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 transition-all"
+                    >
+                      <Wallet className="w-3.5 h-3.5" />
+                      Lihat Portofolio
                     </Link>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
@@ -327,7 +366,7 @@ export default function ChatbotPage() {
                   sendMessage();
                 }
               }}
-              placeholder="Ketik pesan… (Enter untuk kirim, Shift+Enter untuk baris baru)"
+              placeholder="Ketik pesan… (misal: rekomendasi alokasi 20 juta ke BBCA dan TLKM)"
               rows={1}
               className="flex-1 resize-none bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
               style={{ maxHeight: "128px" }}
@@ -342,6 +381,190 @@ export default function ChatbotPage() {
           </div>
         </div>
       </div>
+
+      {buyModalOpen && workspaceId && (
+        <ChatBuyModal
+          workspaceId={workspaceId}
+          suggestedTickers={buyTickers}
+          onClose={() => setBuyModalOpen(false)}
+          onSuccess={handleAllocationSuccess}
+        />
+      )}
     </div>
   );
 }
+
+function ChatBuyModal({
+  workspaceId, suggestedTickers, onClose, onSuccess,
+}: {
+  workspaceId: string;
+  suggestedTickers: string[];
+  onClose: () => void;
+  onSuccess: (ticker: string, amount: number, cashRemaining: number) => void;
+}) {
+  const [selectedTicker, setSelectedTicker] = useState(suggestedTickers[0] || "BBCA");
+  const [amountStr, setAmountStr] = useState("10000000"); // default 10 Juta
+  const [availableCash, setAvailableCash] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
+  const [fetchingCash, setFetchingCash] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const sb = createClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return;
+        const port = await api.getPortfolio(workspaceId, session.access_token);
+        setAvailableCash(port.cash_balance);
+      } catch {
+        setError("Gagal mengambil saldo kas.");
+      } finally {
+        setFetchingCash(false);
+      }
+    })();
+  }, [workspaceId]);
+
+  const amountNum = Number(amountStr);
+  const valid = selectedTicker.trim().length >= 3 && amountNum > 0 && amountNum <= availableCash;
+
+  const presetAmounts = [
+    { label: "5 Juta", val: 5000000 },
+    { label: "10 Juta", val: 10000000 },
+    { label: "25 Juta", val: 25000000 },
+    { label: "50 Juta", val: 50000000 },
+  ];
+
+  async function submit() {
+    if (!valid) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+
+      const res = await api.buyHolding(
+        workspaceId,
+        { ticker: selectedTicker.toUpperCase().trim(), amount: amountNum },
+        session.access_token,
+      );
+
+      toast.success(
+        `Alokasi ${idr(res.allocated_amount)} ke ${res.ticker} berhasil! Saldo kas berkurang.`,
+      );
+      onSuccess(res.ticker, res.allocated_amount, res.cash_balance);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal mengalokasikan dana.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="bg-glass border border-border shadow-[0_20px_60px_rgba(0,0,0,0.5)] rounded-2xl p-6 w-full max-w-md backdrop-blur-xl relative z-10 space-y-4 text-foreground"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h2 className="font-bold text-lg tracking-tight text-foreground flex items-center gap-2">
+            <PlusCircle className="h-5 w-5 text-emerald-400" />
+            Alokasikan Dana Ke Portofolio
+          </h2>
+          <p className="text-muted-foreground text-xs mt-0.5">
+            Saldo Kas Tersedia: {fetchingCash ? (
+              <span className="animate-pulse font-mono">Memuat…</span>
+            ) : (
+              <strong className="text-foreground font-mono">{idr(availableCash)}</strong>
+            )}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Pilih Saham Rekomendasi / Ticker
+          </label>
+          <div className="flex gap-2 mb-2 flex-wrap">
+            {suggestedTickers.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setSelectedTicker(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                  selectedTicker === t
+                    ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                    : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={selectedTicker}
+            onChange={(e) => setSelectedTicker(e.target.value.toUpperCase())}
+            placeholder="Ketik ticker custom, misal: BBCA"
+            className="w-full font-mono uppercase font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all text-xs"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Nominal Alokasi (Rupiah)
+          </label>
+          <input
+            type="number"
+            value={amountStr}
+            onChange={(e) => setAmountStr(e.target.value)}
+            placeholder="Nominal alokasi dalam Rp"
+            className="w-full font-mono font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all text-xs mb-2"
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            {presetAmounts.map((p) => (
+              <button
+                key={p.val}
+                type="button"
+                onClick={() => setAmountStr(String(p.val))}
+                className="text-[11px] font-mono px-2.5 py-1 rounded-lg border border-border bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {amountNum > availableCash && !fetchingCash && (
+          <p className="text-xs text-rose-400 font-medium">
+            ⚠ Nominal alokasi melebihi saldo kas yang tersedia.
+          </p>
+        )}
+
+        {error && <p className="text-xs text-rose-400 font-medium">{error}</p>}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 transition-all"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            disabled={!valid || loading || fetchingCash}
+            onClick={submit}
+            className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
+          >
+            {loading ? "Mengalokasikan…" : "Alokasikan Dana"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
