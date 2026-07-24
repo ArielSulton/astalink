@@ -44,14 +44,20 @@ export function AllocationChart({
   // the internal stock-sleeve percentages (which always sum to ~100%).
   const hasMoney = cash != null && totalFunds != null && totalFunds > 0;
   const investedIdr = cash != null ? sumWeights * cash : null;
-  const investedPct = hasMoney
-    ? Math.min(100, (investedIdr! / totalFunds!) * 100)
-    : Math.min(100, sumWeights * 100);
+
+  // The single scale every visual in this component must use: a leg's share of
+  // the denominator the centre label reports. In money mode that denominator is
+  // total funds owned, so a 9.5% sleeve draws a 9.5% ring — the ring and the
+  // number can't disagree. Without money data it falls back to sleeve weights.
+  const shareOf = (weight: number) =>
+    (hasMoney ? (weight * cash!) / totalFunds! : weight) * 100;
+
+  const investedPct = Math.min(100, shareOf(sumWeights));
 
   // Donut segments on a circumference-100 circle (r = 15.915), starting at 12 o'clock.
   let cursor = 0;
   const segments = weights.map((w, i) => {
-    const pct = Math.max(0, Math.min(100 - cursor, w.weight * 100));
+    const pct = Math.max(0, Math.min(100 - cursor, shareOf(w.weight)));
     const seg = { ticker: w.ticker, pct, offset: 25 - cursor, color: colorFor(w.ticker, i).solid };
     cursor += pct;
     return seg;
@@ -122,7 +128,7 @@ export function AllocationChart({
               <div className="flex-1 bg-background h-2.5 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full bg-gradient-to-r ${gradient} transition-all duration-500 ease-out`}
-                  style={{ width: `${w.weight * 100}%` }}
+                  style={{ width: `${shareOf(w.weight)}%` }}
                 />
               </div>
 
@@ -133,7 +139,7 @@ export function AllocationChart({
                   </span>
                 )}
                 <span className={`font-mono tabular-nums ${cash != null ? "text-[10px] text-muted-foreground" : "text-sm font-bold text-foreground"}`}>
-                  {(hasMoney ? (w.weight * cash!) / totalFunds! * 100 : w.weight * 100).toFixed(1)}%
+                  {shareOf(w.weight).toFixed(1)}%
                 </span>
               </div>
             </li>
