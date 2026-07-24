@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from langchain_core.messages import HumanMessage
 from app.agents.chat_agent import build_chat_reply
 from app.agents.graph import graph
-from app.agents.intents import Intent
-from app.agents.state import LegalStatus, new_state
+from app.agents.state import new_state
 from app.api.deps import get_current_user
 from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
@@ -61,16 +60,9 @@ async def chat(
             detail="Agent produced no response",
         )
 
-    # Same state-shape check the WhatsApp handler uses: only an allocation
-    # paused at HITL (legal ok, no human decision yet) has anything to approve.
-    # Scoped to allocation intents so a leftover legal_status on a continued
-    # thread can't attach an Approvals CTA to a plain Q&A answer.
-    requires_approval = (
-        final_state.get("intent") in (Intent.ALLOCATE_STOCKS.value,
-                                      Intent.ALLOCATE_CAPITAL.value)
-        and final_state.get("legal_status") in (LegalStatus.APPROVED, LegalStatus.PARTIAL)
-        and final_state.get("user_approval") is None
-    )
+    # Advisory mode: the pipeline produces reports and recommendations only.
+    # No HITL approval or automatic execution — the user decides.
+    requires_approval = False
 
     return ChatResponse(
         message=build_chat_reply(final_state, style="report"),

@@ -1,9 +1,10 @@
 """L0 graph node — runs the Layer 0 decision flow before any stock work.
 
 Sits between N1 (intent) and the analyst fan-out for allocation intents.
-If Layer 0 says INSUFFICIENT_DATA or allocates 0% to stocks, the stock
-engine never runs at all: this node appends the user-facing message itself
-and the graph routes straight to END.
+If Layer 0 says INSUFFICIENT_DATA, this node appends the user-facing
+message and the graph routes to END. Otherwise, analysis always continues
+so the user receives a complete advisory report — even when the L0
+recommendation is 0% stocks.
 
 DB loading lives here; the decision flow itself is app/agents/allocation/
 engine.py (pure, tested without Supabase).
@@ -74,18 +75,21 @@ def _format_terminal_message(result: Layer0Result) -> str:
                      "agar evaluasi bisa lebih dalam.")
         return "\n".join(lines)
 
-    # allocated, but 0% stocks — explain instead of silently stopping
+    # Recommendation summary — advisory, user decides
     alloc = result.allocation
     lines = [
-        "Hasil alokasi Layer 0 (kelayakan tujuan dana):",
+        "Hasil analisis Layer 0 (rekomendasi alokasi modal):",
         f"• Kas: {alloc.cash:.0%} | Saham: {alloc.stocks:.0%} | "
         f"Bisnis: {alloc.business:.0%}",
         f"• Keyakinan: {result.confidence_label} ({result.confidence}/100)",
+        "",
+        "⚠ Ini adalah rekomendasi berdasarkan analisis data yang tersedia. "
+        "Keputusan akhir tetap di tangan Anda.",
     ]
     if alloc.stocks == 0:
         lines.append("")
-        lines.append("Mesin analisis saham tidak dijalankan karena alokasi "
-                     "saham 0%.")
+        lines.append("Rekomendasi kami: alokasi saham 0% berdasarkan profil Anda saat ini. "
+                     "Namun, Anda tetap bisa meminta analisis saham jika diinginkan.")
     for f in result.veto_flags:
         lines.append(f"⛔ {f.reason}" if f.hard else f"⚠ {f.reason}")
     return "\n".join(lines)
@@ -126,9 +130,8 @@ def layer0_node(state: AgentState) -> AgentState:
         },
     }
 
-    terminal = (result.status == Layer0Status.INSUFFICIENT_DATA
-                or (result.allocation is not None and result.allocation.stocks == 0))
-    if terminal:
+    is_insufficient = result.status == Layer0Status.INSUFFICIENT_DATA
+    if is_insufficient:
         update["messages"] = [*state.get("messages", []),
                               AIMessage(content=_format_terminal_message(result))]
     return update

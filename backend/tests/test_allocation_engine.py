@@ -89,7 +89,7 @@ def test_empty_profile_returns_insufficient_data_with_questions():
 
 def test_no_business_leg_skips_intake_gate():
     res = run_layer0(_healthy_investor(), business=None)
-    assert res.status == Layer0Status.ALLOCATED
+    assert res.status == Layer0Status.RECOMMENDED
     assert res.allocation.business == 0.0
     assert res.allocation.stocks > 0
 
@@ -99,7 +99,7 @@ def test_no_business_leg_skips_intake_gate():
 def test_force_cash_produces_full_cash_allocation():
     inv = _healthy_investor(emergency_fund=10_000_000)  # 1 month
     res = run_layer0(inv, _strong_business())
-    assert res.status == Layer0Status.ALLOCATED
+    assert res.status == Layer0Status.RECOMMENDED
     assert res.allocation == AllocationSplit(cash=1.0, stocks=0.0, business=0.0)
 
 
@@ -127,7 +127,7 @@ def test_claimed_unverified_revenue_defers_business():
 
 def test_strong_verified_business_earns_allocation():
     res = run_layer0(_healthy_investor(), _strong_business())
-    assert res.status == Layer0Status.ALLOCATED
+    assert res.status == Layer0Status.RECOMMENDED
     assert res.allocation.business > 0
     assert res.allocation.cash >= allocation_config.split.min_cash_floor
     assert abs(res.allocation.cash + res.allocation.stocks

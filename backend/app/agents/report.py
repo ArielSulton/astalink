@@ -1,4 +1,4 @@
-"""Markdown allocation report for the chat surface.
+"""Advisory allocation report for the chat surface.
 
 `/chat` used to answer a successful allocation run with a single "lolos
 validasi legal, setujui di Approvals" sentence even though the final
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agents.state import AgentState, LegalStatus, UserApproval
+from app.agents.state import AgentState, LegalStatus
 
 _BAND_LABELS = {
     "strong_buy": "Strong Buy",
@@ -60,20 +60,18 @@ def _fmt_score(value: Any) -> str:
 
 def _status_line(state: AgentState, layer0: dict[str, Any]) -> str:
     legal_status = state.get("legal_status")
-    if state.get("user_approval") == UserApproval.APPROVED and state.get("transactions"):
-        return "**Status:** transaksi sudah dieksekusi."
     if legal_status in (LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS):
-        return "**Status:** rencana ditolak pada validasi legal."
+        return "**Status:** rekomendasi tidak lolos validasi legal — lihat catatan di bawah."
     if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL):
-        return "**Status:** menunggu persetujuan Anda di halaman Approvals."
+        return "**Status:** analisis selesai — rekomendasi lolos validasi legal."
     allocation = layer0.get("allocation") or {}
     if allocation.get("stocks") == 0:
-        return "**Status:** analisis selesai — tanpa alokasi saham, tidak ada yang perlu disetujui."
+        return "**Status:** analisis selesai — rekomendasi saat ini: 0% saham."
     return "**Status:** analisis selesai."
 
 
 def _layer0_section(layer0: dict[str, Any]) -> str:
-    lines = ["### Layer 0 — Alokasi Modal", ""]
+    lines = ["### Layer 0 — Rekomendasi Alokasi Modal", ""]
 
     allocation = layer0.get("allocation") or {}
     if allocation:
@@ -178,9 +176,9 @@ def _plan_section(state: AgentState) -> str | None:
         return None
 
     lines = [
-        "### Rencana Alokasi (Optimizer)",
+        "### Rekomendasi Bobot Saham (Optimizer)",
         "",
-        "| Ticker | Bobot |",
+        "| Ticker | Bobot yang Disarankan |",
         "| --- | --- |",
     ]
     lines += [
@@ -189,9 +187,9 @@ def _plan_section(state: AgentState) -> str | None:
 
     extras = []
     if plan.get("cash") is not None:
-        extras.append(f"- Dana slice saham: {_fmt_rp(float(plan['cash']))}")
+        extras.append(f"- Dana yang dianalisis: {_fmt_rp(float(plan['cash']))}")
     if plan.get("cash_buffer") is not None:
-        extras.append(f"- Buffer kas minimum: {_fmt_pct(plan['cash_buffer'])}")
+        extras.append(f"- Buffer kas minimum disarankan: {_fmt_pct(plan['cash_buffer'])}")
     for relaxation in plan.get("relaxations_applied") or []:
         extras.append(f"- Relaksasi constraint: {relaxation}")
     if extras:
@@ -200,6 +198,31 @@ def _plan_section(state: AgentState) -> str | None:
     narration = (plan.get("narration") or "").strip()
     if narration:
         lines += ["", narration]
+
+    # Impact estimation
+    lines += [
+        "",
+        "### Perkiraan Dampak",
+        "",
+        "| Skenario | Estimasi |",
+        "| --- | --- |",
+    ]
+    total_cash = float(plan.get('cash') or 0)
+    if total_cash > 0:
+        for w in weights:
+            ticker = w.get('ticker', '?')
+            weight = float(w.get('weight', 0))
+            allocated = total_cash * weight
+            lines.append(f"| {ticker} | {_fmt_rp(allocated)} ({_fmt_pct(weight)} dari dana saham) |")
+        buffer = float(plan.get('cash_buffer') or 0)
+        if buffer > 0:
+            lines.append(f"| Kas (buffer) | {_fmt_rp(total_cash * buffer)} ({_fmt_pct(buffer)}) |")
+
+    lines += [
+        "",
+        "> ⚠ Angka di atas adalah **perkiraan** berdasarkan data saat ini. "
+        "Keputusan alokasi sepenuhnya ada di tangan Anda.",
+    ]
 
     return "\n".join(lines)
 
@@ -231,43 +254,40 @@ def _legal_section(state: AgentState) -> str | None:
 def _next_steps_section(state: AgentState, layer0: dict[str, Any]) -> str:
     audit_id = state.get("audit_id")
     legal_status = state.get("legal_status")
-    lines = ["### Langkah Berikutnya", ""]
-
-    transactions = state.get("transactions") or []
-    if state.get("user_approval") == UserApproval.APPROVED and transactions:
-        lines += ["| Ticker | Status |", "| --- | --- |"]
-        for t in transactions:
-            status = ("Berhasil dieksekusi" if t.get("status") == "filled"
-                      else "Ditolak — saldo tidak mencukupi"
-                      if t.get("status") == "rejected_insufficient_balance"
-                      else str(t.get("status", "-")))
-            lines.append(f"| {t.get('ticker', '?')} | {status} |")
-        lines += ["", f"Detail lengkap ada di halaman Audit (Audit ID: {audit_id})."]
-        return "\n".join(lines)
+    lines = ["### Saran Langkah Berikutnya", ""]
 
     if legal_status in (LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS):
         lines.append(
-            "Rencana ini ditolak validasi legal dan tidak dapat dilanjutkan. "
-            "Coba revisi permintaannya — misalnya ganti saham atau turunkan "
-            f"nominalnya. Audit ID: {audit_id}.")
-        return "\n".join(lines)
-
-    if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) \
-            and state.get("user_approval") is None:
-        lines.append(
-            "Rencana lolos validasi legal. Tinjau dan setujui dengan PIN di "
-            f"halaman Approvals (Audit ID: {audit_id}).")
+            "Rekomendasi ini tidak lolos validasi legal. Anda bisa: \n"
+            "- Meminta analisis ulang dengan saham atau nominal berbeda\n"
+            "- Mengecek regulasi terkait di halaman Legal Docs\n"
+            f"- Melihat detail di halaman Audit (Audit ID: {audit_id})")
         return "\n".join(lines)
 
     allocation = layer0.get("allocation") or {}
-    if allocation.get("stocks") == 0:
-        lines.append(
-            "Mesin analisis saham tidak dijalankan karena alokasi saham 0%. "
-            "Perbarui profil investor Anda bila kondisinya sudah berubah, lalu "
-            "minta analisis ulang.")
-        return "\n".join(lines)
+    lines.append(
+        "Berdasarkan analisis di atas, berikut beberapa opsi yang bisa Anda pertimbangkan:\n")
 
-    lines.append(f"Analisis selesai. Audit ID: {audit_id}.")
+    if allocation.get("stocks", 0) > 0:
+        lines.append(
+            f"- **Saham ({_fmt_pct(allocation.get('stocks'))}):** "
+            "Tinjau rekomendasi bobot per saham dan sesuaikan dengan preferensi Anda")
+    if allocation.get("business", 0) > 0:
+        lines.append(
+            f"- **Bisnis ({_fmt_pct(allocation.get('business'))}):** "
+            "Pertimbangkan investasi ke bisnis yang dianalisis, sesuai profil risiko Anda")
+    if allocation.get("cash", 0) > 0:
+        lines.append(
+            f"- **Kas ({_fmt_pct(allocation.get('cash'))}):** "
+            "Pertahankan sebagian dana dalam bentuk kas untuk fleksibilitas dan keamanan")
+
+    lines += [
+        "",
+        f"Detail lengkap tersedia di halaman Audit (Audit ID: {audit_id}).",
+        "",
+        "> 💡 **Ingat:** AstaLink memberikan analisis dan rekomendasi. "
+        "Keputusan investasi akhir sepenuhnya ada di tangan Anda.",
+    ]
     return "\n".join(lines)
 
 
@@ -282,7 +302,7 @@ def build_allocation_report(state: AgentState) -> str | None:
         return None
 
     header = "\n".join([
-        "## Laporan Analisis Alokasi",
+        "## Laporan Analisis & Rekomendasi",
         "",
         f"Audit ID: `{state.get('audit_id')}`",
         _status_line(state, layer0),

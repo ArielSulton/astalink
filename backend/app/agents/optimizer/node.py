@@ -28,10 +28,11 @@ from app.core.wallet import get_workspace_balance
 log = logging.getLogger(__name__)
 
 NARRATE_SYSTEM = """\
-You are an allocation strategist. Given solver output (weights + objective),
-write ONE short paragraph in Indonesian (≤120 words) explaining the rationale.
-Acknowledge any relaxations applied. Do NOT introduce numeric metrics not in
-the input."""
+You are an allocation advisor. Given solver output (weights + objective),
+write ONE short paragraph in Indonesian (≤120 words) explaining the
+recommended rationale. Frame this as a recommendation, not a decision.
+Acknowledge any relaxations applied. Do NOT introduce numeric metrics not
+in the input. End with a reminder that the final decision is the user's."""
 
 
 # Heuristic mapping from the free-text risk_profile Gemini extracts in N1
@@ -141,12 +142,9 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
     else:
         cash = balance
 
-    # Layer 0 decides how much of the money goes to stocks AT ALL — the
-    # optimizer only ever distributes that slice, never the full amount.
-    layer0 = state.get("layer0_result") or {}
-    stocks_fraction = (layer0.get("allocation") or {}).get("stocks")
-    if stocks_fraction is not None:
-        cash = cash * float(stocks_fraction)
+    # Advisory mode: the optimizer analyzes the full requested amount.
+    # Layer 0's recommended split is shown separately in the report
+    # as a recommendation — it no longer constrains the optimizer.
 
     return OptimizerInputs(
         tickers=tickers,

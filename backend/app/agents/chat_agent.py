@@ -1,16 +1,14 @@
 """Builds a natural-language chat reply from the main pipeline's final state.
 
-`/chat` delegates every message to the same LangGraph pipeline used by
-`/agent/run` (see app.agents.graph) instead of running a separate, stateless
-Gemini wrapper — this is what makes /chat satisfy the PRD's "menyalurkan
-permintaan ke pipeline" requirement (FR-19). This module only formats that
-pipeline's final AgentState into one conversational reply; it holds no graph
-of its own."""
+Advisory mode: the pipeline produces analysis and recommendations only.
+No automatic execution — the user retains full control. This module
+formats the pipeline's final AgentState into one conversational reply;
+it holds no graph of its own."""
 from __future__ import annotations
 
 from app.agents.intents import Intent
 from app.agents.report import build_allocation_report
-from app.agents.state import AgentState, LegalStatus, UserApproval
+from app.agents.state import AgentState, LegalStatus
 
 
 def _last_text(messages: list) -> str:
@@ -19,28 +17,19 @@ def _last_text(messages: list) -> str:
 
 
 def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
-    """Turn a finished/paused pipeline run into one chat message.
+    """Turn a finished pipeline run into one chat message.
 
     style="report" (web chat) formats allocation runs into the full markdown
-    report from app.agents.report; the default "plain" keeps the short
-    single-sentence replies (WhatsApp renders no markdown).
+    advisory report from app.agents.report; the default "plain" keeps the
+    short single-sentence replies (WhatsApp renders no markdown).
 
     Priority mirrors what the user needs to see first:
     1. N1 couldn't classify the message — relay its clarification question.
-    2. optimizer_node had no tickers to work with (e.g. "rekomendasi invest
-       20 juta" without naming a stock) — ask for one. Checked BEFORE the
-       legal branches: an empty allocation_plan still flows through to
-       legal_node, which correctly rejects it ("cannot ground a decision on
-       an empty plan") — but that downstream rejection is misleading on its
-       own; the real, fixable reason is that no ticker was named.
-    3. Informational intents (explain/evaluate_business/risk_review/
-       portfolio_status) — relay the QA/summary node's answer as-is. Checked
-       BEFORE the legal branches: on a continued thread, legal_status from an
-       earlier allocation run lingers in checkpointed state and must not
-       hijack the reply for a non-allocation question.
-    4. Legal rejected the plan — explain that (pipeline stops here).
-    5. Legal approved/partial but no human decision yet — point at Approvals.
-    6. Execution already ran — summarize the resulting transactions.
+    2. optimizer_node had no tickers to work with — ask for one.
+    3. Informational intents — relay the QA/summary node's answer as-is.
+    4. Report-style advisory report (web chat only).
+    5. Legal rejected the plan — explain that.
+    6. Legal approved — confirm analysis complete.
     7. Fallback — relay whatever the last message says, or a generic apology.
     """
     messages = state.get("messages") or []
@@ -68,10 +57,6 @@ def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
     if state.get("intent") in informational and messages:
         return _last_text(messages)
 
-    # Report style sits AFTER the three guards above (clarification,
-    # no_tickers, informational) so stale allocation state on a continued
-    # thread can never hijack a non-allocation reply — and BEFORE the legal
-    # branches, which remain the plain-style fallback.
     if style == "report":
         report = build_allocation_report(state)
         if report:
@@ -79,32 +64,20 @@ def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
 
     if legal_status in (LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS):
         return (
-            f"Maaf, rencana alokasi ini ditolak secara legal dan tidak dapat "
-            f"dilanjutkan. Audit ID: {audit_id}."
+            f"Rekomendasi alokasi ini tidak lolos validasi legal. "
+            f"Coba revisi permintaannya — misalnya ganti saham atau turunkan "
+            f"nominalnya. Audit ID: {audit_id}."
         )
 
-    if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) \
-            and state.get("user_approval") is None:
+    if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL):
         return (
-            "Rencana alokasi sudah dianalisis dan lolos validasi legal. "
-            f"Silakan tinjau dan setujui di halaman Approvals (Audit ID: {audit_id})."
+            "Analisis selesai dan rekomendasi lolos validasi legal. "
+            f"Lihat laporan lengkap di atas untuk detail rekomendasi. "
+            f"Keputusan akhir ada di tangan Anda. Audit ID: {audit_id}."
         )
-
-    if state.get("user_approval") == UserApproval.APPROVED and state.get("transactions"):
-        filled = [t for t in state["transactions"] if t.get("status") == "filled"]
-        rejected = [t for t in state["transactions"]
-                    if t.get("status") == "rejected_insufficient_balance"]
-        parts = []
-        if filled:
-            parts.append(f"Transaksi berhasil dieksekusi untuk: {', '.join(t['ticker'] for t in filled)}.")
-        if rejected:
-            parts.append(
-                f"{', '.join(t['ticker'] for t in rejected)} ditolak karena saldo tidak mencukupi."
-            )
-        if parts:
-            return " ".join(parts) + f" Audit ID: {audit_id}."
 
     if messages:
         return _last_text(messages)
 
     return "Maaf, saya tidak dapat memproses permintaan ini."
+

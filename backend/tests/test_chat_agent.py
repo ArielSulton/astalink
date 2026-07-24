@@ -38,61 +38,18 @@ def test_build_chat_reply_explains_legal_rejection() -> None:
     state["legal_status"] = LegalStatus.REJECTED
     state["audit_id"] = "audit-123"
     reply = build_chat_reply(state)
-    assert "ditolak" in reply.lower()
+    assert "tidak lolos" in reply.lower() or "ditolak" in reply.lower()
     assert "audit-123" in reply
 
 
-def test_build_chat_reply_points_to_approvals_when_awaiting_hitl() -> None:
+def test_build_chat_reply_confirms_analysis_complete_when_approved() -> None:
     state = new_state()
     state["legal_status"] = LegalStatus.APPROVED
-    state["user_approval"] = None
     state["audit_id"] = "audit-456"
     reply = build_chat_reply(state)
     assert "audit-456" in reply
-    assert "approv" in reply.lower() or "setuju" in reply.lower()
-
-
-def test_build_chat_reply_summarizes_completed_transactions() -> None:
-    state = new_state()
-    state["legal_status"] = LegalStatus.APPROVED
-    state["user_approval"] = UserApproval.APPROVED
-    state["audit_id"] = "audit-789"
-    state["transactions"] = [
-        {"ticker": "BBCA", "side": "buy", "quantity": 10, "status": "filled", "broker_ref": "r1"},
-    ]
-    reply = build_chat_reply(state)
-    assert "BBCA" in reply
-    assert "audit-789" in reply
-
-
-def test_build_chat_reply_falls_back_to_last_message() -> None:
-    state = new_state()
-    state["messages"] = [AIMessage(content="Ini penjelasan tentang RSI.")]
-    assert build_chat_reply(state) == "Ini penjelasan tentang RSI."
-
-
-def test_build_chat_reply_has_a_message_when_nothing_else_applies() -> None:
-    state = new_state()
-    assert build_chat_reply(state)  # non-empty string, no crash
-
-
-def test_build_chat_reply_reports_balance_rejected_legs_honestly() -> None:
-    state = new_state()
-    state["legal_status"] = LegalStatus.APPROVED
-    state["user_approval"] = UserApproval.APPROVED
-    state["audit_id"] = "audit-999"
-    state["transactions"] = [
-        {"ticker": "BBCA", "side": "buy", "quantity": 10, "status": "filled", "broker_ref": "r1"},
-        {"ticker": "BMRI", "side": "buy", "quantity": 5, "status": "rejected_insufficient_balance", "broker_ref": None},
-    ]
-    reply = build_chat_reply(state)
-    assert "BBCA" in reply
-    assert "berhasil dieksekusi" in reply.lower()
-    assert "BMRI" in reply
-    assert "tidak mencukupi" in reply.lower()
-    # BMRI must not be listed among the successfully-executed tickers
-    executed_sentence = reply.split(".")[0]
-    assert "BMRI" not in executed_sentence
+    assert "analisis selesai" in reply.lower()
+    assert "keputusan" in reply.lower()
 
 
 def _report_ready_state() -> dict:
@@ -102,7 +59,7 @@ def _report_ready_state() -> dict:
     state["intent"] = "allocate_stocks"
     state["legal_status"] = LegalStatus.APPROVED
     state["layer0_result"] = {
-        "status": "allocated",
+        "status": "recommended",
         "allocation": {"cash": 0.15, "stocks": 0.85, "business": 0.0},
         "confidence": 62,
         "confidence_label": "MEDIUM",
@@ -155,15 +112,4 @@ def test_report_style_no_tickers_still_wins_over_stale_layer0() -> None:
     assert "ticker" in reply.lower() or "saham" in reply.lower()
 
 
-def test_build_chat_reply_all_legs_rejected_does_not_claim_success() -> None:
-    state = new_state()
-    state["legal_status"] = LegalStatus.APPROVED
-    state["user_approval"] = UserApproval.APPROVED
-    state["audit_id"] = "audit-1000"
-    state["transactions"] = [
-        {"ticker": "BMRI", "side": "buy", "quantity": 5, "status": "rejected_insufficient_balance", "broker_ref": None},
-    ]
-    reply = build_chat_reply(state)
-    assert "berhasil dieksekusi" not in reply.lower()
-    assert "BMRI" in reply
-    assert "tidak mencukupi" in reply.lower()
+

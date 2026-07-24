@@ -1,8 +1,8 @@
 """AstaLink LangGraph wiring.
 
-All nodes are real: intent, market, business, risk, optimizer, legal,
-hitl (real interrupt-based pause), execution, and a direct Q&A path
-for pure informational (EXPLAIN) questions."""
+Advisory mode: intent, market, business, risk, optimizer, legal — the
+pipeline produces a comprehensive report and recommendations. No automatic
+execution: the user retains full control over allocation decisions."""
 from __future__ import annotations
 
 import logging
@@ -16,14 +16,13 @@ from app.agents.legal.node import legal_node
 from app.agents.qa import qa_node
 from app.agents.rejection import rejection_handler
 from app.agents.summary import summary_node
-from app.agents.state import AgentState, LegalStatus, UserApproval
+from app.agents.state import AgentState, LegalStatus
 from app.agents.allocation.node import layer0_node
 from app.agents.business.node import business_node
 from app.agents.market.node import market_node
 from app.agents.risk.node import risk_node
 from app.agents.optimizer.node import optimizer_node
-from app.agents.hitl.node import hitl_node
-from app.agents.execution.node import execution_node
+
 from app.core.checkpointer import get_checkpointer
 
 log = logging.getLogger(__name__)
@@ -48,8 +47,8 @@ def _route_after_intent(
     PORTFOLIO_STATUS has no pipeline yet — the summary node answers honestly.
 
     Allocation intents (ALLOCATE_STOCKS / ALLOCATE_CAPITAL) go through Layer 0
-    (l0_allocation) FIRST: whether the money should go to stocks at all is
-    decided before any stock analysis runs."""
+    (l0_allocation) FIRST for initial analysis, then fan out to all analysts
+    for a complete advisory report."""
     if state.get("_needs_clarification"):
         return END
     intent = state.get("intent")
@@ -65,14 +64,14 @@ def _route_after_intent(
 
 
 def _route_after_layer0(state: AgentState) -> str | Sequence[str]:
-    """Layer 1 (the stock engine fan-out) runs ONLY if Layer 0 allocated
-    >0% to stocks. INSUFFICIENT_DATA and 0%-stock allocations are terminal:
-    l0_allocation already appended the user-facing message."""
+    """Layer 1 (the stock engine fan-out) runs unless Layer 0 returned
+    INSUFFICIENT_DATA — in that case l0_allocation already appended the
+    user-facing message asking for more info.
+
+    When L0 recommends 0% stocks, the fan-out STILL runs so the user
+    gets a complete advisory report and can decide for themselves."""
     result = state.get("layer0_result") or {}
     if result.get("status") == "insufficient_data":
-        return END
-    allocation = result.get("allocation") or {}
-    if not allocation.get("stocks"):
         return END
     return ["n2a_market", "n2b_business", "n2c_risk"]
 
@@ -91,22 +90,18 @@ def _route_after_risk(state: AgentState) -> Literal["n9_summary", "n5_optimizer"
 
 def _route_after_legal(
     state: AgentState,
-) -> Literal["n6_hitl", "n5_optimizer", "rejection_handler"]:
+) -> Literal["__end__", "n5_optimizer", "rejection_handler"]:
+    """Advisory mode: after legal validation, the pipeline ends with a
+    report. No HITL approval or automatic execution — the user decides."""
     status = state.get("legal_status")
     revisions = state.get("revision_count", 0)
 
     if status in (LegalStatus.APPROVED, LegalStatus.PARTIAL):
-        return "n6_hitl"
+        return END
     # rejected
     if revisions >= MAX_REVISIONS:
         return "rejection_handler"
     return "n5_optimizer"  # try again with the legal feedback baked in
-
-
-def _route_after_hitl(state: AgentState) -> Literal["n7_execute", "__end__"]:
-    if state.get("user_approval") == UserApproval.APPROVED:
-        return "n7_execute"
-    return END
 
 
 def build_graph():
@@ -119,8 +114,7 @@ def build_graph():
     g.add_node("n2c_risk", risk_node)
     g.add_node("n5_optimizer", optimizer_node)
     g.add_node("n3_legal", legal_node)
-    g.add_node("n6_hitl", hitl_node)
-    g.add_node("n7_execute", execution_node)
+
     g.add_node("n8_qa", qa_node)
     g.add_node("n9_summary", summary_node)
     g.add_node("rejection_handler", rejection_handler)
@@ -166,25 +160,18 @@ def build_graph():
     # Optimizer → Legal (the bottleneck)
     g.add_edge("n5_optimizer", "n3_legal")
 
-    # Conditional after Legal: approve → HITL, reject under cap → loop, reject at cap → terminate
+    # Advisory mode: legal validation ends the pipeline with a report.
+    # No HITL approval or automatic execution.
     g.add_conditional_edges(
         "n3_legal",
         _route_after_legal,
         {
-            "n6_hitl": "n6_hitl",
+            END: END,
             "n5_optimizer": "n5_optimizer",
             "rejection_handler": "rejection_handler",
         },
     )
     g.add_edge("rejection_handler", END)
-
-    # HITL → Execute or END
-    g.add_conditional_edges(
-        "n6_hitl",
-        _route_after_hitl,
-        {"n7_execute": "n7_execute", END: END},
-    )
-    g.add_edge("n7_execute", END)
 
     return g.compile(checkpointer=get_checkpointer())
 

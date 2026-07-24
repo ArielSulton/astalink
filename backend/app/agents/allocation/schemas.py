@@ -210,11 +210,11 @@ class CompletenessTier(StrEnum):
 
 class Layer0Status(StrEnum):
     INSUFFICIENT_DATA = "insufficient_data"  # valid terminal output, not an error
-    ALLOCATED = "allocated"
+    RECOMMENDED = "recommended"
 
 
 class AllocationSplit(BaseModel):
-    """The answer is an allocation, never a binary verdict. Sums to 1.0."""
+    """Recommended allocation split — advisory only, not auto-executed. Sums to 1.0."""
     cash: float
     stocks: float
     business: float

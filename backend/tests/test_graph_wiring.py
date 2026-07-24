@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 
 from app.agents.execution.schemas import BrokerOrder, OrderSide
 from app.agents.intents import Intent
-from app.agents.state import LegalStatus, UserApproval
+from app.agents.state import LegalStatus
 
 
 @pytest.fixture(autouse=True)
@@ -42,16 +42,12 @@ def _patch_externals():
          patch("app.agents.risk.node.fetch_close_prices", return_value=np.linspace(100, 110, 252)), \
          patch("app.agents.risk.node.get_chat_model"), \
          patch("app.agents.business.node.get_chat_model"), \
-         patch("app.agents.optimizer.node.get_chat_model"), \
-         patch("app.agents.hitl.node.interrupt", return_value={"approval": UserApproval.APPROVED.value}), \
-         patch("app.agents.hitl.node.get_admin_client"), \
-         patch("app.agents.execution.node.get_broker", return_value=fake_broker), \
-         patch("app.agents.execution.node.get_admin_client", return_value=fake_admin):
+         patch("app.agents.optimizer.node.get_chat_model"):
         yield
 
 
-def test_graph_runs_happy_path_to_execution() -> None:
-    """Forced-approved path: n3 returns approved → n6 stub approves → n7 stub fires."""
+def test_graph_runs_happy_path_to_report() -> None:
+    """Advisory mode: legal approved → pipeline ends with report, no execution."""
     from app.agents.graph import build_graph
 
     fake_legal = lambda s: {"legal_status": LegalStatus.APPROVED, "legal_citations": []}
@@ -69,8 +65,9 @@ def test_graph_runs_happy_path_to_execution() -> None:
         )
 
     assert result["legal_status"] == LegalStatus.APPROVED
-    assert result["user_approval"] == UserApproval.APPROVED
-    assert result["transactions"], "execution stub must produce transactions"
+    # Advisory mode: no HITL or execution
+    assert not result.get("transactions"), "advisory mode must not execute trades"
+    assert result.get("user_approval") is None, "no HITL approval in advisory mode"
 
 
 def test_graph_rejection_path_skips_execution() -> None:
@@ -126,9 +123,10 @@ def test_graph_revision_loop_caps_at_three() -> None:
     assert not result["transactions"]
 
 
-def test_layer0_force_cash_gates_off_stock_engine() -> None:
-    """L0-2 veto (no emergency fund) → 0% stocks → graph ends at Layer 0:
-    no market/optimizer/legal/execution work at all."""
+def test_layer0_force_cash_still_runs_full_analysis() -> None:
+    """L0-2 veto (no emergency fund) → 100% cash recommendation, but in
+    advisory mode the full analysis still runs so the user gets a complete
+    report and can decide for themselves."""
     from app.agents.allocation.schemas import InvestorProfile
     from app.agents.graph import build_graph
 
@@ -136,7 +134,10 @@ def test_layer0_force_cash_gates_off_stock_engine() -> None:
                              "entities": {"tickers": ["BBCA"], "amount": 1_000_000}}
     broke = InvestorProfile(monthly_expenses=10_000_000, emergency_fund=5_000_000)
 
+    fake_legal = lambda s: {"legal_status": LegalStatus.APPROVED, "legal_citations": []}
+
     with patch("app.agents.graph.intent_node", new=fake_intent), \
+         patch("app.agents.graph.legal_node", new=fake_legal), \
          patch("app.agents.allocation.node.load_investor_profile", return_value=broke):
         graph = build_graph()
         result = graph.invoke(
@@ -148,10 +149,10 @@ def test_layer0_force_cash_gates_off_stock_engine() -> None:
 
     alloc = result["layer0_result"]["allocation"]
     assert alloc == {"cash": 1.0, "stocks": 0.0, "business": 0.0}
-    assert not result["transactions"]
-    assert result.get("allocation_plan") is None, "optimizer must never run"
-    assert any("Dana darurat" in m.content for m in result["messages"]
-               if hasattr(m, "content"))
+    # Advisory mode: analysis DOES run even with 0% stocks recommendation
+    assert result.get("allocation_plan") is not None, \
+        "optimizer should run in advisory mode even when L0 recommends 0% stocks"
+    assert not result.get("transactions"), "advisory mode must not execute trades"
 
 
 def test_layer0_insufficient_data_is_terminal_with_questions() -> None:

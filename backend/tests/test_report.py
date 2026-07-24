@@ -5,12 +5,12 @@ The formatter reads only what is already in the final AgentState; every
 section must degrade gracefully when its data is absent (stock engine
 skipped, no citations, 0%-stocks terminal, ...)."""
 from app.agents.report import build_allocation_report
-from app.agents.state import LegalStatus, UserApproval, new_state
+from app.agents.state import LegalStatus, new_state
 
 
 def _layer0_result(**overrides) -> dict:
     base = {
-        "status": "allocated",
+        "status": "recommended",
         "allocation": {"cash": 0.15, "stocks": 0.85, "business": 0.0},
         "confidence": 62,
         "confidence_label": "MEDIUM",
@@ -108,8 +108,8 @@ def test_full_state_produces_complete_report() -> None:
     # legal status + citation
     assert "POJK No. 1/2024" in report
     assert "Pasal 5" in report
-    # next step points at approvals
-    assert "approv" in report.lower() or "setuju" in report.lower()
+    # next step points at recommendations & user decision
+    assert "rekomendasi" in report.lower() or "keputusan" in report.lower()
 
 
 def test_returns_none_without_layer0_result() -> None:
@@ -159,18 +159,14 @@ def test_missing_stock_engine_and_citations_sections_skipped() -> None:
     assert "60%" in report
 
 
-def test_executed_transactions_reported_honestly() -> None:
+def test_advisory_report_includes_impact_estimation() -> None:
+    """Advisory mode: the report includes impact estimation section."""
     state = _full_state()
-    state["user_approval"] = UserApproval.APPROVED
-    state["transactions"] = [
-        {"ticker": "BBCA", "side": "buy", "quantity": 10, "status": "filled"},
-        {"ticker": "TLKM", "side": "buy", "quantity": 5,
-         "status": "rejected_insufficient_balance"},
-    ]
     report = build_allocation_report(state)
     assert report is not None
-    assert "BBCA" in report and "TLKM" in report
-    assert "tidak mencukupi" in report.lower() or "ditolak" in report.lower()
+    assert "Perkiraan Dampak" in report
+    assert "perkiraan" in report.lower()
+    assert "keputusan" in report.lower()  # advisory disclaimer
 
 
 def test_legal_rejected_report_explains_rejection() -> None:

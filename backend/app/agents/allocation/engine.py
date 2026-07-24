@@ -5,7 +5,7 @@
     STEP 2  business hard vetoes (unit economics, Q5, exit, verification, skin)
     STEP 3  independent scores: business / stocks / baseline (always shown)
     STEP 4  risk & time adjustment (normalizer)
-    STEP 5  emit an ALLOCATION, never a binary verdict
+    STEP 5  emit a RECOMMENDATION, never a binary verdict
 
 The graph node and the API endpoint both call this; DB access stays outside.
 INSUFFICIENT_DATA is a *valid terminal output* — "I cannot decide yet, here
@@ -167,7 +167,7 @@ def run_layer0(
                 "kas + saham menjaga likuiditas jika tesisnya salah.")
 
     return Layer0Result(
-        status=Layer0Status.ALLOCATED,
+        status=Layer0Status.RECOMMENDED,
         allocation=split,
         confidence=conf,
         confidence_label=label,
