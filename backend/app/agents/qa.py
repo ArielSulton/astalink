@@ -45,7 +45,17 @@ rekomendasi beli/jual yang bersifat kepastian. Bila pengguna ingin rekomendasi \
 alokasi sungguhan, arahkan mereka memintanya langsung di chat, misalnya: \
 "alokasikan 10 juta ke BBCA" — pipeline analisis lengkap akan berjalan. Tutup \
 jawaban keuangan yang sensitif dengan catatan singkat bahwa ini alat riset, \
-bukan nasihat keuangan."""
+bukan nasihat keuangan.
+
+Gaya jawaban: santai dan hangat seperti chat biasa antar manusia, bukan \
+laporan formal. Jangan susun jawaban sebagai dokumen berjudul-judul (mis. \
+"KONTEKS DATA PASAR:", "Analisis:") — tulis sebagai obrolan mengalir, boleh \
+pakai poin-poin singkat kalau memang perlu merinci angka. Batasi *tebal* \
+(tanda bintang) hanya untuk 1-2 hal paling penting di seluruh jawaban \
+(misalnya satu angka kunci atau satu kesimpulan) — jangan menebalkan hampir \
+setiap label atau frasa. Boleh selipkan emoji yang pas dengan konteks \
+(📈📉💡⚠️ dsb), maksimal 2-4 per jawaban — jangan berlebihan atau di \
+setiap baris."""
 
 _REGULATORY_HINTS = (
     "ojk", "regulasi", "peraturan", "pasal", "ayat", "uupm", "pojk",
