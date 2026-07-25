@@ -71,6 +71,7 @@ export interface AgentRunResponse {
   intent: string | null;
   legal_status: string | null;
   user_approval: string | null;
+  layer0_result: Layer0Result | null;
   allocation_plan: {
     weights: { ticker: string; weight: number }[];
     cash: number;

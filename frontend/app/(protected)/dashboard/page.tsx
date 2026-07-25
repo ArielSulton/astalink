@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/sheet";
 import { useWorkspace } from "@/components/workspace-context";
 import { AllocationChart } from "@/components/allocation-chart";
+import { AllocationBar } from "@/components/allocation/allocation-bar";
+import { BusinessPanel, VetoPanel } from "@/components/allocation/business-panel";
 import dynamic from "next/dynamic";
 const PriceChart = dynamic(() => import("@/components/price-chart").then(m => ({ default: m.PriceChart })), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono">Memuat chart…</div> });
 import { TickerCard } from "@/components/ticker-card";
@@ -278,12 +280,65 @@ function AiResultView({
 
       {aiAnswer && <AssistantBubble content={aiAnswer} />}
 
+      {/* Layer 0 — the cash/stocks/business decision itself. Without this,
+         an ALLOCATE_CAPITAL comparison ("saham atau modal ke bisnis saya?")
+         silently dropped the business side entirely: the panel below only
+         ever shows the optimizer's stock-only weights. */}
+      {result.layer0_result?.allocation && (
+        <>
+          <Separator className="bg-border" />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
+                Kas vs Saham vs Bisnis
+              </p>
+              <span className="px-2 py-0.5 rounded border text-[10px] font-bold font-mono text-muted-foreground border-border">
+                KEYAKINAN: {result.layer0_result.confidence_label} ({result.layer0_result.confidence}/100)
+              </span>
+            </div>
+            <AllocationBar allocation={result.layer0_result.allocation} />
+            {result.layer0_result.business_id && (
+              <p className="text-xs text-muted-foreground">
+                Bisnis yang dievaluasi: <strong className="text-foreground">{result.layer0_result.business_name}</strong>
+                {" · "}skor bisnis{" "}
+                <strong className="text-foreground">{result.layer0_result.business_score ?? "UNKNOWN"}</strong>
+                {" vs "}skor saham{" "}
+                <strong className="text-foreground">{result.layer0_result.stock_score ?? "—"}</strong>
+              </p>
+            )}
+            {result.layer0_result.business_id ? (
+              <BusinessPanel layer0={result.layer0_result} />
+            ) : (
+              <VetoPanel flags={result.layer0_result.veto_flags} />
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border bg-secondary p-3">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-mono mb-1">
+                  Kenapa tidak 100% saham
+                </p>
+                <p className="text-xs text-muted-foreground whitespace-pre-line">
+                  {result.layer0_result.why_not_all_stocks || "—"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-secondary p-3">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-mono mb-1">
+                  Kenapa tidak 100% bisnis
+                </p>
+                <p className="text-xs text-muted-foreground whitespace-pre-line">
+                  {result.layer0_result.why_not_all_business || "—"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {result.allocation_plan && (
         <>
           <Separator className="bg-border" />
           <div className="space-y-3">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
-              Alokasi Portofolio
+              Rincian Saham (Optimizer)
             </p>
             <AllocationChart weights={result.allocation_plan.weights} cash={result.allocation_plan.cash} totalFunds={result.allocation_plan.total_funds} compact={compact} />
             {result.allocation_plan.narration && (

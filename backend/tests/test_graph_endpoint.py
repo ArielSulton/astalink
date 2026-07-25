@@ -21,9 +21,17 @@ def test_agent_run_returns_final_state(client: TestClient) -> None:
 
     fake_final = {
         "audit_id": "abc",
-        "intent": "allocate_stocks",
+        "intent": "allocate_capital",
         "legal_status": LegalStatus.APPROVED,
         "user_approval": UserApproval.APPROVED,
+        "layer0_result": {
+            "status": "recommended",
+            "allocation": {"cash": 0.1, "stocks": 0.5, "business": 0.4},
+            "business_id": "biz-1",
+            "business_name": "Toko Kopi",
+            "business_score": 72.0,
+            "stock_score": 60.0,
+        },
         "allocation_plan": {"weights": [{"ticker": "BBCA", "weight": 1.0}]},
         "transactions": [{"ticker": "BBCA", "weight": 1.0, "status": "simulated"}],
         "messages": [],
@@ -46,6 +54,11 @@ def test_agent_run_returns_final_state(client: TestClient) -> None:
     body = resp.json()
     assert body["legal_status"] == "approved"
     assert body["transactions"][0]["status"] == "simulated"
+    # Without this, an ALLOCATE_CAPITAL comparison ("saham atau modal ke
+    # bisnis saya?") silently dropped the business side of the decision —
+    # the dashboard panel only ever showed the optimizer's stock weights.
+    assert body["layer0_result"]["business_name"] == "Toko Kopi"
+    assert body["layer0_result"]["allocation"]["business"] == 0.4
 
 
 def test_agent_run_requires_auth(client: TestClient) -> None:

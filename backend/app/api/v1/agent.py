@@ -29,6 +29,12 @@ class AgentRunResponse(BaseModel):
     intent: str | None
     legal_status: str | None
     user_approval: str | None
+    # Layer 0's cash/stocks/business split, business score, and reasoning —
+    # without this, the dashboard panel only ever showed the optimizer's
+    # stock-only weights and silently dropped the business side of an
+    # ALLOCATE_CAPITAL comparison (e.g. "saham BBCA atau modal ke bisnis
+    # saya?"), even though layer0_node evaluated it.
+    layer0_result: dict[str, Any] | None
     allocation_plan: dict[str, Any] | None
     transactions: list[dict[str, Any]]
     revision_count: int
@@ -67,6 +73,7 @@ async def run_agent(
         intent=final.get("intent"),
         legal_status=str(final["legal_status"]) if final.get("legal_status") else None,
         user_approval=str(final["user_approval"]) if final.get("user_approval") else None,
+        layer0_result=final.get("layer0_result"),
         allocation_plan=final.get("allocation_plan"),
         transactions=final.get("transactions", []),
         revision_count=final.get("revision_count", 0),
