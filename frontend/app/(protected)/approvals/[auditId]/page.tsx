@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, type ApprovalDetail } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { PinModal } from "@/components/pin-modal";
+import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import { AllocationChart } from "@/components/allocation-chart";
 import { ShieldCheck, Scale, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -18,6 +19,11 @@ export default function ApprovalDetailPage() {
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // A WhatsApp user landing here from the "Review & approve" link had no way
+  // to actually execute the recommendation without separately finding the
+  // chat/portfolio page again — this reuses the same buy flow directly here.
+  const [buyOpen, setBuyOpen] = useState(false);
+  const [allocated, setAllocated] = useState(false);
 
   useEffect(() => {
     let stale = false;
@@ -91,6 +97,13 @@ export default function ApprovalDetailPage() {
 
   const plan = detail.plan_json;
   const isRejected = detail.legal_status === "rejected" || detail.legal_status === "rejected_after_max_revisions";
+  const rankedWeights = [...(plan?.weights ?? [])]
+    .filter((w) => w.weight > 0)
+    .sort((a, b) => b.weight - a.weight);
+  const suggestedTickers = rankedWeights.length ? rankedWeights.map((w) => w.ticker) : ["BBCA"];
+  const suggestedAmount = rankedWeights.length && plan
+    ? plan.cash * rankedWeights[0].weight
+    : null;
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground space-y-5">
@@ -149,26 +162,46 @@ export default function ApprovalDetailPage() {
       </section>
 
       {/* ── Actions ── */}
-      <p className="text-xs text-muted-foreground leading-relaxed bg-secondary border border-border rounded-xl p-3">
-        AstaLink beroperasi dalam mode advisory: menyetujui di sini hanya mencatat bahwa
-        Anda meninjau dan setuju dengan rekomendasi ini — <strong>tidak ada transaksi yang
-        otomatis dieksekusi</strong>. Untuk benar-benar mengalokasikan dana, gunakan tombol
-        &ldquo;Setujui &amp; Alokasikan Dana&rdquo; di halaman chat atau Portofolio.
-      </p>
-      <div className="flex gap-4">
+      {allocated ? (
+        <div className="flex items-start gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3.5 py-3 text-sm text-emerald-300">
+          Dana dari rekomendasi ini sudah dialokasikan — transaksi tercatat dan posisi
+          diperbarui.{" "}
+          <Link href="/portfolio" className="underline underline-offset-2 hover:text-emerald-200">
+            Lihat portofolio
+          </Link>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground leading-relaxed bg-secondary border border-border rounded-xl p-3">
+          AstaLink beroperasi dalam mode advisory: &ldquo;Setujui Analisis (PIN)&rdquo; hanya
+          mencatat bahwa Anda meninjau dan setuju dengan rekomendasi ini —{" "}
+          <strong>tidak mengeksekusi apa pun</strong>. Untuk benar-benar mengalokasikan dana,
+          gunakan &ldquo;Setujui &amp; Alokasikan Dana&rdquo; di bawah.
+        </p>
+      )}
+      <div className="flex flex-col sm:flex-row gap-3">
         <button
           onClick={reject}
-          className="flex-1 py-3 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 hover:border-border/60 transition-all duration-200"
+          disabled={isRejected || allocated}
+          className="flex-1 py-3 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 hover:border-border/60 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
         >
           Tolak
         </button>
         <button
           onClick={() => setPinOpen(true)}
-          className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
-          disabled={isRejected}
+          className="flex-1 py-3 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+          disabled={isRejected || allocated}
         >
           Setujui Analisis (PIN)
         </button>
+        {!allocated && plan && rankedWeights.length > 0 && (
+          <button
+            onClick={() => setBuyOpen(true)}
+            disabled={isRejected}
+            className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+          >
+            Setujui &amp; Alokasikan Dana
+          </button>
+        )}
       </div>
 
       <PinModal
@@ -177,6 +210,20 @@ export default function ApprovalDetailPage() {
         onClose={() => setPinOpen(false)}
         error={pinError}
       />
+
+      {buyOpen && (
+        <AllocationBuyModal
+          workspaceId={detail.workspace_id}
+          suggestedTickers={suggestedTickers}
+          suggestedAmount={suggestedAmount}
+          onClose={() => setBuyOpen(false)}
+          onSuccess={() => {
+            setBuyOpen(false);
+            setAllocated(true);
+            toast.success("Alokasi berhasil! Saldo kas berkurang.");
+          }}
+        />
+      )}
     </main>
   );
 }
