@@ -87,7 +87,7 @@ def _layer0_section(layer0: dict[str, Any]) -> str:
     confidence = layer0.get("confidence")
     if confidence is not None:
         lines.append(
-            f"Keyakinan: **{layer0.get('confidence_label', '-')}** ({confidence}/100)")
+            f"Confidence: **{layer0.get('confidence_label', '-')}** ({confidence}/100)")
 
     scores = [
         (label, layer0.get(key))
@@ -289,6 +289,31 @@ def _next_steps_section(state: AgentState, layer0: dict[str, Any]) -> str:
         "Keputusan investasi akhir sepenuhnya ada di tangan Anda.",
     ]
     return "\n".join(lines)
+
+
+def build_composition_summary(state: AgentState) -> str | None:
+    """Layer-0-only summary for the composition gate pause (ALLOCATE_CAPITAL
+    only) — Layer 1/optimizer/legal haven't run yet at this point, so this
+    reuses just the Layer 0 section rather than the full report. Used by
+    chat.py/whatsapp.py when the pipeline is paused at n1b_composition_gate
+    awaiting a ya/tidak reply."""
+    layer0 = state.get("layer0_result")
+    if not layer0 or layer0.get("status") == "insufficient_data":
+        return None
+
+    header = "\n".join([
+        "## Rekomendasi Awal — Kas vs Saham vs Bisnis",
+        "",
+        f"Audit ID: `{state.get('audit_id')}`",
+        "**Status:** menunggu persetujuan Anda sebelum lanjut ke analisis saham.",
+    ])
+    sections = [
+        header,
+        _layer0_section(layer0),
+        "Balas **ya**/**setuju** untuk lanjut ke analisis saham, atau "
+        "**tidak**/**batal** untuk berhenti di sini.",
+    ]
+    return "\n\n".join(s for s in sections if s)
 
 
 def build_allocation_report(state: AgentState) -> str | None:

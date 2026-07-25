@@ -325,6 +325,48 @@ def test_optimizer_node_ignores_unparseable_amount_from_llm_entities() -> None:
     assert captured[0].cash == 50_000_000
 
 
+def test_optimizer_node_scales_cash_by_layer0_stock_fraction() -> None:
+    """The optimizer must only analyze Layer 0's own stock-portion of the
+    funds, not the full requested/available amount — otherwise the plan can
+    openly contradict Layer 0's decision (e.g. Layer 0 says 24.8% to stocks,
+    optimizer puts 95% of the FULL 50jt into one ticker regardless)."""
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+    state["entities"] = {
+        "tickers": ["BBCA"],
+        "amount": 50_000_000,
+        "market_snapshot": {"tickers": [{"ticker": "BBCA", "last_close": 8000}]},
+        "risk_metrics": {
+            "metrics": {"var_95": 0.02, "var_99": 0.03, "sharpe": 1.5},
+            "suggested_weights": {"BBCA": 1.0},
+        },
+    }
+    state["layer0_result"] = {"allocation": {"cash": 0.248, "stocks": 0.248, "business": 0.503}}
+    state["revision_count"] = 0
+
+    captured: list = []
+
+    def _capture_solve(inputs):
+        captured.append(inputs)
+        return SolverResult(status="optimal", weights={"BBCA": 1.0}), []
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="Alokasi.")
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
+        MagicMock(data=[{"cash_balance": 950_000_000}])
+
+    with patch("app.agents.optimizer.node.solve_with_relaxation", side_effect=_capture_solve), \
+         patch("app.agents.optimizer.node.get_chat_model", return_value=fake_llm), \
+         patch("app.agents.optimizer.node.get_admin_client", return_value=fake_admin):
+        update = optimizer_node(state)
+
+    assert captured[0].cash == 50_000_000 * 0.248
+    # total_funds stays the real workspace balance, unscaled.
+    assert captured[0].total_funds == 950_000_000
+    assert update["allocation_plan"]["cash"] == 50_000_000 * 0.248
+
+
 def test_optimizer_node_uses_full_balance_when_no_amount_stated() -> None:
     """User didn't state an amount at all (entities.amount absent) — default
     to the workspace's full available balance rather than cash=0."""

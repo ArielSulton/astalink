@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -15,3 +17,10 @@ class ChatResponse(BaseModel):
     audit_id: str | None = None
     requires_approval: bool = False
     intent: str | None = None
+    # True while paused at the composition gate (allocate_capital only),
+    # waiting for a ya/tidak reply in the NEXT message on this same thread.
+    awaiting_composition_approval: bool = False
+    # Layer 0's cash/stocks/business split — lets the chat UI render the same
+    # visual AllocationBar the dashboard shows, instead of leaving the split
+    # as plain text inside `message`.
+    layer0_result: dict[str, Any] | None = None

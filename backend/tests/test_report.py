@@ -4,7 +4,7 @@ markdown report the /chat endpoint returns for allocation runs (style="report").
 The formatter reads only what is already in the final AgentState; every
 section must degrade gracefully when its data is absent (stock engine
 skipped, no citations, 0%-stocks terminal, ...)."""
-from app.agents.report import build_allocation_report
+from app.agents.report import build_allocation_report, build_composition_summary
 from app.agents.state import LegalStatus, new_state
 
 
@@ -176,3 +176,32 @@ def test_legal_rejected_report_explains_rejection() -> None:
     assert report is not None
     assert "ditolak" in report.lower()
     assert "audit-report-1" in report
+
+
+def test_build_composition_summary_shows_only_layer0_and_prompts_reply() -> None:
+    """Used at the composition-gate pause — Layer 1/optimizer/legal haven't
+    run yet, so this must never leak a plan/legal section."""
+    state = new_state()
+    state["audit_id"] = "audit-gate-1"
+    state["layer0_result"] = _layer0_result(
+        allocation={"cash": 0.248, "stocks": 0.248, "business": 0.503},
+        business_name="Toko Kopi", business_id="biz-1",
+    )
+    summary = build_composition_summary(state)
+    assert summary is not None
+    assert "menunggu persetujuan" in summary.lower()
+    assert "ya" in summary.lower() and "tidak" in summary.lower()
+    # No downstream sections — they haven't run yet.
+    assert "Rekomendasi Bobot Saham" not in summary
+    assert "Validasi Legal" not in summary
+
+
+def test_build_composition_summary_returns_none_without_layer0_result() -> None:
+    state = new_state()
+    assert build_composition_summary(state) is None
+
+
+def test_build_composition_summary_returns_none_for_insufficient_data() -> None:
+    state = new_state()
+    state["layer0_result"] = _layer0_result(status="insufficient_data", allocation=None)
+    assert build_composition_summary(state) is None

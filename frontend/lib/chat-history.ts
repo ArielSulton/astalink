@@ -130,6 +130,18 @@ export function allocatedReplyIds(rows: ChatMessageRow[]): Set<string> {
   return ids;
 }
 
+// Same append-only marker pattern as allocatedReplyIds — a Setuju/Tidak
+// answer on the composition gate appends a new row pointing back at the
+// paused reply, since chat_messages has no update policy under RLS.
+export function compositionRespondedIds(rows: ChatMessageRow[]): Set<string> {
+  const ids = new Set<string>();
+  for (const r of rows) {
+    const target = r.metadata?.composition_for;
+    if (typeof target === "string") ids.add(target);
+  }
+  return ids;
+}
+
 export async function updateConversation(
   id: string,
   patch: { title?: string; thread_id?: string },

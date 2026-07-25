@@ -112,4 +112,45 @@ def test_report_style_no_tickers_still_wins_over_stale_layer0() -> None:
     assert "ticker" in reply.lower() or "saham" in reply.lower()
 
 
+def _paused_state() -> dict:
+    state = new_state()
+    state["audit_id"] = "audit-gate"
+    state["intent"] = "allocate_capital"
+    state["layer0_result"] = {
+        "status": "recommended",
+        "allocation": {"cash": 0.248, "stocks": 0.248, "business": 0.503},
+        "confidence": 100, "confidence_label": "HIGH",
+        "veto_flags": [], "narration": "", "business_name": "Toko Kopi",
+        "business_id": "biz-1", "business_score": None, "stock_score": None,
+    }
+    state["__interrupt__"] = [object()]  # LangGraph's actual pause marker
+    return state
+
+
+def test_report_style_shows_layer0_only_summary_when_paused() -> None:
+    reply = build_chat_reply(_paused_state(), style="report")
+    assert "ya" in reply.lower() and "tidak" in reply.lower()
+    assert "Rekomendasi Bobot Saham" not in reply  # optimizer hasn't run
+
+
+def test_plain_style_shows_short_composition_prompt_when_paused() -> None:
+    """WhatsApp (style=plain) must never get the markdown table — it has no
+    renderer for it and would show literal pipe characters."""
+    reply = build_chat_reply(_paused_state())
+    assert "|" not in reply
+    assert "ya" in reply.lower() and "tidak" in reply.lower()
+    assert "Toko Kopi" in reply
+
+
+def test_composition_rejected_relays_cancellation_message_not_a_report() -> None:
+    """A regenerated Layer 0 report would silently override the actual
+    cancellation message the user needs to see."""
+    state = _paused_state()
+    del state["__interrupt__"]
+    state["composition_approval"] = UserApproval.REJECTED
+    state["messages"] = [AIMessage(content="Oke, alokasi ini dibatalkan.")]
+    reply = build_chat_reply(state, style="report")
+    assert reply == "Oke, alokasi ini dibatalkan."
+
+
 

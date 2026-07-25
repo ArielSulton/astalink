@@ -3,14 +3,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Send, Trash2, PlusCircle, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api-client";
+import { api, type Layer0Result } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { AllocationBar } from "@/components/allocation/allocation-bar";
+import { BusinessPanel, VetoPanel } from "@/components/allocation/business-panel";
 import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import { useWorkspace } from "@/components/workspace-context";
 import {
   allocatedReplyIds,
   appendMessage,
+  compositionRespondedIds,
   createConversation,
   deleteConversation,
   getMessages,
@@ -58,6 +61,12 @@ interface Message {
   content: string;
   auditId?: string | null;
   requiresApproval?: boolean;
+  // Paused at the composition gate (allocate_capital only) — awaiting a
+  // Setuju/Tidak reply before Layer 1 stock analysis + optimizer run.
+  awaitingCompositionApproval?: boolean;
+  // Layer 0's cash/stocks/business split — renders the same visual
+  // AllocationBar the dashboard shows, instead of leaving it as plain text.
+  layer0Result?: Layer0Result | null;
 }
 
 export default function ChatbotPage() {
@@ -75,6 +84,10 @@ export default function ChatbotPage() {
   // an executed recommendation must not keep offering its allocate button.
   const [buyForMessageId, setBuyForMessageId] = useState<string | null>(null);
   const [allocatedIds, setAllocatedIds] = useState<Set<string>>(new Set());
+  // Ids of paused replies whose composition gate has already been answered —
+  // without this, Setuju/Tidak would reappear forever after a reload.
+  const [respondedCompositionIds, setRespondedCompositionIds] = useState<Set<string>>(new Set());
+  const [respondingComposition, setRespondingComposition] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,9 +105,12 @@ export default function ChatbotPage() {
         content: r.content,
         auditId: r.audit_id,
         requiresApproval: r.requires_approval,
+        awaitingCompositionApproval: !!r.metadata?.awaiting_composition_approval,
+        layer0Result: (r.metadata?.layer0_result as Layer0Result | undefined) ?? null,
       })),
     );
     setAllocatedIds(allocatedReplyIds(rows));
+    setRespondedCompositionIds(compositionRespondedIds(rows));
   }, []);
 
   // Load this user's chatbot rooms for the workspace; open the most recent.
@@ -104,6 +120,7 @@ export default function ChatbotPage() {
       setActiveId(null);
       setMessages([]);
       setAllocatedIds(new Set());
+      setRespondedCompositionIds(new Set());
       setThreadId(undefined);
       return;
     }
@@ -117,6 +134,7 @@ export default function ChatbotPage() {
         setActiveId(null);
         setMessages([]);
         setAllocatedIds(new Set());
+        setRespondedCompositionIds(new Set());
         setThreadId(undefined);
       }
     })();
@@ -132,6 +150,7 @@ export default function ChatbotPage() {
     setThreadId(undefined);
     setMessages([]);
     setAllocatedIds(new Set());
+    setRespondedCompositionIds(new Set());
   }
 
   async function removeRoom(id: string) {
@@ -144,6 +163,7 @@ export default function ChatbotPage() {
         setActiveId(null);
         setMessages([]);
         setAllocatedIds(new Set());
+        setRespondedCompositionIds(new Set());
         setThreadId(undefined);
       }
     }
@@ -215,6 +235,10 @@ export default function ChatbotPage() {
             content: res.message,
             auditId: res.audit_id,
             requiresApproval: res.requires_approval,
+            metadata: {
+              ...(res.awaiting_composition_approval ? { awaiting_composition_approval: true } : {}),
+              ...(res.layer0_result ? { layer0_result: res.layer0_result } : {}),
+            },
           })
         : null;
       setMessages((prev) => [
@@ -225,6 +249,8 @@ export default function ChatbotPage() {
           content: res.message,
           auditId: res.audit_id,
           requiresApproval: res.requires_approval,
+          awaitingCompositionApproval: res.awaiting_composition_approval,
+          layer0Result: res.layer0_result,
         },
       ]);
       if (cid) {
@@ -254,6 +280,65 @@ export default function ChatbotPage() {
       if (cid) await appendMessage(cid, { role: "assistant", content: fail });
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Setuju/Tidak on a paused composition-gate reply — sends "ya"/"tidak" as
+  // plain chat text, since /chat already transparently resumes the graph on
+  // that text via find_pending_composition_audit/detect_composition_reply.
+  // No dedicated resume endpoint needed here (unlike the dashboard, which
+  // uses api.resumeAgent against /agent/resume).
+  async function respondToComposition(messageId: string | null | undefined, approval: "approved" | "rejected") {
+    if (!activeId || respondingComposition) return;
+    setRespondingComposition(true);
+    const userText = approval === "approved" ? "Setuju, lanjutkan analisis saham" : "Tidak, batalkan";
+    const wireText = approval === "approved" ? "ya" : "tidak";
+    setMessages((prev) => [...prev, { role: "user", content: userText }]);
+    await appendMessage(activeId, {
+      role: "user",
+      content: userText,
+      metadata: messageId ? { composition_for: messageId } : {},
+    });
+    if (messageId) setRespondedCompositionIds((prev) => new Set(prev).add(messageId));
+    try {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session || !workspaceId) return;
+      const res = await api.chat(
+        { message: wireText, workspace_id: workspaceId, thread_id: threadId },
+        session.access_token,
+      );
+      setThreadId(res.thread_id);
+      const msgId = activeId
+        ? await appendMessage(activeId, {
+            role: "assistant",
+            content: res.message,
+            auditId: res.audit_id,
+            requiresApproval: res.requires_approval,
+            metadata: {
+              ...(res.awaiting_composition_approval ? { awaiting_composition_approval: true } : {}),
+              ...(res.layer0_result ? { layer0_result: res.layer0_result } : {}),
+            },
+          })
+        : null;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msgId,
+          role: "assistant",
+          content: res.message,
+          auditId: res.audit_id,
+          requiresApproval: res.requires_approval,
+          awaitingCompositionApproval: res.awaiting_composition_approval,
+          layer0Result: res.layer0_result,
+        },
+      ]);
+    } catch {
+      const fail = "Maaf, terjadi kesalahan. Coba lagi.";
+      setMessages((prev) => [...prev, { role: "assistant", content: fail }]);
+      if (activeId) await appendMessage(activeId, { role: "assistant", content: fail });
+    } finally {
+      setRespondingComposition(false);
     }
   }
 
@@ -321,6 +406,10 @@ export default function ChatbotPage() {
               m.role === "assistant" &&
               precedingUser?.role === "user" &&
               isAllocationRequest(precedingUser.content);
+            const isCompositionPending =
+              m.role === "assistant" &&
+              m.awaitingCompositionApproval &&
+              !(m.id && respondedCompositionIds.has(m.id));
 
             return (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -333,6 +422,35 @@ export default function ChatbotPage() {
                     <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
                       <ChatMarkdown content={m.content} />
                     </div>
+                    {/* Visual Kas/Saham/Bisnis split — same AllocationBar the
+                       dashboard shows, so this isn't left as plain text. */}
+                    {m.layer0Result?.allocation && (
+                      <div className="w-full rounded-2xl border border-border bg-glass p-4 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-mono">
+                            Kas vs Saham vs Bisnis
+                          </p>
+                          <span className="px-2 py-0.5 rounded border text-[10px] font-bold font-mono text-muted-foreground border-border">
+                            CONFIDENCE: {m.layer0Result.confidence_label} ({m.layer0Result.confidence}/100)
+                          </span>
+                        </div>
+                        <AllocationBar allocation={m.layer0Result.allocation} />
+                        {m.layer0Result.business_id && (
+                          <p className="text-xs text-muted-foreground">
+                            Bisnis yang dievaluasi: <strong className="text-foreground">{m.layer0Result.business_name}</strong>
+                            {" · "}skor bisnis{" "}
+                            <strong className="text-foreground">{m.layer0Result.business_score ?? "UNKNOWN"}</strong>
+                            {" vs "}skor saham{" "}
+                            <strong className="text-foreground">{m.layer0Result.stock_score ?? "—"}</strong>
+                          </p>
+                        )}
+                        {m.layer0Result.business_id ? (
+                          <BusinessPanel layer0={m.layer0Result} />
+                        ) : (
+                          <VetoPanel flags={m.layer0Result.veto_flags} />
+                        )}
+                      </div>
+                    )}
                     {/* Report + approval action — only on replies to an actual
                        "alokasikan dana" request; other intents (explain, risk
                        review, etc.) have nothing here to approve. */}
@@ -348,6 +466,33 @@ export default function ChatbotPage() {
                         >
                           Lihat portofolio
                         </Link>
+                      </div>
+                    )}
+
+                    {isCompositionPending && (
+                      <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
+                        <span className="text-[11px] text-muted-foreground leading-relaxed">
+                          Setuju dengan komposisi ini? Analisis saham lanjutan baru jalan setelah dikonfirmasi.
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            disabled={respondingComposition}
+                            onClick={() => respondToComposition(m.id, "approved")}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all shadow-md"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {respondingComposition ? "Memproses…" : "Setuju, Lanjutkan"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={respondingComposition}
+                            onClick={() => respondToComposition(m.id, "rejected")}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                          >
+                            Tidak, Batalkan
+                          </button>
+                        </div>
                       </div>
                     )}
 

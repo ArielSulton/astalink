@@ -184,3 +184,109 @@ def test_layer0_insufficient_data_is_terminal_with_questions() -> None:
     assert len(l0["questions"]) == 3
     assert not result["transactions"]
     assert result.get("allocation_plan") is None
+
+
+def test_composition_gate_pauses_then_resumes_on_approval() -> None:
+    """ALLOCATE_CAPITAL must pause right after Layer 0 — Layer 1 stock
+    analysis, the optimizer, and legal must NOT run until the user
+    explicitly approves the composition."""
+    from langgraph.types import Command
+    from app.agents.graph import build_graph
+
+    fake_intent = lambda s: {"intent": Intent.ALLOCATE_CAPITAL.value,
+                             "entities": {"tickers": ["BBCA"], "amount": 50_000_000,
+                                          "business_name": "Toko Kopi"}}
+    fake_layer0 = lambda s: {"layer0_result": {
+        "status": "recommended",
+        "allocation": {"cash": 0.25, "stocks": 0.25, "business": 0.5},
+        "business_name": "Toko Kopi", "business_id": "biz-1",
+    }}
+    fake_legal = lambda s: {"legal_status": LegalStatus.APPROVED, "legal_citations": []}
+
+    with patch("app.agents.graph.intent_node", new=fake_intent), \
+         patch("app.agents.graph.layer0_node", new=fake_layer0), \
+         patch("app.agents.composition_gate.node.get_admin_client"), \
+         patch("app.agents.graph.legal_node", new=fake_legal):
+        graph = build_graph()
+        paused = graph.invoke(
+            {"messages": [HumanMessage(content="50jt buat BBCA atau Toko Kopi?")],
+             "audit_id": "t-gate-1", "revision_count": 0,
+             "entities": {}, "transactions": [], "errors": []},
+            config={"configurable": {"thread_id": "gate-1"}},
+        )
+
+        assert paused.get("__interrupt__"), "must pause at the composition gate"
+        assert paused.get("allocation_plan") is None, "optimizer must not have run yet"
+        assert paused["layer0_result"]["allocation"]["business"] == 0.5
+
+        resumed = graph.invoke(
+            Command(resume={"approval": "approved"}),
+            config={"configurable": {"thread_id": "gate-1"}},
+        )
+
+    assert not resumed.get("__interrupt__")
+    assert resumed["legal_status"] == LegalStatus.APPROVED
+    assert resumed.get("allocation_plan") is not None
+
+
+def test_composition_gate_stops_pipeline_on_rejection() -> None:
+    """Saying "tidak" must stop the run entirely — no Layer 1, no optimizer,
+    no legal check, no transactions."""
+    from langgraph.types import Command
+    from app.agents.graph import build_graph
+
+    fake_intent = lambda s: {"intent": Intent.ALLOCATE_CAPITAL.value,
+                             "entities": {"tickers": ["BBCA"], "amount": 50_000_000}}
+    fake_layer0 = lambda s: {"layer0_result": {
+        "status": "recommended",
+        "allocation": {"cash": 0.5, "stocks": 0.5, "business": 0.0},
+    }}
+
+    with patch("app.agents.graph.intent_node", new=fake_intent), \
+         patch("app.agents.graph.layer0_node", new=fake_layer0), \
+         patch("app.agents.composition_gate.node.get_admin_client"):
+        graph = build_graph()
+        graph.invoke(
+            {"messages": [HumanMessage(content="x")],
+             "audit_id": "t-gate-2", "revision_count": 0,
+             "entities": {}, "transactions": [], "errors": []},
+            config={"configurable": {"thread_id": "gate-2"}},
+        )
+        result = graph.invoke(
+            Command(resume={"approval": "rejected"}),
+            config={"configurable": {"thread_id": "gate-2"}},
+        )
+
+    assert result.get("allocation_plan") is None
+    assert not result.get("transactions")
+    assert any("dibatalkan" in getattr(m, "content", "").lower()
+               for m in result["messages"])
+
+
+def test_allocate_stocks_skips_composition_gate() -> None:
+    """A plain stock request (no business in the picture) must run straight
+    through with no pause — the gate is allocate_capital only."""
+    from app.agents.graph import build_graph
+
+    fake_intent = lambda s: {"intent": Intent.ALLOCATE_STOCKS.value,
+                             "entities": {"tickers": ["BBCA"], "amount": 20_000_000}}
+    fake_layer0 = lambda s: {"layer0_result": {
+        "status": "recommended",
+        "allocation": {"cash": 0.0, "stocks": 1.0, "business": 0.0},
+    }}
+    fake_legal = lambda s: {"legal_status": LegalStatus.APPROVED, "legal_citations": []}
+
+    with patch("app.agents.graph.intent_node", new=fake_intent), \
+         patch("app.agents.graph.layer0_node", new=fake_layer0), \
+         patch("app.agents.graph.legal_node", new=fake_legal):
+        graph = build_graph()
+        result = graph.invoke(
+            {"messages": [HumanMessage(content="alokasikan 20jt ke BBCA")],
+             "audit_id": "t-gate-3", "revision_count": 0,
+             "entities": {}, "transactions": [], "errors": []},
+            config={"configurable": {"thread_id": "gate-3"}},
+        )
+
+    assert not result.get("__interrupt__")
+    assert result["legal_status"] == LegalStatus.APPROVED
+    assert result.get("allocation_plan") is not None

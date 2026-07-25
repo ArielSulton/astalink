@@ -8,13 +8,19 @@ from pydantic import BaseModel, Field
 
 import app.core.config as _config
 from app.agents.chat_agent import build_chat_reply
+from app.agents.composition_gate.resume import (
+    detect_composition_reply,
+    find_pending_composition_audit,
+    resume_composition,
+)
 from app.agents.graph import graph
 from app.agents.state import LegalStatus, UserApproval, new_state
 from app.api.deps import get_current_user
 from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
-from app.integrations.chart import render_allocation_chart
-from app.integrations.whatsapp import send_image, send_text, verify_signature
+from app.integrations.chart import render_allocation_chart, render_composition_chart, render_report_table_chart
+from app.integrations.pdf_report import render_allocation_pdf
+from app.integrations.whatsapp import send_buttons, send_document, send_image, send_text, verify_signature
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -89,8 +95,16 @@ def _process_message(msg: dict[str, Any]) -> None:
         return
 
     phone = msg.get("from")
-    text = (msg.get("text") or {}).get("body", "")
-    if msg.get("type") != "text" or not phone or not text:
+    msg_type = msg.get("type")
+    if msg_type == "interactive":
+        # Reply to a send_buttons() prompt — the id ("ya"/"tidak") comes back
+        # verbatim, so it flows through detect_composition_reply unchanged.
+        text = ((msg.get("interactive") or {}).get("button_reply") or {}).get("id", "")
+    elif msg_type == "text":
+        text = (msg.get("text") or {}).get("body", "")
+    else:
+        return
+    if not phone or not text:
         return
 
     binding = _resolve_user(phone)
@@ -104,33 +118,50 @@ def _process_message(msg: dict[str, Any]) -> None:
 
     from app.api.v1.chat import load_thread_history
 
-    initial = new_state()
-    initial["messages"] = [*load_thread_history(thread_id),
-                           HumanMessage(content=text)]
-    initial["entities"] = {"workspace_id": binding["workspace_id"]}
-    initial["_user_id"] = binding["user_id"]
-    initial["_workspace_id"] = binding["workspace_id"]
-    initial["_thread_id"] = thread_id
+    # A message on a thread paused at the composition gate is treated as a
+    # reply to it ("ya"/"tidak") rather than a brand new turn, as long as
+    # it's a clear yes/no — anything else falls through to a fresh turn.
+    pending_audit = find_pending_composition_audit(get_admin_client(), thread_id)
+    composition_reply = detect_composition_reply(text) if pending_audit else None
+
     allocation_plan = None
+    composition_alloc = None
+    final: dict[str, Any] | None = None
     try:
-        final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})
+        if composition_reply is not None:
+            final = resume_composition(thread_id, composition_reply)
+        else:
+            initial = new_state()
+            initial["messages"] = [*load_thread_history(thread_id),
+                                   HumanMessage(content=text)]
+            initial["entities"] = {"workspace_id": binding["workspace_id"]}
+            initial["_user_id"] = binding["user_id"]
+            initial["_workspace_id"] = binding["workspace_id"]
+            initial["_thread_id"] = thread_id
+            final = graph.invoke(initial, config={"configurable": {"thread_id": thread_id}})
 
         audit_id = final.get("audit_id")
         reply = build_chat_reply(final)
 
-        # build_chat_reply's text is web-oriented ("buka halaman Approvals") —
-        # WhatsApp has no in-app navigation, so append a direct deep link for the
-        # same two cases it already detects, using the identical state-shape
-        # checks (never a bare "user_approval is None", which used to also catch
-        # informational replies, clarification questions, and legal rejections —
-        # none of which have anything to approve).
-        legal_status = final.get("legal_status")
-        if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) and final.get("user_approval") is None:
-            reply += f"\nReview & approve di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
-            allocation_plan = final.get("allocation_plan")
-        elif final.get("user_approval") == UserApproval.APPROVED and final.get("transactions"):
-            reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
-            allocation_plan = final.get("allocation_plan")
+        if final.get("__interrupt__"):
+            # Freshly paused this turn — send the Kas/Saham/Bisnis donut
+            # alongside the ya/tidak prompt so the split is visible before
+            # deciding, same as the stock chart sent once a plan exists.
+            composition_alloc = (final.get("layer0_result") or {}).get("allocation")
+        else:
+            # build_chat_reply's text is web-oriented ("buka halaman Approvals") —
+            # WhatsApp has no in-app navigation, so append a direct deep link for the
+            # same two cases it already detects, using the identical state-shape
+            # checks (never a bare "user_approval is None", which used to also catch
+            # informational replies, clarification questions, and legal rejections —
+            # none of which have anything to approve).
+            legal_status = final.get("legal_status")
+            if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) and final.get("user_approval") is None:
+                reply += f"\nReview & approve di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
+                allocation_plan = final.get("allocation_plan")
+            elif final.get("user_approval") == UserApproval.APPROVED and final.get("transactions"):
+                reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
+                allocation_plan = final.get("allocation_plan")
     except Exception:
         # Any unhandled exception anywhere in the pipeline (market data
         # fetch, solver, legal RAG, etc.) used to propagate all the way up
@@ -150,8 +181,44 @@ def _process_message(msg: dict[str, Any]) -> None:
             # A chart render/upload failure must never block the text reply
             # (which carries the actual approve/detail link) from sending.
             log.exception("whatsapp: chart render/send failed for thread %s", thread_id)
+        try:
+            engine = ((final or {}).get("entities") or {}).get("stock_engine") or {}
+            verdicts = engine.get("verdicts") or {}
+            table_png = render_report_table_chart(verdicts, allocation_plan["weights"])
+            send_image(to_phone_e164=phone, image_bytes=table_png, caption="Tabel Verdik & Bobot Saham")
+        except Exception:
+            log.exception("whatsapp: table image render/send failed for thread %s", thread_id)
+        try:
+            pdf_bytes = render_allocation_pdf(final) if final is not None else None
+            if pdf_bytes:
+                send_document(
+                    to_phone_e164=phone, doc_bytes=pdf_bytes,
+                    filename="Laporan-Analisis.pdf",
+                    caption="Laporan lengkap analisis & rekomendasi",
+                )
+        except Exception:
+            log.exception("whatsapp: pdf render/send failed for thread %s", thread_id)
+    elif composition_alloc:
+        try:
+            png = render_composition_chart(
+                composition_alloc.get("cash", 0.0),
+                composition_alloc.get("stocks", 0.0),
+                composition_alloc.get("business", 0.0),
+            )
+            send_image(to_phone_e164=phone, image_bytes=png, caption="Kas vs Saham vs Bisnis")
+        except Exception:
+            log.exception("whatsapp: composition chart render/send failed for thread %s", thread_id)
 
-    send_text(to_phone_e164=phone, body=reply)
+    if composition_alloc:
+        # Interactive Ya/Tidak buttons instead of plain text — the user taps
+        # a reply instead of typing "ya"/"tidak" (still detected as a
+        # fallback if they type it anyway, see the type=="text" branch above).
+        send_buttons(
+            to_phone_e164=phone, body=reply,
+            buttons=[("ya", "Ya, Lanjutkan"), ("tidak", "Tidak, Batalkan")],
+        )
+    else:
+        send_text(to_phone_e164=phone, body=reply)
 
 
 class BindWhatsAppRequest(BaseModel):

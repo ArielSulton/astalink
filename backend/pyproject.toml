@@ -46,6 +46,10 @@ dependencies = [
     # Security
     "argon2-cffi>=23.0.0",
     "matplotlib>=3.11.0",
+    # WhatsApp full-report PDF export — pure-Python, no system libs needed
+    # (unlike weasyprint's Cairo/Pango dependency), so it stays safe in the
+    # slim Docker image.
+    "reportlab>=4.0.0",
 ]
 
 [project.optional-dependencies]

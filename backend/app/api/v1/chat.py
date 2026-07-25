@@ -3,6 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from langchain_core.messages import HumanMessage
 from app.agents.chat_agent import build_chat_reply
+from app.agents.composition_gate.resume import (
+    detect_composition_reply,
+    find_pending_composition_audit,
+    resume_composition,
+)
 from app.agents.graph import graph
 from app.agents.state import new_state
 from app.api.deps import get_current_user
@@ -42,17 +47,26 @@ async def chat(
 
     assert_workspace_owned(get_admin_client(), request.workspace_id, user_sub)
 
-    initial = new_state()
-    initial["messages"] = [*load_thread_history(thread_id),
-                           HumanMessage(content=request.message)]
-    initial["_user_id"] = user_sub
-    initial["_workspace_id"] = request.workspace_id
-    initial["_thread_id"] = thread_id
-    initial["entities"] = {"workspace_id": request.workspace_id}
+    # A message on a thread that's paused at the composition gate is treated
+    # as a reply to it ("ya"/"tidak") rather than a brand new turn, as long
+    # as it's a clear yes/no — anything else falls through to a fresh turn.
+    pending_audit = find_pending_composition_audit(get_admin_client(), thread_id)
+    reply = detect_composition_reply(request.message) if pending_audit else None
 
-    final_state = graph.invoke(
-        initial, config={"configurable": {"thread_id": thread_id}},
-    )
+    if reply is not None:
+        final_state = resume_composition(thread_id, reply)
+    else:
+        initial = new_state()
+        initial["messages"] = [*load_thread_history(thread_id),
+                               HumanMessage(content=request.message)]
+        initial["_user_id"] = user_sub
+        initial["_workspace_id"] = request.workspace_id
+        initial["_thread_id"] = thread_id
+        initial["entities"] = {"workspace_id": request.workspace_id}
+
+        final_state = graph.invoke(
+            initial, config={"configurable": {"thread_id": thread_id}},
+        )
 
     if not final_state.get("messages"):
         raise HTTPException(
@@ -70,4 +84,6 @@ async def chat(
         audit_id=final_state.get("audit_id"),
         requires_approval=requires_approval,
         intent=final_state.get("intent"),
+        awaiting_composition_approval=bool(final_state.get("__interrupt__")),
+        layer0_result=final_state.get("layer0_result"),
     )

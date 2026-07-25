@@ -84,6 +84,11 @@ class AgentState(TypedDict, total=False):
     legal_status: LegalStatus | None
     legal_citations: list[dict[str, Any]]
 
+    # N1b — Composition gate (allocate_capital only): pauses after Layer 0 so
+    # the user can approve/reject the cash/stocks/business split before the
+    # (costlier) stock analysis + optimizer run at all. None until resumed.
+    composition_approval: UserApproval | None
+
     # N6 — HITL
     user_approval: UserApproval | None
 
@@ -104,6 +109,7 @@ def new_state() -> AgentState:
         intent=None,
         entities={},
         layer0_result=None,
+        composition_approval=None,
         allocation_plan=None,
         revision_count=0,
         legal_status=None,

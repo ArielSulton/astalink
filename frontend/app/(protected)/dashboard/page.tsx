@@ -35,6 +35,7 @@ import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import {
   allocatedReplyIds,
   appendMessage,
+  compositionRespondedIds,
   deleteConversation,
   getMessages,
   getOrCreateDashboardConversation,
@@ -194,14 +195,16 @@ function rowToAiMessage(r: {
 }
 
 function AiThread({
-  messages, loading, compact, workspaceId, allocatedIds, onAllocated,
+  messages, loading, compact, workspaceId, allocatedIds, respondedCompositionIds, onAllocated, onComposition,
 }: {
   messages: AiMessage[];
   loading: boolean;
   compact?: boolean;
   workspaceId: string | null;
   allocatedIds: Set<string>;
+  respondedCompositionIds: Set<string>;
   onAllocated: (messageId: string | null | undefined, ticker: string, amount: number) => void;
+  onComposition: (messageId: string | null | undefined, result: AgentRunResponse) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -216,7 +219,9 @@ function AiThread({
               compact={compact}
               workspaceId={workspaceId}
               allocated={!!m.id && allocatedIds.has(m.id)}
+              compositionResolved={!!m.id && respondedCompositionIds.has(m.id)}
               onAllocated={(ticker, amount) => onAllocated(m.id, ticker, amount)}
+              onComposition={(result) => onComposition(m.id, result)}
             />
           </div>
         ) : (
@@ -244,7 +249,9 @@ function AiResultView({
   compact = false,
   workspaceId,
   allocated,
+  compositionResolved,
   onAllocated,
+  onComposition,
 }: {
   result: AgentRunResponse;
   aiAnswer: string | null;
@@ -252,10 +259,35 @@ function AiResultView({
   workspaceId: string | null;
   /** True once the user executed the buy for this reply — the CTA is done. */
   allocated: boolean;
+  /** True once Setuju/Tidak was already answered for this paused reply. */
+  compositionResolved: boolean;
   onAllocated: (ticker: string, amount: number) => void;
+  /** Called with the resumed result once Setuju/Tidak is answered on the
+     composition gate (allocate_capital only). */
+  onComposition: (result: AgentRunResponse) => void;
 }) {
   const [buyOpen, setBuyOpen] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const isRejected = ["rejected", "rejected_after_max_revisions"].includes(result.legal_status ?? "");
+
+  async function respondToComposition(approval: "approved" | "rejected") {
+    if (!workspaceId || resuming) return;
+    setResuming(true);
+    try {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      const resumed = await api.resumeAgent(
+        { thread_id: result.thread_id, workspace_id: workspaceId, approval },
+        session.access_token,
+      );
+      onComposition(resumed);
+    } catch {
+      toast.error("Gagal melanjutkan analisis. Coba lagi.");
+    } finally {
+      setResuming(false);
+    }
+  }
 
   const rankedWeights = [...(result.allocation_plan?.weights ?? [])]
     .filter((w) => w.weight > 0)
@@ -293,7 +325,7 @@ function AiResultView({
                 Kas vs Saham vs Bisnis
               </p>
               <span className="px-2 py-0.5 rounded border text-[10px] font-bold font-mono text-muted-foreground border-border">
-                KEYAKINAN: {result.layer0_result.confidence_label} ({result.layer0_result.confidence}/100)
+                CONFIDENCE: {result.layer0_result.confidence_label} ({result.layer0_result.confidence}/100)
               </span>
             </div>
             <AllocationBar allocation={result.layer0_result.allocation} />
@@ -328,6 +360,40 @@ function AiResultView({
                   {result.layer0_result.why_not_all_business || "—"}
                 </p>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Composition gate (allocate_capital only): stop here until the user
+         explicitly approves/rejects the split above — Layer 1 stock
+         analysis + optimizer haven't run yet, so allocation_plan is still
+         null and the sections below simply don't render until resumed. */}
+      {result.awaiting_composition_approval && !compositionResolved && (
+        <>
+          <Separator className="bg-border" />
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Setuju dengan komposisi ini? Analisis saham + optimizer baru jalan
+              setelah Anda konfirmasi.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={resuming}
+                onClick={() => respondToComposition("approved")}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+              >
+                {resuming ? "Memproses…" : "Setuju, Lanjutkan Analisis Saham"}
+              </button>
+              <button
+                type="button"
+                disabled={resuming}
+                onClick={() => respondToComposition("rejected")}
+                className="flex-1 py-2.5 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                Tidak, Batalkan
+              </button>
             </div>
           </div>
         </>
@@ -441,7 +507,17 @@ export default function DashboardPage() {
   // Ids of replies whose allocation was already executed — their "Setujui &
   // Alokasikan Dana" CTA is spent and must not come back after a reload.
   const [allocatedIds, setAllocatedIds] = useState<Set<string>>(new Set());
+  // Ids of paused replies whose composition gate has already been answered —
+  // without this, "Setuju/Tidak" would reappear on the same reply forever
+  // after a reload, since awaiting_composition_approval is stored as-is.
+  const [respondedCompositionIds, setRespondedCompositionIds] = useState<Set<string>>(new Set());
   const [convId, setConvId] = useState<string | null>(null);
+  // Without this, every dashboard message started a brand-new, contextless
+  // LangGraph thread — a follow-up question in the same session got a
+  // generic answer with zero awareness of what was just computed. Also the
+  // hard prerequisite for the composition-gate resume: it must reuse the
+  // exact thread_id the paused run was invoked under.
+  const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [mobileOpen, setMobileOpen] = useState(false);
   // Bumped after a successful "Setujui & Alokasikan Dana" from the AI panel
   // so the cash balance / portfolio strip refetch and reflect the new buy.
@@ -494,7 +570,9 @@ export default function DashboardPage() {
     if (!workspaceId) {
       setAiMessages([]);
       setAllocatedIds(new Set());
+      setRespondedCompositionIds(new Set());
       setConvId(null);
+      setThreadId(undefined);
       return;
     }
     let cancelled = false;
@@ -504,8 +582,12 @@ export default function DashboardPage() {
       setConvId(conv.id);
       const rows = await getMessages(conv.id);
       if (!cancelled) {
-        setAiMessages(rows.map(rowToAiMessage));
+        const mapped = rows.map(rowToAiMessage);
+        setAiMessages(mapped);
         setAllocatedIds(allocatedReplyIds(rows));
+        setRespondedCompositionIds(compositionRespondedIds(rows));
+        const lastResult = [...mapped].reverse().find((m) => m.result)?.result;
+        setThreadId(lastResult?.thread_id);
       }
     })();
     return () => { cancelled = true; };
@@ -536,9 +618,10 @@ export default function DashboardPage() {
 
     try {
       const res = await api.runAgent(
-        { message: query, workspace_id: workspaceId },
+        { message: query, workspace_id: workspaceId, thread_id: threadId },
         session.access_token,
       );
+      setThreadId(res.thread_id);
       const answer =
         [...res.messages].reverse().find((m) => m.type === "AIMessage")?.content ?? "";
       const ls = res.legal_status ?? "";
@@ -555,7 +638,9 @@ export default function DashboardPage() {
           })
         : null;
       setAiMessages((prev) => [...prev, { id: msgId, role: "assistant", content: answer, result: res }]);
-      if (rejected) {
+      if (res.awaiting_composition_approval) {
+        toast.info("Setuju dengan komposisinya? Konfirmasi dulu sebelum lanjut analisis saham.");
+      } else if (rejected) {
         toast.error(`Ditolak secara legal: ${ls}`);
       } else if (!res.allocation_plan) {
         toast.success("Jawaban siap.");
@@ -572,6 +657,32 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // A Setuju/Tidak answer on the composition gate resumes the SAME
+  // audit/thread and always produces a brand-new terminal (or re-paused, in
+  // theory) result — appended as a new row, same append-only pattern as
+  // handleAllocated (chat_messages has no update policy under RLS).
+  async function handleComposition(
+    messageId: string | null | undefined,
+    result: AgentRunResponse,
+  ) {
+    setThreadId(result.thread_id);
+    if (messageId) setRespondedCompositionIds((prev) => new Set(prev).add(messageId));
+    const answer =
+      [...result.messages].reverse().find((m) => m.type === "AIMessage")?.content ?? "";
+    const ls = result.legal_status ?? "";
+    const rejected = ["rejected", "rejected_after_max_revisions"].includes(ls);
+    const msgId = convId
+      ? await appendMessage(convId, {
+          role: "assistant",
+          content: answer,
+          auditId: result.audit_id,
+          requiresApproval: !!result.allocation_plan && result.user_approval === null && !rejected,
+          metadata: { result, ...(messageId ? { composition_for: messageId } : {}) },
+        })
+      : null;
+    setAiMessages((prev) => [...prev, { id: msgId, role: "assistant", content: answer, result }]);
   }
 
   // A successful buy retires that reply's CTA and leaves a confirmation in the
@@ -601,7 +712,9 @@ export default function DashboardPage() {
     const id = convId;
     setAiMessages([]);
     setAllocatedIds(new Set());
+    setRespondedCompositionIds(new Set());
     setConvId(null);
+    setThreadId(undefined);
     if (id) await deleteConversation(id);
   }
 
@@ -765,7 +878,9 @@ export default function DashboardPage() {
                     compact
                     workspaceId={workspaceId}
                     allocatedIds={allocatedIds}
+                    respondedCompositionIds={respondedCompositionIds}
                     onAllocated={handleAllocated}
+                    onComposition={handleComposition}
                   />
                 ) : (
                   <AiIdleState loading={loading} />
@@ -820,7 +935,9 @@ export default function DashboardPage() {
               compact
               workspaceId={workspaceId}
               allocatedIds={allocatedIds}
+              respondedCompositionIds={respondedCompositionIds}
               onAllocated={handleAllocated}
+              onComposition={handleComposition}
             />
           ) : (
             <AiIdleState loading={loading} />

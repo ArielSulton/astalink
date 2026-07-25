@@ -63,6 +63,79 @@ def send_text(*, to_phone_e164: str, body: str) -> None:
         log.error("whatsapp.send_text failed: %s", exc)
 
 
+def send_buttons(*, to_phone_e164: str, body: str, buttons: list[tuple[str, str]]) -> None:
+    """Sends a WhatsApp interactive reply-button message — Meta allows at
+    most 3 buttons, each with a title of at most 20 characters.
+    buttons: [(id, title), ...] — `id` comes back verbatim in the inbound
+    button_reply webhook payload, so callers pick ids the reply-detection
+    logic already understands (e.g. "ya"/"tidak")."""
+    if not settings.WHATSAPP_ACCESS_TOKEN or not settings.WHATSAPP_PHONE_NUMBER_ID:
+        log.warning("whatsapp.send_buttons: skipping (creds unset)")
+        return
+    try:
+        resp = httpx.post(
+            f"{META_BASE}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages",
+            headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+            json={
+                "messaging_product": "whatsapp",
+                "to": to_phone_e164,
+                "type": "interactive",
+                "interactive": {
+                    "type": "button",
+                    "body": {"text": _normalize_for_whatsapp(body)},
+                    "action": {
+                        "buttons": [
+                            {"type": "reply", "reply": {"id": bid, "title": title[:20]}}
+                            for bid, title in buttons[:3]
+                        ],
+                    },
+                },
+            },
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+    except Exception as exc:
+        log.error("whatsapp.send_buttons failed: %s", exc)
+
+
+def send_document(*, to_phone_e164: str, doc_bytes: bytes, filename: str, caption: str | None = None) -> None:
+    """Uploads doc_bytes (PDF) to Meta's Media API, then sends it as a
+    WhatsApp document message — same two-call upload-then-reference flow
+    as send_image, just a different media type."""
+    if not settings.WHATSAPP_ACCESS_TOKEN or not settings.WHATSAPP_PHONE_NUMBER_ID:
+        log.warning("whatsapp.send_document: skipping (creds unset)")
+        return
+    try:
+        upload_resp = httpx.post(
+            f"{META_BASE}/{settings.WHATSAPP_PHONE_NUMBER_ID}/media",
+            headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+            data={"messaging_product": "whatsapp", "type": "application/pdf"},
+            files={"file": (filename, doc_bytes, "application/pdf")},
+            timeout=15.0,
+        )
+        upload_resp.raise_for_status()
+        media_id = upload_resp.json()["id"]
+
+        document_payload: dict = {"id": media_id, "filename": filename}
+        if caption:
+            document_payload["caption"] = caption
+
+        resp = httpx.post(
+            f"{META_BASE}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages",
+            headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+            json={
+                "messaging_product": "whatsapp",
+                "to": to_phone_e164,
+                "type": "document",
+                "document": document_payload,
+            },
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+    except Exception as exc:
+        log.error("whatsapp.send_document failed: %s", exc)
+
+
 def send_image(*, to_phone_e164: str, image_bytes: bytes, caption: str | None = None) -> None:
     """Uploads image_bytes to Meta's Media API, then sends it as an image
     message. Two calls are required — WhatsApp messages reference media by

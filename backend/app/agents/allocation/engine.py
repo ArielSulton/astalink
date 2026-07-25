@@ -151,7 +151,7 @@ def run_layer0(
             why_not_business.extend(rejected_reasons)
         if tier == CompletenessTier.PARTIAL:
             why_not_business.append(
-                f"Kelengkapan data {completeness:.0%} → keyakinan dibatasi "
+                f"Kelengkapan data {completeness:.0%} → confidence dibatasi "
                 f"{allocation_config.completeness.partial_confidence_cap}/100. "
                 "Data yang rapi bukan kualitas aset — tapi data yang bolong "
                 "tidak bisa diberi bobot penuh.")

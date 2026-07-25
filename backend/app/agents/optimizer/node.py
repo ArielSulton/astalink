@@ -136,15 +136,22 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
     workspace_id = state.get("_workspace_id")
     balance = get_workspace_balance(get_admin_client(), workspace_id) if workspace_id else None
     if balance is None:
-        cash = requested
+        base_cash = requested
     elif requested:
-        cash = min(requested, balance)
+        base_cash = min(requested, balance)
     else:
-        cash = balance
+        base_cash = balance
 
-    # Advisory mode: the optimizer analyzes the full requested amount.
-    # Layer 0's recommended split is shown separately in the report
-    # as a recommendation — it no longer constrains the optimizer.
+    # The optimizer only ever analyzes Layer 0's own stock-portion of the
+    # funds — analyzing the full requested/available amount regardless of
+    # what Layer 0 decided (a prior "advisory mode" choice) let the plan
+    # openly contradict Layer 0's own split, e.g. Layer 0 saying "24.8% to
+    # stocks" while the optimizer put 95% of the FULL amount into one ticker.
+    # Missing layer0_result (shouldn't happen on this path, but tests/direct
+    # calls may omit it) falls back to the full amount, unchanged behavior.
+    layer0_alloc = (state.get("layer0_result") or {}).get("allocation") or {}
+    stocks_fraction = layer0_alloc.get("stocks")
+    cash = base_cash * stocks_fraction if stocks_fraction is not None else base_cash
 
     return OptimizerInputs(
         tickers=tickers,
@@ -156,7 +163,7 @@ def _build_inputs(state: AgentState) -> OptimizerInputs:
         sector_caps=sector_caps_from_citations(citations),
         max_per_asset=max_per_asset,
         min_cash_buffer=min_cash_buffer,
-        total_funds=balance if balance is not None else cash,
+        total_funds=balance if balance is not None else base_cash,
     )
 
 

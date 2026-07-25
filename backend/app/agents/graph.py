@@ -16,9 +16,13 @@ from app.agents.legal.node import legal_node
 from app.agents.qa import qa_node
 from app.agents.rejection import rejection_handler
 from app.agents.summary import summary_node
-from app.agents.state import AgentState, LegalStatus
+from app.agents.state import AgentState, LegalStatus, UserApproval
 from app.agents.allocation.node import layer0_node
 from app.agents.business.node import business_node
+from app.agents.composition_gate.node import (
+    composition_gate_node,
+    composition_rejected_handler,
+)
 from app.agents.market.node import market_node
 from app.agents.risk.node import risk_node
 from app.agents.optimizer.node import optimizer_node
@@ -68,11 +72,27 @@ def _route_after_layer0(state: AgentState) -> str | Sequence[str]:
     INSUFFICIENT_DATA — in that case l0_allocation already appended the
     user-facing message asking for more info.
 
+    ALLOCATE_CAPITAL (a real business-vs-stocks comparison) pauses at the
+    composition gate first — the user explicitly approves/rejects Layer 0's
+    cash/stocks/business split before the costlier stock analysis + optimizer
+    run. Plain ALLOCATE_STOCKS requests skip the gate and fan out immediately
+    (no business in the picture, nothing extra to confirm).
+
     When L0 recommends 0% stocks, the fan-out STILL runs so the user
     gets a complete advisory report and can decide for themselves."""
     result = state.get("layer0_result") or {}
     if result.get("status") == "insufficient_data":
         return END
+    if state.get("intent") == Intent.ALLOCATE_CAPITAL.value:
+        return "n1b_composition_gate"
+    return ["n2a_market", "n2b_business", "n2c_risk"]
+
+
+def _route_after_composition_gate(
+    state: AgentState,
+) -> Literal["composition_rejected_handler", "n2a_market", "n2b_business", "n2c_risk"] | Sequence[str]:
+    if state.get("composition_approval") != UserApproval.APPROVED:
+        return "composition_rejected_handler"
     return ["n2a_market", "n2b_business", "n2c_risk"]
 
 
@@ -109,6 +129,8 @@ def build_graph():
 
     g.add_node("n1_intent", intent_node)
     g.add_node("l0_allocation", layer0_node)
+    g.add_node("n1b_composition_gate", composition_gate_node)
+    g.add_node("composition_rejected_handler", composition_rejected_handler)
     g.add_node("n2a_market", market_node)
     g.add_node("n2b_business", business_node)
     g.add_node("n2c_risk", risk_node)
@@ -136,11 +158,22 @@ def build_graph():
 
     # Layer 0 gates Layer 1: the stock fan-out only runs when Layer 0
     # allocated >0% to stocks; otherwise the run ends with L0's own message.
+    # ALLOCATE_CAPITAL detours through the composition gate first.
     g.add_conditional_edges(
         "l0_allocation",
         _route_after_layer0,
-        ["n2a_market", "n2b_business", "n2c_risk", END],
+        ["n1b_composition_gate", "n2a_market", "n2b_business", "n2c_risk", END],
     )
+
+    # Composition gate: paused via interrupt() in composition_gate_node.
+    # Approved → the same analyst fan-out as a plain ALLOCATE_STOCKS run.
+    # Rejected → stop immediately, no Layer 1/optimizer/legal at all.
+    g.add_conditional_edges(
+        "n1b_composition_gate",
+        _route_after_composition_gate,
+        ["composition_rejected_handler", "n2a_market", "n2b_business", "n2c_risk"],
+    )
+    g.add_edge("composition_rejected_handler", END)
 
     # Join: analysts → optimizer for the allocation flow (LangGraph implicitly
     # waits for all activated preds). Business/risk detour to the summary node

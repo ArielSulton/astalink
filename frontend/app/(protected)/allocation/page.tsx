@@ -162,7 +162,7 @@ export default function AllocationPage() {
                 <CardTitle className="text-base">Alokasi yang disarankan</CardTitle>
                 <div className="flex items-center gap-2">
                   <span className={cn("px-2 py-0.5 rounded border text-[10px] font-bold font-mono", CONFIDENCE_CLS[layer0.confidence_label])}>
-                    KEYAKINAN: {layer0.confidence_label} ({layer0.confidence}/100)
+                    CONFIDENCE: {layer0.confidence_label} ({layer0.confidence}/100)
                   </span>
                   {layer0.business_id && tier && (
                     <span className={cn("px-2 py-0.5 rounded border text-[10px] font-bold font-mono", tier.cls)}>
@@ -173,7 +173,7 @@ export default function AllocationPage() {
               </div>
               {layer0.completeness_tier === "partial" && (
                 <p className="text-[11px] text-amber-400">
-                  Keyakinan dibatasi maksimal 50/100 karena kelengkapan data bisnis 40–70%.
+                  Confidence dibatasi maksimal 50/100 karena kelengkapan data bisnis 40–70%.
                 </p>
               )}
             </CardHeader>

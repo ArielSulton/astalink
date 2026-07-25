@@ -72,6 +72,10 @@ export interface AgentRunResponse {
   legal_status: string | null;
   user_approval: string | null;
   layer0_result: Layer0Result | null;
+  // True while paused at the composition gate (allocate_capital only) —
+  // allocation_plan/legal_status are still empty at this point since Layer 1/
+  // optimizer/legal haven't run yet. Resume via api.resumeAgent().
+  awaiting_composition_approval: boolean;
   allocation_plan: {
     weights: { ticker: string; weight: number }[];
     cash: number;
@@ -92,6 +96,10 @@ export interface ChatResponse {
   audit_id?: string | null;
   requires_approval?: boolean;
   intent?: string | null;
+  awaiting_composition_approval?: boolean;
+  // Lets the chatbot page render the same visual AllocationBar the
+  // dashboard shows instead of leaving the Kas/Saham/Bisnis split as text.
+  layer0_result?: Layer0Result | null;
 }
 
 export interface HoldingView {
@@ -387,6 +395,18 @@ export const api = {
   runAgent: (body: AgentRunRequest, token: string) =>
     jsonFetch<AgentRunResponse>(
       "/api/v1/agent/run",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
+  // Resumes a run paused at the composition gate (allocate_capital only) —
+  // the dashboard's Setuju/Tidak buttons call this directly instead of
+  // relying on free-text keyword detection (chat.py/whatsapp.py do that).
+  resumeAgent: (
+    body: { thread_id: string; workspace_id: string; approval: "approved" | "rejected" },
+    token: string,
+  ) =>
+    jsonFetch<AgentRunResponse>(
+      "/api/v1/agent/resume",
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),

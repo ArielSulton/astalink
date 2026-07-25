@@ -81,7 +81,7 @@ def _format_terminal_message(result: Layer0Result) -> str:
         "Hasil analisis Layer 0 (rekomendasi alokasi modal):",
         f"• Kas: {alloc.cash:.0%} | Saham: {alloc.stocks:.0%} | "
         f"Bisnis: {alloc.business:.0%}",
-        f"• Keyakinan: {result.confidence_label} ({result.confidence}/100)",
+        f"• Confidence: {result.confidence_label} ({result.confidence}/100)",
         "",
         "⚠ Ini adalah rekomendasi berdasarkan analisis data yang tersedia. "
         "Keputusan akhir tetap di tangan Anda.",
