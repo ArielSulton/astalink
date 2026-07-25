@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 
 import httpx
 
@@ -26,6 +27,21 @@ def verify_signature(*, body: bytes, signature_header: str | None, app_secret: s
     return hmac.compare_digest(expected, signature_header)
 
 
+def _normalize_for_whatsapp(body: str) -> str:
+    """LLM-authored replies default to standard Markdown often enough that
+    prompt instructions alone aren't a reliable guarantee — WhatsApp only
+    renders single-asterisk *bold* and has no header syntax, so anything
+    else (**bold**, ### heading) shows up as literal punctuation clutter
+    instead of formatting. Em dashes get the same treatment: WhatsApp has
+    no special rendering for them, so they just read as stray characters."""
+    # **bold** / ***bold*** -> *bold* (WhatsApp's own single-asterisk bold)
+    body = re.sub(r"\*{2,3}(.+?)\*{2,3}", r"*\1*", body)
+    # "### Heading" / "## Heading" -> a plain bold line
+    body = re.sub(r"^#{1,6}\s*(.+)$", r"*\1*", body, flags=re.MULTILINE)
+    body = re.sub(r"\s*—\s*", " - ", body)   # em dash (usually spaced)
+    return re.sub(r"\s*–\s*", "-", body)     # en dash (usually unspaced, e.g. ranges)
+
+
 def send_text(*, to_phone_e164: str, body: str) -> None:
     if not settings.WHATSAPP_ACCESS_TOKEN or not settings.WHATSAPP_PHONE_NUMBER_ID:
         log.warning("whatsapp.send_text: skipping (creds unset)")
@@ -38,7 +54,7 @@ def send_text(*, to_phone_e164: str, body: str) -> None:
                 "messaging_product": "whatsapp",
                 "to": to_phone_e164,
                 "type": "text",
-                "text": {"body": body},
+                "text": {"body": _normalize_for_whatsapp(body)},
             },
             timeout=10.0,
         )
