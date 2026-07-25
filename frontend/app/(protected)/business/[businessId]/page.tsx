@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Building2, Coins, TrendingUp } from "lucide-react";
+import { Building2, ClipboardList, Coins, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
@@ -88,6 +89,24 @@ export default function BusinessDetailPage() {
       {business.description && (
         <p className="text-sm text-muted-foreground -mt-6">{business.description}</p>
       )}
+
+      <div className="flex items-start gap-3 rounded-xl border border-chart-2/20 bg-chart-2/5 p-4">
+        <ClipboardList className="h-5 w-5 text-chart-2 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-foreground">Profil investasi (buat analisis AI)</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Data aset/omset/profit di bawah ini beda dengan profil yang dipakai AI untuk
+            membandingkan bisnis ini vs saham. Lengkapi profil investasi minimal 40% dulu
+            supaya AI bisa kasih rekomendasi alokasi yang melibatkan bisnis ini.
+          </p>
+          <Link
+            href={`/allocation/intake/${businessId}`}
+            className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-chart-2 hover:underline"
+          >
+            Isi profil investasi →
+          </Link>
+        </div>
+      </div>
 
       <section className="grid grid-cols-3 gap-4">
         <StatCard
