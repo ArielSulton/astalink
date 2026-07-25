@@ -4,6 +4,7 @@ import { PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
+import { PinModal } from "@/components/pin-modal";
 
 function idr(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -31,6 +32,10 @@ export function AllocationBuyModal({
   const [loading, setLoading] = useState(false);
   const [fetchingCash, setFetchingCash] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // A buy moves real (sandbox) money exactly like a sell already does — it
+  // must not be weaker-gated than sell's mandatory PIN confirmation.
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -58,10 +63,9 @@ export function AllocationBuyModal({
     { label: "50 Juta", val: 50000000 },
   ];
 
-  async function submit() {
-    if (!valid) return;
+  async function submitWithPin(pin: string) {
+    setPinError(null);
     setLoading(true);
-    setError(null);
     try {
       const sb = createClient();
       const { data: { session } } = await sb.auth.getSession();
@@ -69,16 +73,17 @@ export function AllocationBuyModal({
 
       const res = await api.buyHolding(
         workspaceId,
-        { ticker: selectedTicker.toUpperCase().trim(), amount: amountNum },
+        { ticker: selectedTicker.toUpperCase().trim(), amount: amountNum, pin },
         session.access_token,
       );
 
       toast.success(
         `Alokasi ${idr(res.allocated_amount)} ke ${res.ticker} berhasil! Saldo kas berkurang.`,
       );
+      setPinOpen(false);
       onSuccess(res.ticker, res.allocated_amount, res.cash_balance);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal mengalokasikan dana.");
+      setPinError(e instanceof Error ? e.message : "Gagal mengalokasikan dana.");
     } finally {
       setLoading(false);
     }
@@ -180,13 +185,20 @@ export function AllocationBuyModal({
           <button
             type="button"
             disabled={!valid || loading || fetchingCash}
-            onClick={submit}
+            onClick={() => { setPinError(null); setPinOpen(true); }}
             className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
           >
             {loading ? "Mengalokasikan…" : "Alokasikan Dana"}
           </button>
         </div>
       </div>
+
+      <PinModal
+        open={pinOpen}
+        onSubmit={submitWithPin}
+        onClose={() => setPinOpen(false)}
+        error={pinError}
+      />
     </div>
   );
 }

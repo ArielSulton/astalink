@@ -119,8 +119,11 @@ async def buy_holding(
     sb = get_admin_client()
     assert_workspace_owned(sb, workspace_id, user["sub"])
 
-    if body.pin:
-        verify_user_pin(user["sub"], body.pin)
+    # A buy moves real (sandbox) money exactly like a sell — it must not be
+    # weaker-gated than sell's unconditional PIN check.
+    if not body.pin:
+        raise HTTPException(status_code=400, detail="pin required")
+    verify_user_pin(user["sub"], body.pin)
 
     current_cash = get_workspace_balance(sb, workspace_id) or 0.0
     if current_cash < body.amount:

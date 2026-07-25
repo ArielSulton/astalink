@@ -92,6 +92,36 @@ def test_get_portfolio_price_unavailable_is_null_not_zero(client: TestClient) ->
     assert body["total_equity"] is None
 
 
+def test_buy_requires_pin(client: TestClient) -> None:
+    """A buy moves real (sandbox) money exactly like a sell — it must not be
+    weaker-gated than sell's unconditional PIN check."""
+    admin = _fake_admin(owned=True, balance=1_000_000_000)
+    with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
+         patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
+         patch("app.api.v1.portfolio._last_price", return_value=10000):
+        resp = client.post("/api/v1/portfolio/buy?workspace_id=ws-1",
+                           json={"ticker": "BBCA", "amount": 1_000_000},
+                           headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 400
+    assert "pin" in resp.json()["detail"].lower()
+
+
+def test_buy_success_with_pin(client: TestClient) -> None:
+    admin = _fake_admin(owned=True, balance=10_000_000)
+    with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
+         patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
+         patch("app.api.v1.portfolio.verify_user_pin", return_value=None), \
+         patch("app.api.v1.portfolio._last_price", return_value=10000):
+        resp = client.post("/api/v1/portfolio/buy?workspace_id=ws-1",
+                           json={"ticker": "BBCA", "amount": 1_000_000, "pin": "123456"},
+                           headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ticker"] == "BBCA"
+    assert body["allocated_amount"] == 1_000_000
+    assert body["quantity"] == 100  # 1_000_000 / 10000
+
+
 def test_sell_rejects_insufficient_quantity(client: TestClient) -> None:
     admin = _fake_admin(
         owned=True,
