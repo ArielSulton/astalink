@@ -184,7 +184,9 @@ def _process_message(msg: dict[str, Any]) -> None:
         try:
             engine = ((final or {}).get("entities") or {}).get("stock_engine") or {}
             verdicts = engine.get("verdicts") or {}
-            table_png = render_report_table_chart(verdicts, allocation_plan["weights"])
+            table_png = render_report_table_chart(
+                verdicts, allocation_plan["weights"], allocation_plan.get("cash"),
+            )
             send_image(to_phone_e164=phone, image_bytes=table_png, caption="Tabel Verdik & Bobot Saham")
         except Exception:
             log.exception("whatsapp: table image render/send failed for thread %s", thread_id)

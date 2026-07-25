@@ -16,7 +16,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from app.agents.report import _BAND_LABELS, _LEGAL_LABELS, _fmt_pct, _fmt_score
+from app.agents.report import _BAND_LABELS, _LEGAL_LABELS, _fmt_pct, _fmt_rp, _fmt_score
 from app.agents.state import AgentState, LegalStatus
 
 _styles = getSampleStyleSheet()
@@ -107,6 +107,17 @@ def render_allocation_pdf(state: AgentState) -> bytes | None:
         rows = [["Ticker", "Bobot yang Disarankan"]]
         rows += [[w.get("ticker", "?"), _fmt_pct(w.get("weight"))] for w in weights]
         story.append(_table(rows))
+        story.append(Spacer(1, 6))
+        # Without this, a weight like "BBCA 95%" reads as 95% of the user's
+        # total funds — it's actually 95% of just the stock-sleeve amount
+        # Layer 0 allocated to stocks, which can be a small slice of the
+        # total (see the Kas/Saham/Bisnis split above).
+        if plan.get("cash") is not None:
+            story.append(Paragraph(
+                f"Dana yang dianalisis: <b>{_fmt_rp(float(plan['cash']))}</b>", _BODY))
+        if plan.get("cash_buffer") is not None:
+            story.append(Paragraph(
+                f"Buffer kas minimum disarankan: <b>{_fmt_pct(plan['cash_buffer'])}</b>", _BODY))
         plan_narration = (plan.get("narration") or "").strip()
         if plan_narration:
             story.append(Spacer(1, 6))

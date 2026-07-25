@@ -77,3 +77,13 @@ def test_render_report_table_chart_weights_only() -> None:
 def test_render_report_table_chart_raises_when_both_empty() -> None:
     with pytest.raises(ValueError):
         render_report_table_chart(verdicts={}, weights=[])
+
+
+def test_render_report_table_chart_with_plan_cash_annotation() -> None:
+    """plan_cash surfaces the actual rupiah amount the weights were computed
+    against — without it, a weight like "BBCA 95%" reads as 95% of the
+    user's total funds instead of 95% of Layer 0's stock-sleeve slice."""
+    png = render_report_table_chart(
+        verdicts={}, weights=[{"ticker": "BBCA", "weight": 0.95}], plan_cash=12_415_000.0,
+    )
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")

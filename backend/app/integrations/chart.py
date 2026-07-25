@@ -69,12 +69,23 @@ _BAND_LABELS = {
 }
 
 
-def render_report_table_chart(verdicts: dict[str, dict], weights: list[dict]) -> bytes:
+def _fmt_rp(value: float) -> str:
+    return f"Rp {value:,.0f}".replace(",", ".")
+
+
+def render_report_table_chart(
+    verdicts: dict[str, dict], weights: list[dict], plan_cash: float | None = None,
+) -> bytes:
     """Renders the Layer 1 verdict table and optimizer weight table as one
     PNG — mirrors report.py's markdown tables (_layer1_section/_plan_section)
     since WhatsApp has no markdown table renderer. Either argument may be
     empty; the corresponding table is simply omitted, but at least one must
-    be non-empty for a meaningful image."""
+    be non-empty for a meaningful image.
+
+    plan_cash (allocation_plan.cash) is the actual rupiah amount the weights
+    were computed against — which is Layer 0's stock-sleeve slice, not the
+    user's total funds. Without surfacing it, "BBCA 95%" reads as 95% of
+    everything the user owns instead of 95% of just the stock slice."""
     tickers = list(verdicts.keys())
     if not tickers and not weights:
         raise ValueError("render_report_table_chart: verdicts and weights both empty")
@@ -116,7 +127,10 @@ def render_report_table_chart(verdicts: dict[str, dict], weights: list[dict]) ->
         ax = next(ax_iter)
         ax.set_facecolor(_BG)
         ax.axis("off")
-        ax.set_title("Bobot Saham (Optimizer)", color=_FG, fontsize=12, fontweight="bold", loc="left")
+        title = "Bobot Saham (Optimizer)"
+        if plan_cash is not None:
+            title += f" — Dana dianalisis: {_fmt_rp(plan_cash)}"
+        ax.set_title(title, color=_FG, fontsize=11, fontweight="bold", loc="left")
         rows = [[w.get("ticker", "?"), f"{float(w.get('weight', 0)):.0%}"] for w in weights]
         table = ax.table(
             cellText=rows, colLabels=["Ticker", "Bobot"],
