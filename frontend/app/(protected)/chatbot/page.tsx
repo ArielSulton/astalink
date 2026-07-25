@@ -38,11 +38,14 @@ function extractTickers(text: string): string[] {
   return found.length > 0 ? found : ["BBCA"];
 }
 
-// Only the "alokasikan dana" phrasing should trigger the full
-// report-plus-approval treatment on the reply bubble — other intents
-// (explain, risk review, etc.) don't have an allocation to approve.
-function isAllocationRequest(text: string): boolean {
-  return /alokasikan\s+dana/i.test(text);
+// Whether THIS reply itself carries a real optimizer recommendation —
+// checked on the assistant's own message, not the preceding user request's
+// wording. A regex on the request text ("alokasikan dana") broke as soon as
+// the request came via the composition-gate "Setuju, lanjutkan analisis
+// saham" reply instead of a literal alokasikan-dana phrasing, silently
+// hiding the CTA on every allocate_capital flow.
+function hasAllocationPlan(text: string): boolean {
+  return /Rekomendasi Bobot Saham/i.test(text);
 }
 
 function extractAmount(text: string): number | null {
@@ -53,6 +56,15 @@ function extractAmount(text: string): number | null {
   const rawMatch = text.match(/\b(\d{1,3}(?:\.\d{3})+|\d{6,})\b/);
   if (rawMatch) return parseInt(rawMatch[1].replace(/\./g, ""), 10);
   return null;
+}
+
+// Fallback for when the preceding user message has no extractable amount
+// (e.g. it's just "Setuju, lanjutkan analisis saham") — the report itself
+// always states the analyzed amount when a plan exists.
+function extractAnalyzedAmount(text: string): number | null {
+  const m = text.match(/Dana yang dianalisis:\s*\**Rp\s*([\d.,]+)/i);
+  if (!m) return null;
+  return parseInt(m[1].replace(/[.,]/g, ""), 10);
 }
 
 interface Message {
@@ -176,7 +188,8 @@ export default function ChatbotPage() {
   ) => {
     const tickers = extractTickers(content);
     setBuyTickers(tickers);
-    setBuyAmount(requestText ? extractAmount(requestText) : null);
+    const amount = (requestText ? extractAmount(requestText) : null) ?? extractAnalyzedAmount(content);
+    setBuyAmount(amount);
     setBuyForMessageId(messageId ?? null);
     setBuyModalOpen(true);
   };
@@ -402,14 +415,20 @@ export default function ChatbotPage() {
           {messages.map((m, i) => {
             const precedingUser = i > 0 ? messages[i - 1] : null;
             const isAllocated = !!m.id && allocatedIds.has(m.id);
-            const isAllocationReply =
-              m.role === "assistant" &&
-              precedingUser?.role === "user" &&
-              isAllocationRequest(precedingUser.content);
+            const isAllocationReply = m.role === "assistant" && hasAllocationPlan(m.content);
             const isCompositionPending =
               m.role === "assistant" &&
               m.awaitingCompositionApproval &&
               !(m.id && respondedCompositionIds.has(m.id));
+            // The message 2 back is the paused reply this one resumes from
+            // (index i-1 is the synthetic "Setuju/Tidak" user bubble) — its
+            // Kas/Saham/Bisnis panel already showed the same layer0Result,
+            // so repeating it here would just be a duplicate.
+            const twoBack = i >= 2 ? messages[i - 2] : null;
+            const isCompositionContinuation =
+              m.role === "assistant" &&
+              twoBack?.role === "assistant" &&
+              !!twoBack.awaitingCompositionApproval;
 
             return (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -424,7 +443,7 @@ export default function ChatbotPage() {
                     </div>
                     {/* Visual Kas/Saham/Bisnis split — same AllocationBar the
                        dashboard shows, so this isn't left as plain text. */}
-                    {m.layer0Result?.allocation && (
+                    {m.layer0Result?.allocation && !isCompositionContinuation && (
                       <div className="w-full rounded-2xl border border-border bg-glass p-4 space-y-3">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-mono">

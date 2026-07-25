@@ -208,8 +208,18 @@ function AiThread({
 }) {
   return (
     <div className="space-y-5">
-      {messages.map((m, i) =>
-        m.role === "user" ? (
+      {messages.map((m, i) => {
+        // A composition-gate resume appends its full result as a brand-new
+        // assistant message directly after the paused one (no user bubble in
+        // between, unlike the chatbot's synthetic Setuju/Tidak reply) — its
+        // Kas/Saham/Bisnis panel would otherwise repeat what the immediately
+        // preceding message already showed.
+        const prev = i > 0 ? messages[i - 1] : null;
+        const isCompositionContinuation =
+          m.role === "assistant" && !!m.result &&
+          prev?.role === "assistant" && !!prev.result?.awaiting_composition_approval;
+
+        return m.role === "user" ? (
           <UserBubble key={i} content={m.content} />
         ) : m.result ? (
           <div key={i} className="animate-fade-in">
@@ -220,14 +230,15 @@ function AiThread({
               workspaceId={workspaceId}
               allocated={!!m.id && allocatedIds.has(m.id)}
               compositionResolved={!!m.id && respondedCompositionIds.has(m.id)}
+              suppressLayer0={isCompositionContinuation}
               onAllocated={(ticker, amount) => onAllocated(m.id, ticker, amount)}
               onComposition={(result) => onComposition(m.id, result)}
             />
           </div>
         ) : (
           <AssistantBubble key={i} content={m.content} />
-        ),
-      )}
+        );
+      })}
       {loading && (
         <div className="flex justify-start">
           <div className="bg-secondary border border-border rounded-xl rounded-tl-none px-5 py-4">
@@ -250,6 +261,7 @@ function AiResultView({
   workspaceId,
   allocated,
   compositionResolved,
+  suppressLayer0 = false,
   onAllocated,
   onComposition,
 }: {
@@ -261,6 +273,10 @@ function AiResultView({
   allocated: boolean;
   /** True once Setuju/Tidak was already answered for this paused reply. */
   compositionResolved: boolean;
+  /** True when this message is the resumed continuation of the immediately
+     preceding paused reply — its Kas/Saham/Bisnis panel already showed the
+     identical layer0_result, so this one skips repeating it. */
+  suppressLayer0?: boolean;
   onAllocated: (ticker: string, amount: number) => void;
   /** Called with the resumed result once Setuju/Tidak is answered on the
      composition gate (allocate_capital only). */
@@ -316,7 +332,7 @@ function AiResultView({
          an ALLOCATE_CAPITAL comparison ("saham atau modal ke bisnis saya?")
          silently dropped the business side entirely: the panel below only
          ever shows the optimizer's stock-only weights. */}
-      {result.layer0_result?.allocation && (
+      {result.layer0_result?.allocation && !suppressLayer0 && (
         <>
           <Separator className="bg-border" />
           <div className="space-y-3">
