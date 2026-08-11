@@ -97,5 +97,14 @@ def market_node(state: AgentState) -> AgentState:
             update["eligible_tickers"] = engine["eligible_tickers"]
         except Exception as exc:
             log.error("market_node: stock engine failed: %s", exc)
+            # entities is merged across turns via operator.or_ (state.py) and
+            # never cleared — on a long-lived thread (WhatsApp's thread_id
+            # never rotates) these keys may still hold a *previous* turn's
+            # ticker. optimizer_node prefers eligible_tickers over
+            # entities.tickers, so leaving stale data here would make it
+            # silently analyze the wrong ticker instead of just degrading to
+            # the unfiltered list.
+            update["stock_engine"] = None
+            update["eligible_tickers"] = None
 
     return {"entities": {**entities, **update}}
