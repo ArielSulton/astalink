@@ -367,8 +367,8 @@ export default function ChatbotPage() {
             </div>
             <div className="min-w-0">
               <span className="text-foreground font-bold text-sm block truncate">Astalink AI</span>
-              <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> Online
+              <span className="text-[10px] text-chart-2 font-medium flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-chart-2 animate-pulse" /> Online
               </span>
             </div>
           </div>
@@ -391,7 +391,7 @@ export default function ChatbotPage() {
             <button
               onClick={newRoom}
               aria-label="Percakapan baru"
-              className="shrink-0 flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+              className="shrink-0 flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
             >
               <MessageSquarePlus className="w-4 h-4" />
             </button>
@@ -475,8 +475,8 @@ export default function ChatbotPage() {
                        review, etc.) have nothing here to approve. */}
                     {isAllocationReply && isAllocated && (
                       <div className="w-full flex items-center gap-2 border-t border-border/60 pt-3">
-                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                        <span className="text-[11px] text-emerald-400">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-chart-2" />
+                        <span className="text-[11px] text-chart-2">
                           Sudah dieksekusi — dana dialokasikan dari rekomendasi ini.
                         </span>
                         <Link
@@ -498,7 +498,7 @@ export default function ChatbotPage() {
                             type="button"
                             disabled={respondingComposition}
                             onClick={() => respondToComposition(m.id, "approved")}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all shadow-md"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all shadow-md"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             {respondingComposition ? "Memproses…" : "Setuju, Lanjutkan"}
@@ -517,14 +517,14 @@ export default function ChatbotPage() {
 
                     {isAllocationReply && !isAllocated && (
                       <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-chart-2">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Laporan pertimbangan siap — setujui untuk eksekusi
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
                           <button
                             onClick={() => openAllocationModal(m.content, precedingUser?.content, m.id)}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-md"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-md"
                           >
                             <PlusCircle className="w-3.5 h-3.5" />
                             Setujui &amp; Alokasikan Dana
@@ -576,6 +576,7 @@ export default function ChatbotPage() {
                 }
               }}
               placeholder="Ketik pesan… (misal: rekomendasi alokasi 20 juta ke BBCA dan TLKM)"
+              aria-label="Ketik pesan ke AI"
               rows={1}
               className="flex-1 resize-none bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
               style={{ maxHeight: "128px" }}
@@ -583,7 +584,8 @@ export default function ChatbotPage() {
             <button
               onClick={sendMessage}
               disabled={!input.trim() || loading}
-              className="shrink-0 h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
+              aria-label="Kirim pesan"
+              className="shrink-0 size-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
             >
               <Send className="h-4 w-4" />
             </button>
@@ -620,7 +622,7 @@ export default function ChatbotPage() {
               <button
                 onClick={(e) => { e.stopPropagation(); removeRoom(r.id); }}
                 aria-label="Hapus percakapan"
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-400 transition-all"
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

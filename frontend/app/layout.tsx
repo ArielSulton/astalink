@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Oxanium } from "next/font/google";
+import { Oxanium, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 
 const oxanium = Oxanium({subsets:['latin'],variable:'--font-sans'});
-const plusJakarta = Plus_Jakarta_Sans({
+// globals.css maps --font-mono to --font-geist-mono, but nothing loaded that
+// variable — every "tabular numbers" price/percent in the UI was silently
+// falling back to Oxanium instead of a real monospace face. JetBrains Mono
+// keeps the terminal-technical character DESIGN.md documents for numerics.
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-geist-mono",
 });
 
 const SITE_URL = "https://astalink.my.id";
@@ -47,7 +50,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" data-scroll-behavior="smooth" className={cn("font-sans dark", oxanium.variable, plusJakarta.variable)}>
+    <html lang="id" data-scroll-behavior="smooth" className={cn("font-sans dark", oxanium.variable, jetbrainsMono.variable)}>
       <body>
         {children}
         <Toaster />

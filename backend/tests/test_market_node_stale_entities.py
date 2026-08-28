@@ -45,3 +45,32 @@ def test_market_node_clears_stale_eligible_tickers_on_engine_failure() -> None:
     entities = update["entities"]
     assert entities.get("eligible_tickers") is None
     assert entities.get("stock_engine") is None
+
+
+def test_market_node_reuses_precomputed_engine_for_matching_tickers() -> None:
+    """l0_allocation now runs the A1-A4 engine before market_node does (see
+    test_layer0_node.py) and hands the result over via entities — market_node
+    must reuse it instead of paying for a second run, as long as it was
+    computed for the *same* ticker set as this turn (not a stale one)."""
+    state = new_state()
+    state["layer0_result"] = {"allocation": {"stocks": 0.5, "cash": 0.3, "business": 0.2}}
+    precomputed = {"verdicts": {"TLKM": {"score": 80.0}}, "eligible_tickers": ["TLKM"]}
+    state["entities"] = {
+        "tickers": ["TLKM"],
+        "eligible_tickers": ["TLKM"],
+        "stock_engine": precomputed,
+    }
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = AIMessage(content="ringkasan")
+
+    with patch("app.agents.market.node.fetch_close_prices", return_value=np.array([])), \
+         patch("app.agents.market.node.fetch_news", return_value=[]), \
+         patch("app.agents.market.node.get_chat_model", return_value=fake_llm), \
+         patch("app.agents.market.stock_engine.run_stock_engine") as mock_run:
+        update = market_node(state)
+
+    mock_run.assert_not_called()
+    entities = update["entities"]
+    assert entities.get("stock_engine") == precomputed
+    assert entities.get("eligible_tickers") == ["TLKM"]

@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.agents.intent.schemas import IntentDecision
 from app.agents.intents import Intent
+from app.agents.optimizer.sectors import sector_to_tickers
 from app.agents.state import AgentState
 from app.core.gemini import get_chat_model
 from app.core.metrics import track_node_duration
@@ -79,6 +80,19 @@ def _build_chain():
     return llm.with_structured_output(IntentDecision)
 
 
+def _extract_sectors(entities: dict[str, Any]) -> list[str]:
+    """The intent LLM isn't schema-constrained for entities (free-form
+    dict), so a stated sector shows up inconsistently — a single string
+    under "sector", or a list under "sectors" (observed live: "bank atau
+    telco gitu" -> {"sectors": ["banking", "telecommunications"]}, not
+    {"sector": ...}). Normalize both shapes so a real request doesn't
+    silently miss the resolution below just because of key naming."""
+    raw = entities.get("sector") or entities.get("sectors")
+    if raw is None:
+        return []
+    return [raw] if isinstance(raw, str) else [s for s in raw if isinstance(s, str)]
+
+
 def _last_user_text(state: AgentState) -> str:
     for m in reversed(state.get("messages") or []):
         if isinstance(m, HumanMessage):
@@ -133,22 +147,34 @@ def intent_node(state: AgentState) -> AgentState:
         decision.confidence < CONFIDENCE_FLOOR or decision.intent == Intent.UNKNOWN
     )
     entities = decision.entities
-    # "rekomendasi investasi untuk dana 20 juta" names no ticker AND no
-    # sector — a genuine recommendation request, not something to bounce
-    # back asking the user to name a stock. Fall back to the same
-    # blue-chip basket already used as the Market watchlist's default
-    # (app/api/v1/market.py's DEFAULT_TICKERS). A stated sector with no
-    # exact tickers is left alone — silently substituting this basket
-    # would ignore what the user actually asked for (ASII/TLKM aren't
-    # bank stocks); optimizer_node's existing no-tickers gate is more
-    # honest than a default that quietly answers a different question.
     if (
         decision.intent in (Intent.ALLOCATE_STOCKS, Intent.ALLOCATE_CAPITAL)
         and not needs_clarification
         and not entities.get("tickers")
-        and not entities.get("sector")
     ):
-        entities = {**entities, "tickers": DEFAULT_ALLOCATION_TICKERS}
+        sectors = _extract_sectors(entities)
+        if sectors:
+            # A stated sector ("bank atau telco gitu") resolves to that
+            # sector's real constituents — NOT the generic blue-chip basket
+            # below, which would ignore what the user actually asked for
+            # (ASII/TLKM aren't bank stocks). Without this, Layer 0's stocks
+            # leg falls back to the baseline stand-in (engine.py's
+            # `effective_stock_score`), producing an uninformative
+            # baseline-vs-baseline 50/50 split no matter the user's request.
+            sector_tickers: list[str] = []
+            for s in sectors:
+                for t in sector_to_tickers(s):
+                    if t not in sector_tickers:
+                        sector_tickers.append(t)
+            if sector_tickers:
+                entities = {**entities, "tickers": sector_tickers}
+        else:
+            # "rekomendasi investasi untuk dana 20 juta" names no ticker AND
+            # no sector — a genuine recommendation request, not something to
+            # bounce back asking the user to name a stock. Fall back to the
+            # same blue-chip basket already used as the Market watchlist's
+            # default (app/api/v1/market.py's DEFAULT_TICKERS).
+            entities = {**entities, "tickers": DEFAULT_ALLOCATION_TICKERS}
 
     update: dict[str, Any] = {
         "intent": decision.intent.value,

@@ -167,7 +167,7 @@ export default function BusinessDetailPage() {
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
           Tambah / Perbarui Data Tahunan
         </h2>
-        <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-xl">
+        <div className="rounded-xl bg-card p-6 space-y-4 ring-1 ring-foreground/10">
           <div className="grid grid-cols-4 gap-4">
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Tahun</label>

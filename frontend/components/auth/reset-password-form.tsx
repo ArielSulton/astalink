@@ -20,11 +20,11 @@ import {
 
 const resetPasswordSchema = z
   .object({
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    password: z.string().min(6, "Password minimal 6 karakter"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
+    message: "Password tidak cocok",
     path: ["confirmPassword"],
   });
 

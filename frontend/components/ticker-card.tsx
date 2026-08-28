@@ -21,7 +21,7 @@ function Sparkline({ series, isUp }: { series: number[]; isUp: boolean }) {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
-  const color = isUp ? "#4ade80" : "#f87171";
+  const color = isUp ? "var(--color-chart-2)" : "var(--color-destructive)";
   const gradId = `spark-${isUp ? "up" : "down"}`;
 
   return (
@@ -63,9 +63,9 @@ export function TickerCard({
 
   const badgeClass =
     rsiLabel === "OB"
-      ? "text-rose-400 bg-rose-500/10 border border-rose-500/20"
+      ? "text-destructive bg-destructive/10 border border-destructive/20"
       : rsiLabel === "OS"
-      ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20"
+      ? "text-chart-2 bg-chart-2/10 border border-chart-2/20"
       : "text-muted-foreground bg-secondary border border-border";
 
   const sparkSeries = (series ?? []).filter((v): v is number => v != null).slice(-30);
@@ -74,10 +74,10 @@ export function TickerCard({
     <button
       onClick={onClick}
       type="button"
-      className={`rounded-2xl p-4 pb-3 text-left w-full transition-all duration-200 border ${
+      className={`rounded-xl p-4 pb-3 text-left w-full transition-all duration-200 ring-1 ${
         selected
-          ? "border-chart-2/60 bg-chart-2/[0.08] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.45)] ring-1 ring-chart-2/20"
-          : "border-border bg-card hover:border-border/80 hover:bg-secondary/40"
+          ? "ring-chart-2/60 bg-chart-2/[0.08]"
+          : "ring-foreground/10 bg-card hover:ring-foreground/20 hover:bg-secondary/40"
       }`}
     >
       <div className="flex items-center justify-between">
@@ -96,8 +96,9 @@ export function TickerCard({
         )}
       </div>
       <div
-        className="font-mono text-xs mt-1.5 flex items-center gap-1 font-medium"
-        style={{ color: isUp ? "#4ade80" : "#f87171" }}
+        className={`font-mono text-xs mt-1.5 flex items-center gap-1 font-medium ${
+          isUp ? "text-chart-2" : "text-destructive"
+        }`}
       >
         <span>{isUp ? "▲" : "▼"}</span>
         <span>

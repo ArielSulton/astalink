@@ -38,7 +38,7 @@ function BindingContent() {
 
   if (!code) {
     return (
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+      <div className="bg-card rounded-xl p-6 ring-1 ring-foreground/10">
         <p className="text-sm text-muted-foreground">
           Belum ada permintaan koneksi nomor WhatsApp. Kirim pesan ke bot AstaLink di
           WhatsApp untuk mendapatkan link koneksi.
@@ -49,25 +49,25 @@ function BindingContent() {
 
   if (status === "success") {
     return (
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-4">
-        <p className="text-sm p-3.5 rounded-xl border text-emerald-400 bg-emerald-500/5 border-emerald-500/15">
+      <div className="bg-card rounded-xl p-6 ring-1 ring-foreground/10 space-y-4">
+        <p className="text-sm p-3.5 rounded-xl border text-chart-2 bg-chart-2/5 border-chart-2/15">
           Nomor WhatsApp berhasil terhubung ke workspace {currentWorkspace?.name ?? ""}.
         </p>
         <Link href="/settings" className="text-sm text-chart-2 underline underline-offset-4">
-          Kembali ke Settings
+          Kembali ke Pengaturan
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-5">
+    <div className="bg-card rounded-xl p-6 ring-1 ring-foreground/10 space-y-5">
       <p className="text-sm text-foreground">
         Nomor WhatsApp Anda akan terhubung ke workspace:{" "}
         <span className="font-semibold text-chart-2">{currentWorkspace?.name ?? "…"}</span>
       </p>
       {errorMsg && (
-        <p className="text-xs p-3.5 rounded-xl border text-rose-400 bg-rose-500/5 border-rose-500/15">
+        <p className="text-xs p-3.5 rounded-xl border text-destructive bg-destructive/5 border-destructive/15">
           {errorMsg}
         </p>
       )}
@@ -85,7 +85,7 @@ function BindingContent() {
 export default function WhatsAppSettingsPage() {
   return (
     <main className="p-8 max-w-xl w-full mx-auto bg-background min-h-screen text-foreground space-y-6">
-      <PageHeader eyebrow="Integrations" title="WhatsApp" />
+      <PageHeader eyebrow="Integrasi" title="WhatsApp" />
       <Suspense fallback={<div className="text-sm text-muted-foreground">Memuat…</div>}>
         <BindingContent />
       </Suspense>

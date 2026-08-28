@@ -11,7 +11,7 @@ interface StatCardProps {
 
 export function StatCard({ label, value, icon: Icon, hint, className }: StatCardProps) {
   return (
-    <div className={cn("rounded-2xl border border-border bg-card p-5", className)}>
+    <div className={cn("rounded-xl bg-card p-5 ring-1 ring-foreground/10", className)}>
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
           {label}

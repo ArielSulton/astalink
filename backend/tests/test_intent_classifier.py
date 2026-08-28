@@ -84,11 +84,11 @@ def test_intent_node_returns_state_update_with_intent_and_entities() -> None:
     from app.agents.state import new_state
 
     state = new_state()
-    state["messages"] = [HumanMessage(content="Alokasikan 10 juta ke saham bank")]
+    state["messages"] = [HumanMessage(content="Alokasikan 10 juta ke BBCA")]
 
     fake_decision = IntentDecision(
         intent=Intent.ALLOCATE_STOCKS,
-        entities={"amount": 10_000_000, "sector": "bank"},
+        entities={"amount": 10_000_000, "tickers": ["BBCA"]},
         confidence=0.92,
     )
     fake_chain = MagicMock()
@@ -99,7 +99,7 @@ def test_intent_node_returns_state_update_with_intent_and_entities() -> None:
         update = intent_node(state)
 
     assert update["intent"] == Intent.ALLOCATE_STOCKS.value
-    assert update["entities"] == {"amount": 10_000_000, "sector": "bank"}
+    assert update["entities"] == {"amount": 10_000_000, "tickers": ["BBCA"]}
     record.assert_called_once()
 
 
@@ -133,12 +133,15 @@ def test_intent_node_defaults_to_blue_chip_basket_when_no_ticker_or_sector_named
     assert update["entities"]["amount"] == 20_000_000
 
 
-def test_intent_node_does_not_override_sector_with_default_basket() -> None:
-    """A stated sector with no exact tickers must NOT get the generic
-    blue-chip basket silently substituted in — ASII/TLKM aren't bank
-    stocks, so that would quietly ignore what the user actually asked
-    for. Better to fall through to optimizer_node's existing
-    no-tickers-to-work-with gate than answer a different question."""
+def test_intent_node_resolves_stated_sector_to_matching_tickers() -> None:
+    """A stated sector ("bank atau telco gitu") must resolve to that
+    sector's real constituents (BBCA/BMRI/... for "bank"), NOT the generic
+    blue-chip basket — ASII/TLKM aren't bank stocks, so that basket would
+    quietly ignore what the user actually asked for. Regression coverage:
+    previously this case left `entities["tickers"]` empty entirely, which
+    made prescreen_stock_score short-circuit to (None, None) and Layer 0
+    fall back to the baseline stand-in for the stocks leg — producing an
+    uninformative baseline-vs-baseline 50/50 split no matter the request."""
     from app.agents.intent.node import intent_node
     from app.agents.intent.schemas import IntentDecision
     from app.agents.intents import Intent
@@ -151,6 +154,71 @@ def test_intent_node_does_not_override_sector_with_default_basket() -> None:
         intent=Intent.ALLOCATE_STOCKS,
         entities={"amount": 10_000_000, "sector": "bank"},
         confidence=0.92,
+    )
+    fake_chain = MagicMock()
+    fake_chain.invoke.return_value = fake_decision
+
+    with patch("app.agents.intent.node._build_chain", return_value=fake_chain), \
+         patch("app.agents.intent.node._record_audit"):
+        update = intent_node(state)
+
+    tickers = update["entities"]["tickers"]
+    assert tickers, "expected 'bank' to resolve to real bank tickers"
+    assert set(tickers) <= {"BBCA", "BMRI", "BBNI", "BBRI", "BBTN", "BRIS"}
+    assert "ASII" not in tickers and "TLKM" not in tickers
+
+
+def test_intent_node_resolves_sectors_list_key_and_merges_across_sectors() -> None:
+    """Live-observed shape: the intent LLM extracted {"sectors": ["banking",
+    "telecommunications"]} (plural, list) for "bank atau telco gitu", not
+    {"sector": "..."} — the entities dict is unconstrained free-form, so both
+    shapes must resolve. Multiple stated sectors merge into one ticker list."""
+    from app.agents.intent.node import intent_node
+    from app.agents.intent.schemas import IntentDecision
+    from app.agents.intents import Intent
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["messages"] = [HumanMessage(
+        content="Mau investasi 50 juta ke saham IDX. Saya pemula, mau yang "
+                "aman dulu aja — bank atau telco gitu.")]
+
+    fake_decision = IntentDecision(
+        intent=Intent.ALLOCATE_STOCKS,
+        entities={"amount": 50_000_000, "risk_profile": "conservative",
+                  "sectors": ["banking", "telecommunications"]},
+        confidence=0.9,
+    )
+    fake_chain = MagicMock()
+    fake_chain.invoke.return_value = fake_decision
+
+    with patch("app.agents.intent.node._build_chain", return_value=fake_chain), \
+         patch("app.agents.intent.node._record_audit"):
+        update = intent_node(state)
+
+    tickers = update["entities"]["tickers"]
+    assert tickers
+    assert {"BBCA", "BMRI", "BBNI", "BBRI"} & set(tickers), "expected banking tickers"
+    assert {"TLKM", "EXCL", "ISAT", "FREN"} & set(tickers), "expected telco tickers"
+
+
+def test_intent_node_leaves_unrecognized_sector_without_tickers() -> None:
+    """A sector string we can't map to real constituents must NOT fall back
+    to the generic blue-chip basket either — same "don't quietly answer a
+    different question" rule, just for the unmapped case. Falls through to
+    optimizer_node's existing no-tickers-to-work-with gate instead."""
+    from app.agents.intent.node import intent_node
+    from app.agents.intent.schemas import IntentDecision
+    from app.agents.intents import Intent
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["messages"] = [HumanMessage(content="alokasikan 10 juta ke saham perkebunan")]
+
+    fake_decision = IntentDecision(
+        intent=Intent.ALLOCATE_STOCKS,
+        entities={"amount": 10_000_000, "sector": "perkebunan"},
+        confidence=0.9,
     )
     fake_chain = MagicMock()
     fake_chain.invoke.return_value = fake_decision

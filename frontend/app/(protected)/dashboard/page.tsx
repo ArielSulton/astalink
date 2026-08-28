@@ -110,14 +110,15 @@ function AiComposer({
             }
           }}
           placeholder="Tanya apa saja, atau minta analisis alokasi…"
-          className="w-full rounded-xl border border-border bg-secondary pl-3.5 pr-12 py-3 text-foreground text-sm resize-none focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200 placeholder:text-muted-foreground/50"
+          aria-label="Tanya AI atau minta analisis alokasi"
+          className="w-full rounded-xl border border-border bg-secondary pl-3.5 pr-14 py-3 text-foreground text-sm resize-none focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200 placeholder:text-muted-foreground/50"
           rows={2}
         />
         <button
           onClick={onRun}
           disabled={loading || !message.trim()}
           aria-label={loading ? "Menganalisis" : "Kirim perintah"}
-          className="absolute bottom-2.5 right-2.5 flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+          className="absolute bottom-2 right-2 flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
         >
           {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
         </button>
@@ -141,7 +142,7 @@ function fmtSigned(n: number | null | undefined): string {
 }
 
 function MiniStat({ label, value, tone }: { label: string; value: string; tone?: number | null }) {
-  const toneClass = tone == null ? "text-foreground" : tone >= 0 ? "text-emerald-400" : "text-rose-400";
+  const toneClass = tone == null ? "text-foreground" : tone >= 0 ? "text-chart-2" : "text-destructive";
   return (
     <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
       <p className="text-[9px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1">
@@ -398,7 +399,7 @@ function AiResultView({
                 type="button"
                 disabled={resuming}
                 onClick={() => respondToComposition("approved")}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
               >
                 {resuming ? "Memproses…" : "Setuju, Lanjutkan Analisis Saham"}
               </button>
@@ -436,10 +437,10 @@ function AiResultView({
         <>
           <Separator className="bg-border" />
           <div className="space-y-2">
-            <p className="text-xs font-bold text-rose-400 uppercase tracking-wider font-mono">Error Log</p>
-            <div className="space-y-1 bg-rose-500/5 border border-rose-500/10 rounded-xl p-3.5">
+            <p className="text-xs font-bold text-destructive uppercase tracking-wider font-mono">Error Log</p>
+            <div className="space-y-1 bg-destructive/5 border border-destructive/10 rounded-xl p-3.5">
               {result.errors.map((e, i) => (
-                <p key={i} className="text-xs text-rose-400 font-mono break-words">
+                <p key={i} className="text-xs text-destructive font-mono break-words">
                   [{e.node}] {e.reason}
                 </p>
               ))}
@@ -451,12 +452,12 @@ function AiResultView({
       {allocated && (
         <>
           <Separator className="bg-border" />
-          <div className="flex items-start gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3.5 py-2.5">
-            <CheckCircle2 className="size-4 shrink-0 text-emerald-400 mt-0.5" />
-            <p className="text-xs leading-relaxed text-emerald-300">
+          <div className="flex items-start gap-2 rounded-xl border border-chart-2/25 bg-chart-2/[0.06] px-3.5 py-2.5">
+            <CheckCircle2 className="size-4 shrink-0 text-chart-2 mt-0.5" />
+            <p className="text-xs leading-relaxed text-chart-2">
               Dana dari rekomendasi ini sudah dialokasikan — transaksi tercatat dan
               posisi diperbarui.{" "}
-              <Link href="/portfolio" className="underline underline-offset-2 hover:text-emerald-200">
+              <Link href="/portfolio" className="underline underline-offset-2 hover:text-chart-2">
                 Lihat portofolio
               </Link>
             </p>
@@ -476,7 +477,7 @@ function AiResultView({
               type="button"
               disabled={!workspaceId}
               onClick={() => setBuyOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
             >
               <PlusCircle className="h-4 w-4" />
               Setujui &amp; Alokasikan Dana
@@ -786,7 +787,7 @@ export default function DashboardPage() {
 
         {/* Market Watch Header */}
         <div className="border-b border-border px-6 py-5 bg-card/40">
-          <PageHeader eyebrow="Market Watch" title="IDX Blue Chips" className="mb-5">
+          <PageHeader eyebrow="Pantauan Pasar" title="IDX Blue Chips" className="mb-5">
             {cashBalance != null && (
               <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-1.5 animate-fade-in">
                 <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25">

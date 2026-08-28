@@ -67,7 +67,7 @@ export default function BusinessListPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Bisnis Saya" title="List Bisnis" />
+      <PageHeader eyebrow="Bisnis Saya" title="Daftar Bisnis" />
 
       <section className="space-y-3">
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
@@ -133,7 +133,7 @@ export default function BusinessListPage() {
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
           Tambah Bisnis Baru
         </h2>
-        <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-xl">
+        <div className="rounded-xl bg-card p-6 space-y-4 ring-1 ring-foreground/10">
           <div>
             <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Nama Bisnis</label>
             <input

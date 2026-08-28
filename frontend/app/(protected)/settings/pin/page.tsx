@@ -32,9 +32,9 @@ export default function PinSettings() {
 
   return (
     <main className="p-8 max-w-xl w-full mx-auto bg-background min-h-screen text-foreground space-y-6">
-      <PageHeader eyebrow="Security Settings" title="PIN Persetujuan" />
+      <PageHeader eyebrow="Keamanan" title="PIN Persetujuan" />
 
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-5">
+      <div className="bg-card rounded-xl p-6 ring-1 ring-foreground/10 space-y-5">
         <div>
           <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">PIN Baru (6-8 digit)</label>
           <input
@@ -64,8 +64,8 @@ export default function PinSettings() {
         {msg && (
           <p className={`text-xs p-3.5 rounded-xl border ${
             msg === "PIN berhasil disimpan."
-              ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/15"
-              : "text-rose-400 bg-rose-500/5 border-rose-500/15"
+              ? "text-chart-2 bg-chart-2/5 border-chart-2/15"
+              : "text-destructive bg-destructive/5 border-destructive/15"
           }`}>
             {msg}
           </p>

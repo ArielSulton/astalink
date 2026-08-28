@@ -1,17 +1,21 @@
 "use client";
 
+// Every color here routes through the project's real 5-step chart-1..chart-5
+// green ramp (see DESIGN.md) instead of inventing off-ramp shades — a ticker
+// beyond the four named slots cycles back through the same ramp rather than
+// picking a new hue.
 const TICKER_COLORS: Record<string, { solid: string; gradient: string }> = {
-  "BBCA.JK": { solid: "#22c55e", gradient: "from-green-500 to-green-400" },
-  "TLKM.JK": { solid: "#86efac", gradient: "from-green-300 to-green-200" },
-  "ASII.JK": { solid: "#16a34a", gradient: "from-green-600 to-green-500" },
-  "BBRI.JK": { solid: "#4ade80", gradient: "from-green-400 to-green-300" },
+  "BBCA.JK": { solid: "var(--color-chart-2)", gradient: "from-chart-2 to-chart-2/40" },
+  "TLKM.JK": { solid: "var(--color-chart-1)", gradient: "from-chart-1 to-chart-1/40" },
+  "ASII.JK": { solid: "var(--color-chart-3)", gradient: "from-chart-3 to-chart-3/40" },
+  "BBRI.JK": { solid: "var(--color-chart-4)", gradient: "from-chart-4 to-chart-4/40" },
 };
 
 const FALLBACK_COLORS: { solid: string; gradient: string }[] = [
-  { solid: "#15803d", gradient: "from-green-700 to-green-600" },
-  { solid: "#bbf7d0", gradient: "from-green-200 to-green-100" },
-  { solid: "#a3a3a3", gradient: "from-neutral-400 to-neutral-300" },
-  { solid: "#166534", gradient: "from-green-800 to-green-700" },
+  { solid: "var(--color-chart-5)", gradient: "from-chart-5 to-chart-5/40" },
+  { solid: "var(--color-chart-2)", gradient: "from-chart-2 to-chart-2/40" },
+  { solid: "var(--color-chart-1)", gradient: "from-chart-1 to-chart-1/40" },
+  { solid: "var(--color-chart-3)", gradient: "from-chart-3 to-chart-3/40" },
 ];
 
 function colorFor(ticker: string, index: number) {

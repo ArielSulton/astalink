@@ -11,7 +11,7 @@ import {
 import type { DevilsAdvocateFinding, Layer0Result, QualitySubScore, VetoFlag } from "@/lib/api-client";
 
 const SEVERITY_STYLES: Record<DevilsAdvocateFinding["severity"], string> = {
-  critical: "text-rose-400 bg-rose-500/10 border-rose-500/30",
+  critical: "text-destructive bg-destructive/10 border-destructive/30",
   warning: "text-amber-400 bg-amber-500/10 border-amber-500/30",
   info: "text-sky-400 bg-sky-500/10 border-sky-500/30",
 };
@@ -27,13 +27,13 @@ export function VetoPanel({ flags }: { flags: VetoFlag[] }) {
           className={cn(
             "flex items-start gap-2 rounded-lg border px-3 py-2.5",
             f.hard
-              ? "border-rose-500/50 bg-rose-500/10"
+              ? "border-destructive/50 bg-destructive/10"
               : "border-amber-500/40 bg-amber-500/5",
           )}
         >
-          <ShieldAlert className={cn("h-4 w-4 mt-0.5 shrink-0", f.hard ? "text-rose-400" : "text-amber-400")} />
+          <ShieldAlert className={cn("h-4 w-4 mt-0.5 shrink-0", f.hard ? "text-destructive" : "text-amber-400")} />
           <div>
-            <p className={cn("text-[10px] font-black font-mono uppercase tracking-wider", f.hard ? "text-rose-400" : "text-amber-400")}>
+            <p className={cn("text-[10px] font-black font-mono uppercase tracking-wider", f.hard ? "text-destructive" : "text-amber-400")}>
               {f.hard ? "VETO KERAS" : "PERINGATAN"} · {f.code}
             </p>
             <p className="text-xs text-foreground mt-0.5">{f.reason}</p>
@@ -50,7 +50,7 @@ function QualityRow({ sub }: { sub: QualitySubScore }) {
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 rounded border border-border px-3 py-2 hover:bg-secondary/50">
         <span className="text-xs font-mono font-bold">{sub.code} · {sub.label}</span>
         <span className="flex items-center gap-2">
-          <span className={cn("text-sm font-mono font-bold", sub.score === null && "text-rose-400")}>
+          <span className={cn("text-sm font-mono font-bold", sub.score === null && "text-destructive")}>
             {sub.score === null ? "UNKNOWN" : `${sub.score.toFixed(0)}/100`}
           </span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -63,9 +63,9 @@ function QualityRow({ sub }: { sub: QualitySubScore }) {
               <span
                 className={cn(
                   "px-1.5 rounded font-mono font-bold text-[9px] border",
-                  c.passed === true && "text-emerald-400 border-emerald-500/30",
-                  c.passed === false && "text-rose-400 border-rose-500/30",
-                  c.passed === null && "text-rose-400 border-rose-500/30 border-dashed",
+                  c.passed === true && "text-chart-2 border-chart-2/30",
+                  c.passed === false && "text-destructive border-destructive/30",
+                  c.passed === null && "text-destructive border-destructive/30 border-dashed",
                 )}
               >
                 {c.passed === true ? "PASS" : c.passed === false ? "FAIL" : "UNKNOWN"}
@@ -86,8 +86,8 @@ export function BusinessPanel({ layer0 }: { layer0: Layer0Result }) {
       <VetoPanel flags={layer0.veto_flags} />
 
       {layer0.rejected_reasons.length > 0 && (
-        <div className="rounded-lg border border-rose-500/40 bg-rose-500/5 px-3 py-2.5">
-          <p className="text-[10px] font-black font-mono uppercase tracking-wider text-rose-400 mb-1">
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5">
+          <p className="text-[10px] font-black font-mono uppercase tracking-wider text-destructive mb-1">
             Hard reject (STEP 2)
           </p>
           <ul className="space-y-0.5 pl-4 list-disc text-xs text-foreground">

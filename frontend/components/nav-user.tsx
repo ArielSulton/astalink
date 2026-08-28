@@ -98,7 +98,7 @@ export function NavUser() {
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => router.push("/settings")}>
                 <SettingsIcon />
-                Settings
+                Pengaturan
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push("/settings/pin")}>
                 <KeyRoundIcon />
@@ -108,7 +108,7 @@ export function NavUser() {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOutIcon />
-              Log out
+              Keluar
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

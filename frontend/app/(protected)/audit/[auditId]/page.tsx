@@ -37,7 +37,7 @@ export default function AuditDetailPage() {
   if (fetchError) {
     return (
       <main className="p-8 max-w-3xl mx-auto bg-background min-h-screen text-foreground space-y-4">
-        <div className="bg-card border border-rose-500/20 rounded-2xl p-8 text-center text-sm text-rose-400">
+        <div className="bg-card rounded-xl ring-1 ring-destructive/20 p-8 text-center text-sm text-destructive">
           Gagal memuat jejak audit: {fetchError.startsWith("404") ? "tidak ditemukan atau bukan milik Anda." : fetchError}
         </div>
         <Link
@@ -64,12 +64,12 @@ export default function AuditDetailPage() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground space-y-5">
-      <PageHeader eyebrow="Decision Trace" title={`Audit #${auditId.slice(0, 8)}…`}>
+      <PageHeader eyebrow="Jejak Keputusan" title={`Audit #${auditId.slice(0, 8)}…`}>
         <StatusBadge status={detail.status} />
       </PageHeader>
 
       {/* 1 — Intent */}
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+      <section className="bg-card rounded-xl p-6 ring-1 ring-foreground/10">
         <div className="flex items-center gap-2 mb-2">
           <Target className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Permintaan</h2>
@@ -78,7 +78,7 @@ export default function AuditDetailPage() {
       </section>
 
       {/* 2 — Alokasi */}
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+      <section className="bg-card rounded-xl p-6 ring-1 ring-foreground/10">
         <div className="flex items-center gap-2 mb-4">
           <ShieldCheck className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Alokasi</h2>
@@ -92,7 +92,7 @@ export default function AuditDetailPage() {
       </section>
 
       {/* 3 — Legal */}
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-4">
+      <section className="bg-card rounded-xl p-6 ring-1 ring-foreground/10 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3 border-b border-border pb-4">
           <div className="flex items-center gap-2">
             <Scale className="h-5 w-5 text-chart-2" />
@@ -126,7 +126,7 @@ export default function AuditDetailPage() {
       </section>
 
       {/* 4 — Transaksi */}
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+      <section className="bg-card rounded-xl p-6 ring-1 ring-foreground/10">
         <div className="flex items-center gap-2 mb-4">
           <Receipt className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Transaksi</h2>

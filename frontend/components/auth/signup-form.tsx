@@ -18,12 +18,12 @@ import {
 
 const signupSchema = z
   .object({
-    email: z.email({ message: "Invalid email address" }),
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    email: z.email({ message: "Email tidak valid" }),
+    password: z.string().min(6, "Password minimal 6 karakter"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
+    message: "Password tidak cocok",
     path: ["confirmPassword"],
   });
 
@@ -56,7 +56,7 @@ export function SignupForm() {
   if (success) {
     return (
       <p className="text-center text-sm text-muted-foreground">
-        Check your email for a confirmation link.
+        Periksa email Anda untuk tautan konfirmasi.
       </p>
     );
   }
@@ -95,7 +95,7 @@ export function SignupForm() {
           name="confirmPassword"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Confirm Password</FormLabel>
+              <FormLabel>Konfirmasi Password</FormLabel>
               <FormControl>
                 <Input placeholder="••••••••" type="password" {...field} />
               </FormControl>
@@ -105,7 +105,7 @@ export function SignupForm() {
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Creating account..." : "Create Account"}
+          {loading ? "Membuat akun…" : "Buat Akun"}
         </Button>
       </form>
     </Form>

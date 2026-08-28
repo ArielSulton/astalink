@@ -13,9 +13,9 @@ const SENTIMENT_ICON: Record<NewsArticle["sentiment"], React.ReactNode> = {
 };
 
 const SENTIMENT_CLASS: Record<NewsArticle["sentiment"], string> = {
-  positive: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20 uppercase tracking-wider text-[9px] font-bold",
+  positive: "text-chart-2 bg-chart-2/10 border-chart-2/20 uppercase tracking-wider text-[9px] font-bold",
   neutral: "text-muted-foreground bg-secondary border-border uppercase tracking-wider text-[9px] font-bold",
-  negative: "text-rose-400 bg-rose-500/10 border-rose-500/20 uppercase tracking-wider text-[9px] font-bold",
+  negative: "text-destructive bg-destructive/10 border-destructive/20 uppercase tracking-wider text-[9px] font-bold",
 };
 
 export default function NewsPage() {
@@ -36,7 +36,7 @@ export default function NewsPage() {
   return (
     <div className="p-8 space-y-6 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
       {/* Header + ticker pills */}
-      <PageHeader eyebrow="Market Sentiment" title="Market News" className="border-b border-border pb-5">
+      <PageHeader eyebrow="Sentimen Pasar" title="Berita Pasar" className="border-b border-border pb-5">
         <div className="flex gap-1.5 bg-secondary p-1 border border-border rounded-xl">
           {TICKERS.map((t) => (
             <button
@@ -57,13 +57,13 @@ export default function NewsPage() {
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 rounded-2xl bg-card animate-pulse border border-border" />
+            <div key={i} className="h-24 rounded-xl bg-card animate-pulse ring-1 ring-foreground/10" />
           ))}
         </div>
       )}
 
       {!loading && news && news.articles.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground bg-card border border-border rounded-2xl p-6">
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground bg-card rounded-xl ring-1 ring-foreground/10 p-6">
           <Newspaper className="h-10 w-10 text-chart-2/75" />
           <p className="text-sm text-center leading-relaxed max-w-sm">
             Tidak ada berita untuk <span className="font-bold text-foreground">{selectedTicker.replace(".JK", "")}</span>.
@@ -80,7 +80,7 @@ export default function NewsPage() {
           {news.articles.map((article, i) => (
             <article
               key={i}
-              className="rounded-2xl border border-border bg-card hover:border-border/60 hover:bg-secondary/30 p-5 space-y-3 transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between"
+              className="rounded-xl bg-card ring-1 ring-foreground/10 hover:ring-foreground/20 hover:bg-secondary/30 p-5 space-y-3 transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between"
             >
               <div className="flex items-start justify-between gap-4">
                 <p className="text-sm text-foreground font-bold leading-normal flex-1">

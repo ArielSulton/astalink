@@ -13,6 +13,7 @@ import {
   History,
   LayoutDashboard,
   Newspaper,
+  PieChart,
   Receipt,
   Scale,
   Settings,
@@ -57,43 +58,46 @@ function isVisible(item: NavItem, isAdmin: boolean): boolean {
 
 const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
   {
-    label: "Portfolio",
+    label: "Utama",
+    items: [{ href: "/dashboard", label: "Dasbor", icon: LayoutDashboard }],
+  },
+  {
+    label: "Portofolio",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      // "Alokasi Modal" (/allocation) intentionally dropped from nav — its
-      // analysis overlaps almost entirely with the chat's Layer 0 report.
-      // Route + API stay live for backward compatibility (direct links,
-      // bookmarks); just not surfaced as a first-class page anymore.
-      { href: "/chatbot", label: "AI Chatbot", icon: Bot },
+      // Restored per /impeccable critique (2026-08-27): the Layer 0 allocation
+      // gate is the product's own headline differentiator and was previously
+      // reachable only via deep link or chat — undiscoverable from nav.
+      { href: "/allocation", label: "Alokasi Modal", icon: PieChart },
+      { href: "/chatbot", label: "Chatbot AI", icon: Bot },
       { href: "/portfolio", label: "Portofolio", icon: Wallet },
-      { href: "/transactions", label: "Transactions", icon: Receipt },
+      { href: "/transactions", label: "Transaksi", icon: Receipt },
     ],
   },
   {
-    label: "Compliance",
+    label: "Kepatuhan",
     items: [
-      { href: "/legal-docs", label: "Legal Docs", icon: Scale },
-      { href: "/approvals", label: "Approvals", icon: ClipboardCheck },
-      { href: "/audit", label: "Audit Trail", icon: History },
-      { href: "/news", label: "Market News", icon: Newspaper },
+      { href: "/legal-docs", label: "Dokumen Legal", icon: Scale },
+      { href: "/approvals", label: "Persetujuan", icon: ClipboardCheck },
+      { href: "/audit", label: "Jejak Audit", icon: History },
+      { href: "/news", label: "Berita Pasar", icon: Newspaper },
     ],
   },
   {
-    label: "Business",
+    label: "Bisnis",
     items: [
       {
         label: "Bisnis Saya",
         icon: Building2,
         children: [
-          { href: "/business", label: "List Bisnis" },
+          { href: "/business", label: "Daftar Bisnis" },
           { href: "/business/detail", label: "Detail Bisnis" },
         ],
       },
     ],
   },
   {
-    label: "System",
-    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+    label: "Sistem",
+    items: [{ href: "/settings", label: "Pengaturan", icon: Settings }],
   },
 ];
 

@@ -100,7 +100,7 @@ export function AllocationBuyModal({
       >
         <div>
           <h2 className="font-bold text-lg tracking-tight text-foreground flex items-center gap-2">
-            <PlusCircle className="h-5 w-5 text-emerald-400" />
+            <PlusCircle className="h-5 w-5 text-chart-2" />
             Alokasikan Dana Ke Portofolio
           </h2>
           <p className="text-muted-foreground text-xs mt-0.5">
@@ -124,7 +124,7 @@ export function AllocationBuyModal({
                 onClick={() => setSelectedTicker(t)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
                   selectedTicker === t
-                    ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                    ? "bg-chart-2/20 border-chart-2 text-chart-2"
                     : "bg-secondary border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -137,7 +137,7 @@ export function AllocationBuyModal({
             value={selectedTicker}
             onChange={(e) => setSelectedTicker(e.target.value.toUpperCase())}
             placeholder="Ketik ticker custom, misal: BBCA"
-            className="w-full font-mono uppercase font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all text-xs"
+            className="w-full font-mono uppercase font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all text-xs"
           />
         </div>
 
@@ -150,7 +150,7 @@ export function AllocationBuyModal({
             value={amountStr}
             onChange={(e) => setAmountStr(e.target.value)}
             placeholder="Nominal alokasi dalam Rp"
-            className="w-full font-mono font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all text-xs mb-2"
+            className="w-full font-mono font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all text-xs mb-2"
           />
           <div className="flex items-center gap-2 flex-wrap">
             {presetAmounts.map((p) => (
@@ -167,12 +167,12 @@ export function AllocationBuyModal({
         </div>
 
         {amountNum > availableCash && !fetchingCash && (
-          <p className="text-xs text-rose-400 font-medium">
+          <p className="text-xs text-destructive font-medium">
             ⚠ Nominal alokasi melebihi saldo kas yang tersedia.
           </p>
         )}
 
-        {error && <p className="text-xs text-rose-400 font-medium">{error}</p>}
+        {error && <p className="text-xs text-destructive font-medium">{error}</p>}
 
         <div className="flex gap-3 pt-2">
           <button
@@ -186,7 +186,7 @@ export function AllocationBuyModal({
             type="button"
             disabled={!valid || loading || fetchingCash}
             onClick={() => { setPinError(null); setPinOpen(true); }}
-            className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
+            className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
           >
             {loading ? "Mengalokasikan…" : "Alokasikan Dana"}
           </button>

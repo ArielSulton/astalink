@@ -200,11 +200,11 @@ export default function IntakePage({ params }: { params: Promise<{ businessId: s
 
   return (
     <div className="space-y-6 p-6">
-      <PageHeader eyebrow="B0 — Business Intake" title="Profil Intake Bisnis">
+      <PageHeader eyebrow="B0 — Pendataan Bisnis" title="Profil Intake Bisnis">
         <div className="flex items-center gap-3">
           <span className="text-xs font-mono text-muted-foreground">
             Kelengkapan: <b className="text-foreground">{(completeness * 100).toFixed(0)}%</b>
-            {completeness < 0.4 && <span className="text-rose-400"> (&lt;40% → INSUFFICIENT)</span>}
+            {completeness < 0.4 && <span className="text-destructive"> (&lt;40% → INSUFFICIENT)</span>}
           </span>
           <Button variant="outline" size="sm" render={<Link href="/allocation" />}>
             <ArrowLeft className="h-4 w-4 mr-1" />Kembali
@@ -227,10 +227,11 @@ export default function IntakePage({ params }: { params: Promise<{ businessId: s
             {block.fields.map((f) => {
               const field = profile[block.key]?.[f.key];
               const tag = (field?.evidence ?? "unknown") as EvidenceTag;
+              const fieldId = `${block.key}-${f.key}`;
               return (
                 <div key={f.key} className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <label className="text-[11px] font-medium">{f.label}</label>
+                    <label htmlFor={fieldId} className="text-[11px] font-medium">{f.label}</label>
                     <div className="flex items-center gap-1.5">
                       <EvidenceBadge tag={tag} />
                       <select
@@ -245,6 +246,7 @@ export default function IntakePage({ params }: { params: Promise<{ businessId: s
                   </div>
                   {f.kind === "bool" || f.kind === "select" ? (
                     <select
+                      id={fieldId}
                       value={displayValue(f.kind, field)}
                       onChange={(e) => update(block.key, f.key, { value: serializeValue(f.kind, e.target.value) })}
                       className="h-8 w-full rounded border border-border bg-background px-2 text-xs"
@@ -256,6 +258,7 @@ export default function IntakePage({ params }: { params: Promise<{ businessId: s
                     </select>
                   ) : f.kind === "breakdown" ? (
                     <textarea
+                      id={fieldId}
                       defaultValue={displayValue(f.kind, field)}
                       onBlur={(e) => update(block.key, f.key, { value: serializeValue(f.kind, e.target.value) })}
                       placeholder={f.hint}
@@ -264,6 +267,7 @@ export default function IntakePage({ params }: { params: Promise<{ businessId: s
                     />
                   ) : (
                     <input
+                      id={fieldId}
                       defaultValue={displayValue(f.kind, field)}
                       onBlur={(e) => update(block.key, f.key, { value: serializeValue(f.kind, e.target.value) })}
                       placeholder={f.hint ?? (f.kind === "number" ? "0" : "")}

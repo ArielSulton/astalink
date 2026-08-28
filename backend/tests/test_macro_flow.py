@@ -31,6 +31,27 @@ def test_insufficient_data_is_none_not_neutral():
     assert any("tidak cukup" in d for d in res.detail)
 
 
+def test_rising_us_yield_is_negative_fed_signal():
+    ihsg = np.linspace(6000, 7500, 250)
+    fx = np.linspace(16500, 15500, 250)
+    fed = np.linspace(4.0, 4.8, 250)   # US 10Y yield rising 0.8pt
+    res = compute_macro_score(ihsg, fx, fed)
+    assert res.fed_signal is not None and res.fed_signal < 0
+
+
+def test_falling_us_yield_is_positive_fed_signal():
+    ihsg = np.linspace(6000, 7500, 250)
+    fx = np.linspace(16500, 15500, 250)
+    fed = np.linspace(4.8, 4.0, 250)   # US 10Y yield falling 0.8pt
+    res = compute_macro_score(ihsg, fx, fed)
+    assert res.fed_signal is not None and res.fed_signal > 0
+
+
+def test_fed_signal_omitted_when_not_provided():
+    res = compute_macro_score(np.linspace(6000, 7500, 250), np.linspace(16500, 15500, 250))
+    assert res.fed_signal is None
+
+
 # --- A4 flow ---
 
 def _ohlcv(closes: np.ndarray, volumes: np.ndarray):

@@ -52,7 +52,7 @@ export default function TransactionsPage() {
 
   return (
     <main className="p-8 max-w-5xl mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Execution & Allocation Ledger" title="Riwayat Transaksi" className="mb-8" />
+      <PageHeader eyebrow="Eksekusi & Alokasi" title="Riwayat Transaksi" className="mb-8" />
 
       {!workspaceId && (
         <EmptyState icon={Receipt} title="Pilih Workspace">
@@ -73,7 +73,7 @@ export default function TransactionsPage() {
       )}
 
       {workspaceId && items.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xl">
+        <div className="rounded-xl bg-card overflow-hidden ring-1 ring-foreground/10">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -112,8 +112,8 @@ export default function TransactionsPage() {
                         <span
                           className={`inline-flex px-2.5 py-0.5 rounded-md text-[10px] font-bold font-mono uppercase tracking-wider border ${
                             isBuy
-                              ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                              : "text-rose-400 bg-rose-500/10 border-rose-500/20"
+                              ? "text-chart-2 bg-chart-2/10 border-chart-2/20"
+                              : "text-destructive bg-destructive/10 border-destructive/20"
                           }`}
                         >
                           {isBuy ? "BELI / ALOKASI" : "JUAL"}

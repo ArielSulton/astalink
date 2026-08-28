@@ -113,8 +113,11 @@ def run_layer0(
     business_hard_rejected = bool(rejected_reasons)
 
     # ---------- STEP 3 (stocks leg) ----------
-    # Until Layer 1 has run, the boring index baseline stands in as the
-    # stock proxy — Layer 1 refines it afterwards, never the reverse.
+    # Callers (allocation/node.py, api/v1/allocation.py) run the A1-A4
+    # engine and pass its aggregate score in as `stock_score` BEFORE calling
+    # this function — the split must not be decided on a proxy when a real
+    # read is available. The baseline stand-in only applies when there are
+    # no tickers to analyze at all (pure business/cash question).
     effective_stock_score = stock_score if stock_score is not None else baseline
 
     # ---------- STEP 5: allocation ----------

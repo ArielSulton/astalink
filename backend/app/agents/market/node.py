@@ -81,6 +81,21 @@ def market_node(state: AgentState) -> AgentState:
     # allocation intents). Verdict REJECT/AVOID tickers are excluded from the
     # optimizer via eligible_tickers.
     if state.get("layer0_result"):
+        # l0_allocation already runs the A1-A4 engine before deciding the
+        # split (its "saham" leg needs a real score, not the baseline
+        # stand-in) — reuse that result instead of paying for it twice.
+        # Guarded by an exact ticker-set match, not mere presence: entities
+        # persists across turns on a long-lived WhatsApp thread (see the
+        # stale-entities regression test), so a precomputed stock_engine for
+        # a *different* ticker set must fall through to a fresh recompute
+        # below, same as if nothing had been precomputed at all.
+        precomputed = entities.get("stock_engine")
+        if precomputed is not None and tickers \
+                and set(precomputed.get("verdicts", {})) == set(tickers):
+            update["stock_engine"] = precomputed
+            update["eligible_tickers"] = entities.get("eligible_tickers")
+            return {"entities": {**entities, **update}}
+
         from app.agents.market.stock_engine import run_stock_engine
 
         try:

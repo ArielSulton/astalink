@@ -70,7 +70,7 @@ export default function LegalDocsPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Regulations" title="Legal Documents" />
+      <PageHeader eyebrow="Regulasi" title="Dokumen Legal" />
 
       {/* ── Indexed docs ── */}
       <section className="space-y-3">
@@ -90,7 +90,7 @@ export default function LegalDocsPage() {
         )}
 
         {!docsLoading && docsError && (
-          <p className="text-xs text-rose-400 p-4 rounded-xl border border-rose-500/10 bg-rose-500/5">
+          <p className="text-xs text-destructive p-4 rounded-xl border border-destructive/10 bg-destructive/5">
             Gagal memuat daftar dokumen. Coba muat ulang halaman.
           </p>
         )}
@@ -143,7 +143,7 @@ export default function LegalDocsPage() {
           Unggah Dokumen Mandiri
         </h2>
 
-        <div className="rounded-2xl border border-border bg-card p-6 space-y-5 shadow-xl">
+        <div className="rounded-xl bg-card p-6 space-y-5 ring-1 ring-foreground/10">
           <div>
             <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">File PDF</label>
             <div
@@ -191,12 +191,12 @@ export default function LegalDocsPage() {
           </div>
 
           {uploadError && (
-            <p className="text-xs text-rose-400 p-3.5 rounded-xl bg-rose-500/5 border border-rose-500/10">
+            <p className="text-xs text-destructive p-3.5 rounded-xl bg-destructive/5 border border-destructive/10">
               {uploadError}
             </p>
           )}
           {uploadSuccess && (
-            <p className="text-xs text-emerald-400 p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+            <p className="text-xs text-chart-2 p-3.5 rounded-xl bg-chart-2/5 border border-chart-2/10">
               Dokumen berhasil diunggah dan diindeks ke BM25.
             </p>
           )}

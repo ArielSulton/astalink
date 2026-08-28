@@ -75,7 +75,7 @@ export default function InvestorProfilePage() {
 
   return (
     <div className="space-y-6 p-6">
-      <PageHeader eyebrow="L0-2 — Personal Constraints" title="Profil Investor">
+      <PageHeader eyebrow="L0-2 — Batasan Personal" title="Profil Investor">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" render={<Link href="/allocation" />}>
             <ArrowLeft className="h-4 w-4 mr-1" />Kembali

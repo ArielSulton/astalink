@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
+import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 
 function idr(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -23,7 +24,7 @@ function signed(n: number | null | undefined): string {
 
 function pnlClass(n: number | null | undefined): string {
   if (n == null) return "text-muted-foreground";
-  return n >= 0 ? "text-emerald-400" : "text-rose-400";
+  return n >= 0 ? "text-chart-2" : "text-destructive";
 }
 
 export default function PortfolioPage() {
@@ -67,12 +68,12 @@ export default function PortfolioPage() {
   return (
     <div className="p-8 space-y-6 max-w-6xl w-full mx-auto bg-background min-h-screen text-foreground">
       <PageHeader
-        eyebrow="Sandbox Portfolio & Allocation"
+        eyebrow="Sandbox Portofolio & Alokasi"
         title="Portofolio Investasi"
         className="border-b border-border pb-5"
       >
         {workspaceId && (
-          <Button onClick={() => handleOpenBuy()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+          <Button onClick={() => handleOpenBuy()} className="font-semibold">
             <PlusCircle className="h-4 w-4 mr-2" />
             Alokasikan Dana / Beli Saham
           </Button>
@@ -89,10 +90,10 @@ export default function PortfolioPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded-2xl bg-card animate-pulse border border-border" />
+              <div key={i} className="h-28 rounded-xl bg-card animate-pulse ring-1 ring-foreground/10" />
             ))}
           </div>
-          <div className="h-64 rounded-2xl bg-card animate-pulse border border-border" />
+          <div className="h-64 rounded-xl bg-card animate-pulse ring-1 ring-foreground/10" />
         </div>
       )}
 
@@ -106,12 +107,12 @@ export default function PortfolioPage() {
             <StatCard label="Unrealized P&L" value={signed(data.total_unrealized_pnl)}
               icon={TrendingUp} hint="Selisih nilai pasar vs modal awal"
               className={data.total_unrealized_pnl != null && data.total_unrealized_pnl < 0
-                ? "border-rose-500/20" : ""} />
+                ? "border-destructive/20" : ""} />
             <StatCard label="Realized P&L" value={signed(data.total_realized_pnl)}
               icon={Wallet} hint="Akumulasi hasil penjualan" />
           </div>
 
-          <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xl">
+          <div className="rounded-xl bg-card overflow-hidden ring-1 ring-foreground/10">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
                 Rincian Kepemilikan & Kinerja Investasi
@@ -177,9 +178,9 @@ export default function PortfolioPage() {
                             <div className={`inline-flex flex-col items-end ${pnlClass(h.unrealized_pnl)}`}>
                               <span className="font-mono tabular-nums font-bold flex items-center gap-1 text-sm">
                                 {isGain ? (
-                                  <ArrowUpRight className="h-4 w-4 shrink-0 text-emerald-400" />
+                                  <ArrowUpRight className="h-4 w-4 shrink-0 text-chart-2" />
                                 ) : (
-                                  <ArrowDownRight className="h-4 w-4 shrink-0 text-rose-400" />
+                                  <ArrowDownRight className="h-4 w-4 shrink-0 text-destructive" />
                                 )}
                                 {pct != null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%` : "—"}
                               </span>
@@ -192,13 +193,13 @@ export default function PortfolioPage() {
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleOpenBuy(h.ticker)}
-                                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-chart-2/30 text-chart-2 hover:bg-chart-2/10 transition-all"
                               >
                                 Tambah
                               </button>
                               <button
                                 onClick={() => setSelling(h)}
-                                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-all"
+                                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-all"
                               >
                                 Jual
                               </button>
@@ -221,12 +222,11 @@ export default function PortfolioPage() {
       )}
 
       {buying && (
-        <BuyModal
+        <AllocationBuyModal
           workspaceId={workspaceId!}
-          initialTicker={buyTicker}
-          availableCash={data?.cash_balance ?? 0}
+          suggestedTickers={buyTicker ? [buyTicker] : []}
           onClose={() => setBuying(false)}
-          onBought={() => { setBuying(false); load(); }}
+          onSuccess={() => { setBuying(false); load(); }}
         />
       )}
 
@@ -238,142 +238,6 @@ export default function PortfolioPage() {
           onSold={() => { setSelling(null); load(); }}
         />
       )}
-    </div>
-  );
-}
-
-function BuyModal({
-  workspaceId, initialTicker, availableCash, onClose, onBought,
-}: {
-  workspaceId: string;
-  initialTicker: string;
-  availableCash: number;
-  onClose: () => void;
-  onBought: () => void;
-}) {
-  const [ticker, setTicker] = useState(initialTicker);
-  const [amountStr, setAmountStr] = useState<string>("10000000"); // default 10 Juta
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const amountNum = Number(amountStr);
-  const valid = ticker.trim().length >= 3 && amountNum > 0 && amountNum <= availableCash;
-
-  const presetAmounts = [
-    { label: "5 Juta", val: 5000000 },
-    { label: "10 Juta", val: 10000000 },
-    { label: "25 Juta", val: 25000000 },
-    { label: "50 Juta", val: 50000000 },
-  ];
-
-  async function submit() {
-    if (!valid) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-
-      const res = await api.buyHolding(
-        workspaceId,
-        { ticker: ticker.toUpperCase().trim(), amount: amountNum },
-        session.access_token,
-      );
-
-      toast.success(
-        `Berhasil mengalokasikan ${idr(res.allocated_amount)} ke ${res.ticker}! Saldo kas tersisa: ${idr(res.cash_balance)}`,
-      );
-      onBought();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Gagal melakukan alokasi dana.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        className="bg-glass border border-border shadow-[0_20px_60px_rgba(0,0,0,0.5)] rounded-2xl p-6 w-full max-w-md backdrop-blur-xl relative z-10 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div>
-          <h2 className="text-foreground font-bold text-lg tracking-tight">
-            Alokasikan Dana Ke Saham
-          </h2>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Saldo Kas Tersedia: <strong className="text-foreground font-mono">{idr(availableCash)}</strong>
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-            Kode Saham (Ticker)
-          </label>
-          <input
-            type="text"
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value.toUpperCase())}
-            placeholder="Contoh: BBCA, TLKM, ASII, BBRI"
-            className="w-full font-mono uppercase font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all"
-          />
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-            Nominal Alokasi (Rupiah)
-          </label>
-          <input
-            type="number"
-            value={amountStr}
-            onChange={(e) => setAmountStr(e.target.value)}
-            placeholder="Nominal alokasi dalam Rp"
-            className="w-full font-mono font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all mb-2"
-          />
-          <div className="flex items-center gap-2 flex-wrap">
-            {presetAmounts.map((p) => (
-              <button
-                key={p.val}
-                type="button"
-                onClick={() => setAmountStr(String(p.val))}
-                className="text-[11px] font-mono px-2.5 py-1 rounded-lg border border-border bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {amountNum > availableCash && (
-          <p className="text-xs text-rose-400 font-medium">
-            ⚠ Nominal alokasi melebihi saldo kas yang tersedia.
-          </p>
-        )}
-
-        {error && <p className="text-xs text-rose-400 font-medium">{error}</p>}
-
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 transition-all"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            disabled={!valid || loading}
-            onClick={submit}
-            className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
-          >
-            {loading ? "Mengalokasikan…" : "Alokasikan Dana"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -472,7 +336,7 @@ function SellModal({
           className="w-full text-center tracking-[0.6em] font-mono font-bold bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground/50 placeholder:tracking-normal focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all"
           placeholder="••••••"
         />
-        {error && <p className="text-xs text-rose-400 mt-2 font-medium">{error}</p>}
+        {error && <p className="text-xs text-destructive mt-2 font-medium">{error}</p>}
 
         <div className="flex gap-3 mt-5">
           <button
@@ -484,7 +348,7 @@ function SellModal({
           <button
             disabled={!valid || loading}
             onClick={submit}
-            className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-500/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
+            className="flex-1 py-2.5 rounded-xl bg-destructive text-white text-sm font-semibold hover:bg-destructive/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all"
           >
             {loading ? "Menjual…" : "Jual"}
           </button>

@@ -11,18 +11,18 @@ import {
 import type { StockVerdict } from "@/lib/api-client";
 
 const BAND_STYLES: Record<StockVerdict["band"], { label: string; cls: string }> = {
-  strong_buy: { label: "STRONG BUY", cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-  buy: { label: "BUY", cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
+  strong_buy: { label: "STRONG BUY", cls: "text-chart-2 bg-chart-2/10 border-chart-2/30" },
+  buy: { label: "BUY", cls: "text-chart-2 bg-chart-2/10 border-chart-2/30" },
   watchlist: { label: "WATCHLIST", cls: "text-amber-400 bg-amber-500/10 border-amber-500/30" },
-  avoid: { label: "AVOID", cls: "text-rose-400 bg-rose-500/10 border-rose-500/30" },
-  reject: { label: "REJECT", cls: "text-rose-400 bg-rose-500/20 border-rose-500/50" },
+  avoid: { label: "AVOID", cls: "text-destructive bg-destructive/10 border-destructive/30" },
+  reject: { label: "REJECT", cls: "text-destructive bg-destructive/20 border-destructive/50" },
   no_verdict: { label: "NO VERDICT", cls: "text-muted-foreground bg-secondary border-border border-dashed" },
 };
 
 // A gate is not a score — render it as a distinct PASS/FAIL/CONDITIONAL chip.
 const GATE_STYLES: Record<string, string> = {
-  pass: "text-emerald-400 border-emerald-500/40",
-  fail: "text-rose-400 border-rose-500/40",
+  pass: "text-chart-2 border-chart-2/40",
+  fail: "text-destructive border-destructive/40",
   conditional: "text-amber-400 border-amber-500/40",
 };
 
@@ -42,7 +42,7 @@ export function StockVerdictCard({ verdict }: { verdict: StockVerdict }) {
           <CardTitle className="font-mono text-lg">{verdict.ticker}</CardTitle>
           <div className="flex items-center gap-2">
             {verdict.manipulation_risk !== "low" && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono border text-rose-400 bg-rose-500/15 border-rose-500/40">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono border text-destructive bg-destructive/15 border-destructive/40">
                 <AlertTriangle className="h-3 w-3" />
                 MANIPULASI: {verdict.manipulation_risk.toUpperCase()}
               </span>
@@ -73,7 +73,7 @@ export function StockVerdictCard({ verdict }: { verdict: StockVerdict }) {
           {Object.entries(verdict.components).map(([key, value]) => (
             <div key={key} className="rounded border border-border px-2 py-1.5">
               <p className="text-[10px] text-muted-foreground font-mono">{COMPONENT_LABELS[key] ?? key}</p>
-              <p className={cn("text-sm font-mono font-bold", value === null && "text-rose-400")}>
+              <p className={cn("text-sm font-mono font-bold", value === null && "text-destructive")}>
                 {value === null ? "UNKNOWN" : value.toFixed(0)}
               </p>
             </div>

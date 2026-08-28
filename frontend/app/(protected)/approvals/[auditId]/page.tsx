@@ -62,7 +62,7 @@ export default function ApprovalDetailPage() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
     try {
-      await api.reject(auditId, "User rejected", session.access_token);
+      await api.reject(auditId, "Ditolak oleh pengguna", session.access_token);
       router.push("/approvals");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menolak");
@@ -72,7 +72,7 @@ export default function ApprovalDetailPage() {
   if (fetchError) {
     return (
       <main className="p-8 max-w-3xl mx-auto bg-background min-h-screen text-foreground space-y-4">
-        <div className="bg-card border border-rose-500/20 rounded-2xl p-8 text-center text-sm text-rose-400">
+        <div className="bg-card rounded-xl ring-1 ring-destructive/20 p-8 text-center text-sm text-destructive">
           Gagal memuat detail approval: {fetchError.includes("404") ? "Data approval tidak ditemukan atau sudah kadaluarsa." : fetchError}
         </div>
         <Link
@@ -107,10 +107,10 @@ export default function ApprovalDetailPage() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground space-y-5">
-      <PageHeader eyebrow="Review Request" title={`Approval #${auditId.slice(0, 8)}…`} />
+      <PageHeader eyebrow="Tinjau Permintaan" title={`Persetujuan #${auditId.slice(0, 8)}…`} />
 
       {/* ── Proposed Allocation ── */}
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+      <section className="bg-card rounded-xl p-6 ring-1 ring-foreground/10">
         <div className="flex items-center gap-2 mb-4">
           <ShieldCheck className="h-5 w-5 text-chart-2" />
           <h2 className="text-foreground font-bold text-base tracking-tight">Alokasi yang diusulkan</h2>
@@ -124,7 +124,7 @@ export default function ApprovalDetailPage() {
       </section>
 
       {/* ── Regulatory Compliance ── */}
-      <section className="bg-card border border-border rounded-2xl p-6 shadow-xl space-y-4">
+      <section className="bg-card rounded-xl p-6 ring-1 ring-foreground/10 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3 border-b border-border pb-4">
           <div className="flex items-center gap-2">
             <Scale className="h-5 w-5 text-chart-2" />
@@ -163,12 +163,21 @@ export default function ApprovalDetailPage() {
 
       {/* ── Actions ── */}
       {allocated ? (
-        <div className="flex items-start gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3.5 py-3 text-sm text-emerald-300">
+        <div className="flex items-start gap-2 rounded-xl border border-chart-2/25 bg-chart-2/[0.06] px-3.5 py-3 text-sm text-chart-2">
           Dana dari rekomendasi ini sudah dialokasikan — transaksi tercatat dan posisi
           diperbarui.{" "}
-          <Link href="/portfolio" className="underline underline-offset-2 hover:text-emerald-200">
+          <Link href="/portfolio" className="underline underline-offset-2 hover:text-chart-2">
             Lihat portofolio
           </Link>
+        </div>
+      ) : isRejected ? (
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-3.5 py-3 text-sm text-destructive">
+          Rekomendasi ini ditolak oleh pemeriksaan kepatuhan dan tidak bisa dieksekusi dalam
+          bentuk ini — lihat sitasi hukum di atas untuk alasannya.{" "}
+          <Link href="/chatbot" className="underline underline-offset-2 hover:text-destructive">
+            Minta analisis baru di chat
+          </Link>{" "}
+          dengan target atau batasan yang disesuaikan.
         </div>
       ) : (
         <p className="text-xs text-muted-foreground leading-relaxed bg-secondary border border-border rounded-xl p-3">
@@ -197,7 +206,7 @@ export default function ApprovalDetailPage() {
           <button
             onClick={() => setBuyOpen(true)}
             disabled={isRejected}
-            className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
+            className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
           >
             Setujui &amp; Alokasikan Dana
           </button>

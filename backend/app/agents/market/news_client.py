@@ -34,13 +34,72 @@ _cache: dict[str, tuple[float, list[NewsItem]]] = {}
 # NewsAPI's /everything does literal keyword matching against article text,
 # and real articles almost never spell out a raw ticker — searching "BBCA.JK"
 # returns 0 results, "BBCA" alone returns ~1-2, but the company name returns
-# hundreds. Cover the tickers AstaLink actually surfaces by default; anything
-# else falls back to the bare ticker code (suffix stripped).
+# hundreds. Worse, a bare ticker code can literally BE an unrelated word
+# ("GOTO" as in the programming keyword) and pull in garbage results — cover
+# every ticker in optimizer/sectors.py's demo universe (keep the two in sync
+# when either grows); anything outside both still falls back to the bare
+# ticker code (suffix stripped).
 _IDX_COMPANY_NAMES: dict[str, str] = {
+    # Banking
     "BBCA": "Bank Central Asia",
-    "TLKM": "Telkom Indonesia",
-    "ASII": "Astra International",
+    "BMRI": "Bank Mandiri",
+    "BBNI": "Bank Negara Indonesia",
     "BBRI": "Bank Rakyat Indonesia",
+    "BBTN": "Bank Tabungan Negara",
+    "BRIS": "Bank Syariah Indonesia",
+    # Tobacco
+    "GGRM": "Gudang Garam",
+    "HMSP": "HM Sampoerna",
+    "WIIM": "Wismilak Inti Makmur",
+    # Alcohol
+    "MLBI": "Multi Bintang Indonesia",
+    # Consumer / FMCG
+    "INDF": "Indofood Sukses Makmur",
+    "ICBP": "Indofood CBP Sukses Makmur",
+    "UNVR": "Unilever Indonesia",
+    "MYOR": "Mayora Indah",
+    "CPIN": "Charoen Pokphand Indonesia",
+    "JPFA": "Japfa Comfeed Indonesia",
+    "AMRT": "Sumber Alfaria Trijaya",
+    # Telco
+    "TLKM": "Telkom Indonesia",
+    "EXCL": "XL Axiata",
+    "ISAT": "Indosat Ooredoo Hutchison",
+    "FREN": "Smartfren Telecom",
+    # Mining & energy
+    "ANTM": "Aneka Tambang",
+    "PTBA": "Bukit Asam",
+    "ADRO": "Adaro Energy",
+    "ITMG": "Indo Tambangraya Megah",
+    "INCO": "Vale Indonesia",
+    "MDKA": "Merdeka Copper Gold",
+    "PGAS": "Perusahaan Gas Negara",
+    "MEDC": "Medco Energi Internasional",
+    # Basic materials (cement)
+    "SMGR": "Semen Indonesia",
+    "INTP": "Indocement Tunggal Prakarsa",
+    # Property & real estate
+    "BSDE": "Bumi Serpong Damai",
+    "CTRA": "Ciputra Development",
+    "PWON": "Pakuwon Jati",
+    "SMRA": "Summarecon Agung",
+    # Infrastructure & construction
+    "WIKA": "Wijaya Karya",
+    "WSKT": "Waskita Karya",
+    "PTPP": "Pembangunan Perumahan",
+    "JSMR": "Jasa Marga",
+    # Healthcare
+    "KLBF": "Kalbe Farma",
+    "SIDO": "Sido Muncul",
+    "MIKA": "Mitra Keluarga Karyasehat",
+    # Technology & media
+    "GOTO": "GoTo Gojek Tokopedia",
+    "BUKA": "Bukalapak",
+    "EMTK": "Elang Mahkota Teknologi",
+    "SCMA": "Surya Citra Media",
+    # Industrials / conglomerate
+    "ASII": "Astra International",
+    "MAPI": "Mitra Adiperkasa",
 }
 
 SENTIMENT_BATCH_SYSTEM = """\

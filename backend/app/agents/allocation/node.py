@@ -23,6 +23,7 @@ from app.agents.allocation.schemas import (
     Layer0Status,
 )
 from app.agents.intents import Intent
+from app.agents.market.stock_engine import prescreen_stock_score
 from app.agents.state import AgentState
 from app.core.metrics import track_node_duration
 from app.core.supabase_admin import get_admin_client
@@ -120,7 +121,25 @@ def layer0_node(state: AgentState) -> AgentState:
     else:
         investor = InvestorProfile()
 
-    result = run_layer0(investor, business_profile)
+    # STEP 3 (stocks leg): run the real A1-A4 engine BEFORE Layer 0 decides
+    # the split, so "saham" reflects actual market conditions instead of
+    # always falling back to the baseline stand-in (see engine.py's
+    # `effective_stock_score`). Only for allocation intents — EVALUATE_
+    # BUSINESS/RISK_REVIEW never reach this node.
+    stock_score = None
+    stock_engine_dump = None
+    eligible_tickers = None
+    if intent in ALLOCATION_INTENTS:
+        try:
+            amount = float(entities.get("amount") or 0) or None
+        except (TypeError, ValueError):
+            amount = None
+        stock_score, stock_engine_dump = prescreen_stock_score(
+            entities.get("tickers") or [], amount)
+        if stock_engine_dump is not None:
+            eligible_tickers = stock_engine_dump["eligible_tickers"]
+
+    result = run_layer0(investor, business_profile, stock_score=stock_score)
 
     update: AgentState = {
         "layer0_result": {
@@ -129,6 +148,11 @@ def layer0_node(state: AgentState) -> AgentState:
             "business_name": (business_row or {}).get("name"),
         },
     }
+    if stock_engine_dump is not None:
+        # Hand the already-computed result to n2a_market so it doesn't
+        # re-run the A1-A4 engine a second time for the same tickers.
+        update["entities"] = {**entities, "stock_engine": stock_engine_dump,
+                              "eligible_tickers": eligible_tickers}
 
     is_insufficient = result.status == Layer0Status.INSUFFICIENT_DATA
     if is_insufficient:

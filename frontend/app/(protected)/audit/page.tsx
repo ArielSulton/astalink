@@ -41,7 +41,7 @@ export default function AuditTrail() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Decision Ledger" title="Jejak Audit" className="mb-8" />
+      <PageHeader eyebrow="Riwayat Keputusan" title="Jejak Audit" className="mb-8" />
 
       {!workspaceId && (
         <EmptyState icon={History} title="Pilih Workspace">
@@ -50,13 +50,13 @@ export default function AuditTrail() {
       )}
 
       {workspaceId && fetchError && (
-        <div className="bg-card border border-rose-500/20 rounded-2xl p-8 text-center text-rose-400 text-sm">
+        <div className="bg-card rounded-xl ring-1 ring-destructive/20 p-8 text-center text-destructive text-sm">
           Gagal memuat jejak audit: {fetchError}
         </div>
       )}
 
       {workspaceId && !fetchError && loading && (
-        <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground text-sm">
+        <div className="bg-card rounded-xl ring-1 ring-foreground/10 p-8 text-center text-muted-foreground text-sm">
           <span className="inline-block w-2 h-2 rounded-full bg-primary animate-ping mr-2.5" />
           Memuat…
         </div>
@@ -78,7 +78,7 @@ export default function AuditTrail() {
             return (
               <li
                 key={it.audit_id}
-                className="flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-chart-2/30 hover:bg-chart-2/[0.04] transition-all duration-200"
+                className="flex items-center justify-between p-4 bg-card rounded-xl ring-1 ring-foreground/10 hover:ring-chart-2/30 hover:bg-chart-2/[0.04] transition-all duration-200"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className="w-10 h-10 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center shrink-0">

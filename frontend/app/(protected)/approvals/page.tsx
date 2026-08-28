@@ -36,7 +36,7 @@ export default function ApprovalsInbox() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground">
-      <PageHeader eyebrow="Verification Inbox" title="Pending Approvals" className="mb-8" />
+      <PageHeader eyebrow="Kotak Verifikasi" title="Menunggu Persetujuan" className="mb-8" />
 
       {!workspaceId && (
         <EmptyState icon={FileCheck2} title="Pilih Workspace">
@@ -63,7 +63,7 @@ export default function ApprovalsInbox() {
             return (
               <li
                 key={it.audit_id}
-                className="flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-chart-2/30 hover:bg-chart-2/[0.04] transition-all duration-200 group"
+                className="flex items-center justify-between p-4 bg-card rounded-xl ring-1 ring-foreground/10 hover:ring-chart-2/30 hover:bg-chart-2/[0.04] transition-all duration-200 group"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className="w-10 h-10 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center shrink-0">
@@ -82,7 +82,7 @@ export default function ApprovalsInbox() {
                   href={`/approvals/${it.audit_id}`}
                   className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-all duration-200"
                 >
-                  Review
+                  Tinjau
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </li>

@@ -6,10 +6,10 @@ import { PageHeader } from "@/components/ui/page-header";
 export default function SettingsPage() {
   return (
     <div className="p-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground space-y-6">
-      <PageHeader eyebrow="Preferences" title="Settings" />
+      <PageHeader eyebrow="Preferensi" title="Pengaturan" />
 
       <Link href="/settings/pin">
-        <div className="bg-card hover:bg-secondary border border-border hover:border-border/60 rounded-2xl p-5 flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group">
+        <div className="bg-card hover:bg-secondary rounded-xl ring-1 ring-foreground/10 hover:ring-foreground/20 p-5 flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group">
           <div className="flex items-center gap-4 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center text-chart-2 shrink-0 group-hover:scale-105 transition-all">
               <KeyRound className="h-5 w-5" />
@@ -24,7 +24,7 @@ export default function SettingsPage() {
       </Link>
 
       <Link href="/settings/whatsapp">
-        <div className="bg-card hover:bg-secondary border border-border hover:border-border/60 rounded-2xl p-5 flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group">
+        <div className="bg-card hover:bg-secondary rounded-xl ring-1 ring-foreground/10 hover:ring-foreground/20 p-5 flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group">
           <div className="flex items-center gap-4 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center text-chart-2 shrink-0 group-hover:scale-105 transition-all">
               <MessageCircle className="h-5 w-5" />

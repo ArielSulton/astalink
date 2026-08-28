@@ -87,16 +87,22 @@ class NewsCredibilityConfig:
 @dataclass(frozen=True)
 class MacroConfig:
     """A2 — macro & regulation (Indonesia/IDX). Rule-based signals from
-    index + FX trends; each component in [-1, 1], combined by weight into
-    a 0-100 score (50 = neutral)."""
+    index + FX trends + a US rates read; each component in [-1, 1], combined
+    by weight into a 0-100 score (50 = neutral)."""
     ihsg_symbol: str = "^JKSE"
     fx_symbol: str = "USDIDR=X"     # rising = rupiah weakening = negative
+    fed_symbol: str = "DGS10"       # FRED: US 10Y Treasury yield, daily
     trend_sma_days: int = 50
     momentum_lookback_days: int = 63    # ~3 months of trading days
-    ihsg_weight: float = 0.6
-    fx_weight: float = 0.4
+    # domestic price action (IHSG/FX) weighted higher — it's the direct
+    # read; the Fed signal is a secondary, leading cross-check
+    ihsg_weight: float = 0.5
+    fx_weight: float = 0.3
+    fed_weight: float = 0.2
     # momentum saturates at ±this 3-month move
     momentum_saturation_pct: float = 0.10
+    # US 10Y yield saturates at ±this 3-month change, in percentage points
+    fed_saturation_pts: float = 0.5
 
 
 # --------------------------------------------------------------------------

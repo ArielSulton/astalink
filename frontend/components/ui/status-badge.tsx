@@ -1,19 +1,19 @@
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLES: Record<string, string> = {
-  approved: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  acknowledged: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  completed: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  filled: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  positive: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  approved: "text-chart-2 bg-chart-2/10 border-chart-2/20",
+  acknowledged: "text-chart-2 bg-chart-2/10 border-chart-2/20",
+  completed: "text-chart-2 bg-chart-2/10 border-chart-2/20",
+  filled: "text-chart-2 bg-chart-2/10 border-chart-2/20",
+  positive: "text-chart-2 bg-chart-2/10 border-chart-2/20",
   partial: "text-amber-400 bg-amber-500/10 border-amber-500/20",
   awaiting_approval: "text-amber-400 bg-amber-500/10 border-amber-500/20",
   pending: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-  rejected: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-  rejected_after_max_revisions: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-  declined: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-  failed: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-  negative: "text-rose-400 bg-rose-500/10 border-rose-500/20",
+  rejected: "text-destructive bg-destructive/10 border-destructive/20",
+  rejected_after_max_revisions: "text-destructive bg-destructive/10 border-destructive/20",
+  declined: "text-destructive bg-destructive/10 border-destructive/20",
+  failed: "text-destructive bg-destructive/10 border-destructive/20",
+  negative: "text-destructive bg-destructive/10 border-destructive/20",
 };
 
 const NEUTRAL = "text-muted-foreground bg-secondary border-border";

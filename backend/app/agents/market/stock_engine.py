@@ -83,3 +83,32 @@ def run_stock_engine(
         "macro": macro.model_dump(),
         "as_of": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def prescreen_stock_score(
+    tickers: list[str], total_amount_idr: float | None = None,
+) -> tuple[float | None, dict | None]:
+    """Run the A1-A4 engine and reduce it to one 0-100 scalar Layer 0 can use
+    as its real "stocks leg" input (STEP 3) — this must run BEFORE Layer 0
+    decides the split, not after, otherwise Layer 0 falls back to the
+    baseline stand-in and never reflects actual market conditions.
+
+    Averages over every ticker with a known score (not just eligible ones):
+    if the whole universe is REJECT/AVOID, that IS the honest stock score —
+    silently falling back to baseline would hide the bad news instead of
+    surfacing it.
+
+    Returns (stock_score, engine_dump); both None when there are no tickers."""
+    from app.agents.market.news_client import fetch_news
+
+    if not tickers:
+        return None, None
+
+    engine = run_stock_engine(
+        tickers,
+        news_by_ticker={t: fetch_news(t) for t in tickers},
+        total_amount_idr=total_amount_idr,
+    )
+    scores = [v["score"] for v in engine["verdicts"].values() if v.get("score") is not None]
+    stock_score = sum(scores) / len(scores) if scores else None
+    return stock_score, engine

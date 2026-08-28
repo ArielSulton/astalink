@@ -26,7 +26,7 @@ export default function SignupPage() {
                     <span className="text-chart-2 text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
                   </div>
                 </div>
-                <h1 className="text-2xl font-bold">Create your account</h1>
+                <h1 className="text-2xl font-bold">Buat akun Anda</h1>
                 <p className="text-sm text-balance text-muted-foreground">
                   Mulai analisis portofolio IDX pertamamu dalam 2 menit
                 </p>
@@ -35,7 +35,7 @@ export default function SignupPage() {
               <p className="text-center text-sm text-muted-foreground">
                 Sudah punya akun?{" "}
                 <Link href="/login" className="underline underline-offset-4 hover:text-foreground">
-                  Sign in
+                  Masuk
                 </Link>
               </p>
             </div>

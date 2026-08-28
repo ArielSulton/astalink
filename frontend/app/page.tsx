@@ -24,16 +24,16 @@ const PIPELINE_STEPS = [
     icon: Brain,
     title: "Analisis Multi-Agen",
     body: "LangGraph AI pipeline memindai fundamental, teknikal, sentimen berita, dan risiko portofolio secara paralel — dalam hitungan detik.",
-    accent: "text-green-400",
-    iconBg: "bg-[#22c55e]/10 border-[#22c55e]/30",
+    accent: "text-chart-2",
+    iconBg: "bg-chart-2/10 border-chart-2/30",
   },
   {
     step: "02",
     icon: ShieldCheck,
     title: "Verifikasi OJK Otomatis",
     body: "Setiap rekomendasi divalidasi terhadap regulasi IDX dan OJK secara otomatis. Tidak ada celah kepatuhan, tidak ada risiko hukum.",
-    accent: "text-emerald-400",
-    iconBg: "bg-emerald-500/10 border-emerald-500/25",
+    accent: "text-chart-2",
+    iconBg: "bg-chart-2/10 border-chart-2/25",
   },
   {
     step: "03",
@@ -52,10 +52,10 @@ const CARD_CHECKS = [
 ] as const;
 
 const TRUST_CHIPS = [
-  { label: "AI Multi-Agen", cls: "border-[#22c55e]/40 bg-[#22c55e]/[0.08] text-green-400" },
-  { label: "OJK Verified", cls: "border-[#22c55e]/40 bg-[#22c55e]/[0.08] text-green-400" },
-  { label: "Human-in-Loop", cls: "border-[#22c55e]/40 bg-[#22c55e]/[0.08] text-green-400" },
-  { label: "PIN Konfirmasi", cls: "border-[#22c55e]/40 bg-[#22c55e]/[0.08] text-green-400" },
+  { label: "AI Multi-Agen", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
+  { label: "OJK Verified", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
+  { label: "Human-in-the-Loop", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
+  { label: "PIN Konfirmasi", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
 ] as const;
 
 const STATS = [
@@ -117,7 +117,7 @@ export default async function Home() {
                 href="/dashboard"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all duration-200"
               >
-                Dashboard
+                Dasbor
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
@@ -126,7 +126,7 @@ export default async function Home() {
                   href="/login"
                   className="hidden sm:block px-3.5 py-1.5 rounded-full text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150"
                 >
-                  Login
+                  Masuk
                 </Link>
                 <Link
                   href="/signup"
@@ -145,7 +145,7 @@ export default async function Home() {
       <section className="relative pt-32 pb-20 px-6 overflow-hidden">
         {/* Ambient orbs */}
         <div className="pointer-events-none absolute -top-24 left-1/4 w-[700px] h-[500px] rounded-full bg-chart-2/[0.07] blur-[130px]" />
-        <div className="pointer-events-none absolute top-32 right-8 w-[350px] h-[350px] rounded-full bg-emerald-500/[0.05] blur-[100px]" />
+        <div className="pointer-events-none absolute top-32 right-8 w-[350px] h-[350px] rounded-full bg-chart-2/[0.05] blur-[100px]" />
 
         <div className="relative mx-auto max-w-6xl">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-16 lg:gap-10 items-center">
@@ -154,8 +154,8 @@ export default async function Home() {
             <div className="max-w-[560px]">
               {/* Eyebrow */}
               <div className="flex flex-wrap items-center gap-2.5 mb-8">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/[0.07] text-emerald-400 text-[11px] font-semibold uppercase tracking-[0.15em]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-chart-2/30 bg-chart-2/[0.07] text-chart-2 text-[11px] font-semibold uppercase tracking-[0.15em]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-chart-2 animate-pulse" />
                   Teregulasi OJK
                 </span>
                 <span className="text-muted-foreground/60 text-[11px] font-mono">× IDX Compliance</span>
@@ -232,7 +232,7 @@ export default async function Home() {
                 <div className="absolute z-20 -bottom-4 -right-3 px-3.5 py-2.5 rounded-xl border border-border bg-background shadow-[0_12px_32px_-8px_rgba(0,0,0,0.18)]">
                   <div className="text-muted-foreground/70 text-[10px] font-mono mb-1 uppercase tracking-wider">Portfolio hari ini</div>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-emerald-400 font-mono font-bold text-sm">+2.4%</span>
+                    <span className="text-chart-2 font-mono font-bold text-sm">+2.4%</span>
                     <span className="text-muted-foreground/60 text-[10px] font-mono">↑ Rp 4.2jt</span>
                   </div>
                 </div>
@@ -243,16 +243,16 @@ export default async function Home() {
                   {/* Card header */}
                   <div className="px-5 py-4 border-b border-white/[0.07] flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-[#22c55e]/15 border border-[#22c55e]/30 flex items-center justify-center">
-                        <span className="text-[#22c55e] text-[9px] font-black font-mono">AI</span>
+                      <div className="w-7 h-7 rounded-lg bg-chart-2/15 border border-chart-2/30 flex items-center justify-center">
+                        <span className="text-chart-2 text-[9px] font-black font-mono">AI</span>
                       </div>
                       <div>
                         <div className="text-[#fafafa] font-semibold text-[13px] leading-none">Rekomendasi AI</div>
                         <div className="text-[#a1a1aa] text-[10px] mt-0.5 font-mono">LangGraph Pipeline</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <div className="flex items-center gap-1.5 text-[10px] text-chart-2 font-mono font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-chart-2 animate-pulse" />
                       Aktif
                     </div>
                   </div>
@@ -262,7 +262,7 @@ export default async function Home() {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold font-mono bg-chart-2/15 text-chart-2 border border-chart-2/25">
                             BUY
                           </span>
                           <span className="text-[#fafafa] font-mono font-bold text-[1.35rem] tracking-tight leading-none">
@@ -276,7 +276,7 @@ export default async function Home() {
                         </div>
                       </div>
                       {/* Sparkline */}
-                      <svg width="68" height="36" viewBox="0 0 68 36" className="text-emerald-400 opacity-75 shrink-0 mt-1">
+                      <svg width="68" height="36" viewBox="0 0 68 36" className="text-chart-2 opacity-75 shrink-0 mt-1">
                         <polyline
                           points="0,30 12,24 24,27 36,16 48,19 58,10 68,7"
                           fill="none"
@@ -293,12 +293,12 @@ export default async function Home() {
                       {CARD_CHECKS.map(([label, val]) => (
                         <div key={label} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
-                              <Checkmark className="w-2.5 h-2.5 text-emerald-400" />
+                            <div className="w-4 h-4 rounded-full bg-chart-2/15 flex items-center justify-center shrink-0">
+                              <Checkmark className="w-2.5 h-2.5 text-chart-2" />
                             </div>
                             <span className="text-[#a1a1aa] text-xs">{label}</span>
                           </div>
-                          <span className="text-emerald-400 text-xs font-medium">{val}</span>
+                          <span className="text-chart-2 text-xs font-medium">{val}</span>
                         </div>
                       ))}
                     </div>
@@ -306,14 +306,14 @@ export default async function Home() {
                     {/* Return */}
                     <div className="flex items-center justify-between py-1.5 border-t border-white/[0.06]">
                       <span className="text-[#a1a1aa] text-xs">Estimasi return (90 hari)</span>
-                      <span className="text-emerald-400 font-mono font-bold text-sm">+8.2%</span>
+                      <span className="text-chart-2 font-mono font-bold text-sm">+8.2%</span>
                     </div>
 
                     {/* Action buttons */}
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-colors cursor-default"
+                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-chart-2/15 border border-chart-2/30 text-chart-2 text-xs font-semibold hover:bg-chart-2/25 transition-colors cursor-default"
                       >
                         <svg className="w-3.5 h-3.5" viewBox="0 0 14 14" fill="none">
                           <path d="M2.5 7l3 3L11 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -360,7 +360,7 @@ export default async function Home() {
             >
               <span className="text-[#fafafa]/80 font-mono font-semibold text-[11px]">{sym}</span>
               <span className="text-[#a1a1aa] font-mono text-[11px]">{px}</span>
-              <span className={`font-mono text-[11px] font-semibold ${up ? "text-emerald-400" : "text-red-400"}`}>
+              <span className={`font-mono text-[11px] font-semibold ${up ? "text-chart-2" : "text-destructive"}`}>
                 {ch}
               </span>
             </div>
@@ -398,8 +398,8 @@ export default async function Home() {
                       aria-hidden
                       className={`hidden md:block h-px flex-1 -mr-10 bg-gradient-to-r ${
                         i === 0
-                          ? "from-green-500/40 to-emerald-500/40"
-                          : "from-emerald-500/40 to-stone-400/40"
+                          ? "from-chart-2/40 to-chart-2/40"
+                          : "from-chart-2/40 to-stone-400/40"
                       }`}
                     />
                   )}
@@ -480,10 +480,10 @@ export default async function Home() {
               Menu
             </p>
             <ul className="space-y-2.5 text-sm">
-              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dashboard</Link></li>
-              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">AI Chatbot</Link></li>
-              <li><Link href="/news" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Market News</Link></li>
-              <li><Link href="/legal-docs" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Legal Docs</Link></li>
+              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dasbor</Link></li>
+              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Chatbot AI</Link></li>
+              <li><Link href="/news" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Berita Pasar</Link></li>
+              <li><Link href="/legal-docs" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dokumen Legal</Link></li>
             </ul>
           </div>
 
@@ -493,7 +493,7 @@ export default async function Home() {
               Akun
             </p>
             <ul className="space-y-2.5 text-sm">
-              <li><Link href="/login" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Login</Link></li>
+              <li><Link href="/login" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Masuk</Link></li>
               <li><Link href="/signup" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Buat Akun Gratis</Link></li>
             </ul>
           </div>

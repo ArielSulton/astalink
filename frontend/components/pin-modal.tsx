@@ -43,20 +43,20 @@ export function PinModal({
           placeholder="••••••••"
           autoFocus
         />
-        {error && <p className="text-xs text-rose-400 mt-2 font-medium">{error}</p>}
+        {error && <p className="text-xs text-destructive mt-2 font-medium">{error}</p>}
         <div className="flex gap-3 mt-5">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 transition-all duration-200"
           >
-            Cancel
+            Batal
           </button>
           <button
             disabled={loading || pin.length < 6}
             onClick={handle}
             className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
           >
-            {loading ? "Verifying..." : "Approve"}
+            {loading ? "Memverifikasi…" : "Setujui"}
           </button>
         </div>
       </div>

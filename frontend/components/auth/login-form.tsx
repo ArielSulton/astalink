@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/form";
 
 const loginSchema = z.object({
-  email: z.email({ message: "Invalid email address" }),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z.email({ message: "Email tidak valid" }),
+  password: z.string().min(6, "Password minimal 6 karakter"),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -100,7 +100,7 @@ export function LoginForm() {
           className="w-full"
           disabled={loading}
         >
-          {loading ? "Signing in..." : "Sign In"}
+          {loading ? "Sedang masuk…" : "Masuk"}
         </Button>
       </form>
     </Form>

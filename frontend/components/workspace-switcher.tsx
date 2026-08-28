@@ -68,7 +68,7 @@ export function WorkspaceSwitcher() {
                   render={<button type="button" />}
                   onClick={() => { setWorkspaceId(w.id); setOpen(false); }}
                 >
-                  <span>{w.name} ({w.type === "personal" ? "Personal" : "Business"})</span>
+                  <span>{w.name} ({w.type === "personal" ? "Personal" : "Bisnis"})</span>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
             ))}
@@ -86,7 +86,7 @@ export function WorkspaceSwitcher() {
       </SidebarMenuItem>
 
       {creating && (
-        <div className="mx-2 mt-2 rounded-xl border border-border bg-card p-4 shadow-xl space-y-3">
+        <div className="mx-2 mt-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 space-y-3">
           <p className="text-xs font-bold text-foreground uppercase tracking-wider">Workspace Baru</p>
           <input
             autoFocus
@@ -107,7 +107,7 @@ export function WorkspaceSwitcher() {
                     : "bg-secondary text-muted-foreground border-border hover:border-border/60"
                 }`}
               >
-                {t === "personal" ? "Personal" : "Business"}
+                {t === "personal" ? "Personal" : "Bisnis"}
               </button>
             ))}
           </div>

@@ -6,7 +6,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "Login",
+  title: "Masuk",
   description: "Masuk ke Astalink AI untuk mengelola portofolio IDX kamu.",
 };
 
@@ -27,7 +27,7 @@ export default function LoginPage() {
                     <span className="text-chart-2 text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
                   </div>
                 </div>
-                <h1 className="text-2xl font-bold">Welcome back</h1>
+                <h1 className="text-2xl font-bold">Selamat datang kembali</h1>
                 <p className="text-sm text-balance text-muted-foreground">
                   Masuk untuk mengelola portofolio IDX Anda
                 </p>
@@ -38,7 +38,7 @@ export default function LoginPage() {
               <p className="text-center text-sm text-muted-foreground">
                 Belum punya akun?{" "}
                 <Link href="/signup" className="underline underline-offset-4 hover:text-foreground">
-                  Sign up
+                  Daftar
                 </Link>
               </p>
             </div>

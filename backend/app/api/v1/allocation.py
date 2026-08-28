@@ -2,10 +2,11 @@
 
 - intake profile CRUD (B0 schema, per business, evidence-tagged jsonb)
 - investor profile CRUD (L0-2 personal constraints, per workspace)
-- POST /analyze — runs the Layer 0 decision flow (and, when it allocates
-  >0% to stocks, the Layer 1 stock engine) synchronously for the UI.
-  This is the read/analysis path only: the execution path (optimizer →
-  legal → HITL → broker) still runs exclusively through the agent graph.
+- POST /analyze — runs the Layer 1 stock engine FIRST (when tickers are
+  given) so Layer 0's "saham" leg is a real score, then the Layer 0
+  decision flow, synchronously for the UI. This is the read/analysis path
+  only: the execution path (optimizer → legal → HITL → broker) still runs
+  exclusively through the agent graph.
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from pydantic import BaseModel, Field
 from app.agents.allocation.engine import run_layer0
 from app.agents.allocation.node import load_business_profile, load_investor_profile
 from app.agents.allocation.schemas import BusinessProfile, InvestorProfile
+from app.agents.market.stock_engine import prescreen_stock_score
 from app.api.deps import get_current_user
 from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
@@ -101,7 +103,8 @@ async def put_investor_profile(
 
 
 # --------------------------------------------------------------------------
-# Analyze (Layer 0 → Layer 1)
+# Analyze (Layer 1 → Layer 0): the A1-A4 engine runs first so Layer 0's
+# "saham" leg is a real score instead of the baseline stand-in.
 # --------------------------------------------------------------------------
 
 class AnalyzeRequest(BaseModel):
@@ -113,7 +116,7 @@ class AnalyzeRequest(BaseModel):
 
 class AnalyzeResponse(BaseModel):
     layer0: dict
-    stock_engine: dict | None = None   # None ⟺ Layer 1 was gated off
+    stock_engine: dict | None = None   # None only if the engine call errored
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -134,26 +137,19 @@ async def analyze(
             business_profile = BusinessProfile()
 
     investor = load_investor_profile(body.workspace_id)
-    result = run_layer0(investor, business_profile)
+
+    tickers = [t.upper() for t in (body.tickers or DEFAULT_TICKERS)]
+    try:
+        stock_score, engine = prescreen_stock_score(tickers, body.amount)
+    except Exception as exc:
+        log.error("allocation/analyze: stock engine failed: %s", exc)
+        stock_score, engine = None, None
+
+    result = run_layer0(investor, business_profile, stock_score=stock_score)
     layer0 = {
         **result.model_dump(),
         "business_id": (business_row or {}).get("id"),
         "business_name": (business_row or {}).get("name"),
     }
-
-    engine = None
-    if result.allocation is not None and result.allocation.stocks > 0:
-        from app.agents.market.news_client import fetch_news
-        from app.agents.market.stock_engine import run_stock_engine
-
-        tickers = [t.upper() for t in (body.tickers or DEFAULT_TICKERS)]
-        try:
-            engine = run_stock_engine(
-                tickers,
-                news_by_ticker={t: fetch_news(t) for t in tickers},
-                total_amount_idr=body.amount,
-            )
-        except Exception as exc:
-            log.error("allocation/analyze: stock engine failed: %s", exc)
 
     return AnalyzeResponse(layer0=layer0, stock_engine=engine)

@@ -18,15 +18,15 @@ import { api, type AnalyzeResponse, type Business } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 
 const TIER_LABELS: Record<string, { label: string; cls: string }> = {
-  insufficient: { label: "INSUFFICIENT", cls: "text-rose-400 border-rose-500/40" },
+  insufficient: { label: "INSUFFICIENT", cls: "text-destructive border-destructive/40" },
   partial: { label: "PARTIAL", cls: "text-amber-400 border-amber-500/40" },
-  ok: { label: "OK", cls: "text-emerald-400 border-emerald-500/40" },
+  ok: { label: "OK", cls: "text-chart-2 border-chart-2/40" },
 };
 
 const CONFIDENCE_CLS: Record<string, string> = {
-  LOW: "text-rose-400 border-rose-500/40",
+  LOW: "text-destructive border-destructive/40",
   MEDIUM: "text-amber-400 border-amber-500/40",
-  HIGH: "text-emerald-400 border-emerald-500/40",
+  HIGH: "text-chart-2 border-chart-2/40",
 };
 
 async function getToken(): Promise<string | null> {
@@ -78,7 +78,7 @@ export default function AllocationPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <PageHeader eyebrow="Layer 0 — Capital Allocation" title="Alokasi Modal">
+      <PageHeader eyebrow="Layer 0 — Gerbang Kelayakan" title="Alokasi Modal">
         <div className="flex items-center gap-2 flex-wrap">
           <select
             value={businessId}
@@ -150,7 +150,7 @@ export default function AllocationPage() {
                 Sistem ini memegang 100% data saham dan {(layer0.completeness * 100).toFixed(0)}% data bisnis Anda.
                 Kelengkapan data bukan kualitas aset. Jangan biarkan saham menang hanya karena datanya lebih rapi.
               </p>
-              <button onClick={() => setBiasDismissed(true)} aria-label="Tutup">
+              <button onClick={() => setBiasDismissed(true)} aria-label="Tutup" className="-m-2 shrink-0 rounded-md p-2 hover:bg-secondary transition-colors">
                 <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
               </button>
             </div>
@@ -180,7 +180,7 @@ export default function AllocationPage() {
             <CardContent className="space-y-4">
               <AllocationBar allocation={layer0.allocation} />
               <div className="flex gap-4 text-[11px] font-mono text-muted-foreground flex-wrap">
-                <span>Skor bisnis: <b className={cn("text-foreground", layer0.business_score === null && "text-rose-400")}>{layer0.business_score ?? "UNKNOWN"}</b></span>
+                <span>Skor bisnis: <b className={cn("text-foreground", layer0.business_score === null && "text-destructive")}>{layer0.business_score ?? "UNKNOWN"}</b></span>
                 <span>Skor saham: <b className="text-foreground">{layer0.stock_score ?? "—"}</b></span>
                 <span>Baseline (obligasi/indeks): <b className="text-foreground">{layer0.baseline_score ?? "—"}</b> — selalu tersedia</span>
               </div>
