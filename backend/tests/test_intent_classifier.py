@@ -385,3 +385,42 @@ def test_intent_node_replies_with_apology_instead_of_echoing_user_on_classificat
     last = new_messages[-1]
     assert isinstance(last, AIMessage)
     assert last.content != user_text, "must not echo the user's own message back"
+
+
+def test_intent_node_includes_prior_turns_so_follow_ups_have_context() -> None:
+    """Live incident: "kenapa bisnis nya 0%?" sent right after a report that
+    said exactly that ("Kenapa tidak 100% bisnis: Tidak ada bisnis yang
+    dievaluasi...") got classified with confidence < 0.6 and dead-ended at a
+    generic "saya kurang paham" clarification — n8_qa (which already knows
+    how to answer contextual follow-ups) never got a chance to run, because
+    intent_node classified the message in total isolation from the
+    conversation. The classifier call must include prior turns."""
+    from app.agents.intent.node import intent_node
+    from app.agents.intent.schemas import IntentDecision
+    from app.agents.intents import Intent
+    from app.agents.state import new_state
+    from langchain_core.messages import AIMessage
+
+    state = new_state()
+    state["messages"] = [
+        HumanMessage(content="Mau investasi 50 juta ke saham IDX, bank atau telco gitu."),
+        AIMessage(content="Layer 0: Kas 44%, Saham 56%, Bisnis 0%. Kenapa tidak 100% "
+                          "bisnis: Tidak ada bisnis yang dievaluasi dalam permintaan ini."),
+        HumanMessage(content="kenapa bisnis nya 0%?"),
+    ]
+
+    fake_decision = IntentDecision(
+        intent=Intent.EXPLAIN, entities={}, confidence=0.9,
+    )
+    fake_chain = MagicMock()
+    fake_chain.invoke.return_value = fake_decision
+
+    with patch("app.agents.intent.node._build_chain", return_value=fake_chain), \
+         patch("app.agents.intent.node._record_audit"):
+        intent_node(state)
+
+    sent_messages = fake_chain.invoke.call_args[0][0]
+    sent_texts = [m.content for m in sent_messages]
+    assert "kenapa bisnis nya 0%?" in sent_texts[-1]
+    assert any("Bisnis 0%" in t or "Tidak ada bisnis" in t for t in sent_texts[:-1]), \
+        "prior AI turn explaining the 0% must be included for the classifier to see"

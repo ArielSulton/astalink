@@ -9,7 +9,7 @@ import logging
 from functools import lru_cache
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from app.agents.intent.schemas import IntentDecision
 from app.agents.intents import Intent
@@ -23,6 +23,15 @@ from app.core.supabase_admin import get_admin_client
 log = logging.getLogger(__name__)
 
 CONFIDENCE_FLOOR = 0.6
+
+# Recent turns given to the classifier so it can recognize a genuine
+# follow-up ("kenapa bisnis nya 0%?" right after a report that said exactly
+# that) instead of scoring it low-confidence in isolation and dead-ending at
+# END before n8_qa (which already has its own, larger history window — see
+# qa.py's _MAX_HISTORY) ever gets a chance to actually answer it. Small on
+# purpose: this fires on every single turn, unlike qa_node which only runs
+# for EXPLAIN, so keep it cheap.
+_MAX_HISTORY = 6
 
 # Same 4 blue-chip IDX tickers as app/api/v1/market.py's DEFAULT_TICKERS
 # (kept as a separate bare-code list here rather than imported, since that
@@ -48,6 +57,12 @@ Map the user message to one of:
   follow-up questions about a previous answer or analysis, and casual
   conversation. Extract `tickers` when specific stocks are mentioned.
 - unknown: cannot determine at all
+
+Prior conversation turns (if any) are included before the current message —
+use them. A message that looks ambiguous in isolation, like "kenapa bisnis
+nya 0%?" or "kenapa segitu?", is a confident, ordinary explain (follow-up
+about the prior answer) once you can see what "bisnis"/"segitu" refers to in
+that history — do NOT drop confidence below 0.6 for that reason alone.
 
 Only choose allocate_stocks/allocate_capital when the user actually asks to
 allocate/invest money (usually with an amount); asking ABOUT a stock, sector,
@@ -157,6 +172,17 @@ def _last_user_text(state: AgentState) -> str:
     return ""
 
 
+def _history(state: AgentState) -> list[BaseMessage]:
+    """Prior human/AI turns, excluding the current (last) human message —
+    same pattern as qa.py's _history(), just a smaller window (see
+    _MAX_HISTORY)."""
+    messages = [m for m in state.get("messages") or []
+                if isinstance(m, (HumanMessage, AIMessage))]
+    if messages and isinstance(messages[-1], HumanMessage):
+        messages = messages[:-1]
+    return messages[-_MAX_HISTORY:]
+
+
 def _record_audit(state: AgentState, decision: IntentDecision) -> None:
     """Insert or update the audit_log row for this run."""
     try:
@@ -186,6 +212,7 @@ def intent_node(state: AgentState) -> AgentState:
     try:
         decision: IntentDecision = chain.invoke([
             SystemMessage(content=SYSTEM),
+            *_history(state),
             HumanMessage(content=user_text),
         ])
     except Exception as exc:
