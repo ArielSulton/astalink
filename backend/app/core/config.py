@@ -21,10 +21,22 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: str
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
-    # Google Gemini — optional so the app boots without a key; the lazy chat
-    # client raises only when actually invoked.
+    # Chat model provider switch — "gemini" (default) or "sumopod". See
+    # app/core/gemini.py's get_chat_model(); both are optional so the app
+    # boots without either key, and the lazy chat client raises only when
+    # actually invoked.
+    LLM_PROVIDER: str = "gemini"
+
+    # Google Gemini
     GOOGLE_API_KEY: str = ""
     GEMINI_CHAT_MODEL: str = "gemini-3.1-flash-lite"
+
+    # SumoPod AI — OpenAI-compatible proxy (https://ai.sumopod.com/v1), used
+    # when LLM_PROVIDER=sumopod. SUMOPOD_CHAT_MODEL is whatever model string
+    # SumoPod exposes for the desired underlying model (e.g. a DeepSeek model).
+    SUMOPOD_API_KEY: str = ""
+    SUMOPOD_BASE_URL: str = "https://ai.sumopod.com/v1"
+    SUMOPOD_CHAT_MODEL: str = "gpt-4o-mini"
 
     # Pinecone — same lazy-boot philosophy.
     PINECONE_API_KEY: str = ""

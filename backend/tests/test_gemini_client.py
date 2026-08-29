@@ -50,3 +50,33 @@ def test_get_chat_model_is_lazy_and_cached() -> None:
     kwargs = ctor.call_args.kwargs
     assert kwargs["model"] == "gemini-3.1-flash-lite"
     assert kwargs["google_api_key"] == "d"
+
+
+def test_get_chat_model_routes_to_sumopod_when_selected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_PROVIDER=sumopod must construct ChatOpenAI against SumoPod's
+    OpenAI-compatible endpoint instead of ChatGoogleGenerativeAI."""
+    monkeypatch.setenv("LLM_PROVIDER", "sumopod")
+    monkeypatch.setenv("SUMOPOD_API_KEY", "sumo-key")
+    monkeypatch.setenv("SUMOPOD_BASE_URL", "https://ai.sumopod.com/v1")
+    monkeypatch.setenv("SUMOPOD_CHAT_MODEL", "deepseek-chat")
+
+    import importlib
+    from app.core import config as config_module
+    importlib.reload(config_module)
+    config_module.settings = config_module.Settings(_env_file=None)
+    import app.core.gemini as g
+    importlib.reload(g)
+    g._chat_model = None
+
+    fake_instance = MagicMock(name="ChatOpenAI-instance")
+    with patch("app.core.gemini.ChatOpenAI", return_value=fake_instance) as openai_ctor, \
+         patch("app.core.gemini.ChatGoogleGenerativeAI") as gemini_ctor:
+        model = g.get_chat_model()
+
+    assert model is fake_instance
+    gemini_ctor.assert_not_called()
+    openai_ctor.assert_called_once()
+    kwargs = openai_ctor.call_args.kwargs
+    assert kwargs["model"] == "deepseek-chat"
+    assert kwargs["api_key"] == "sumo-key"
+    assert kwargs["base_url"] == "https://ai.sumopod.com/v1"

@@ -14,8 +14,12 @@ def test_pyproject_declares_phase0_dependencies() -> None:
     deps_str = " ".join(deps).lower()
 
     # LLM swap
-    assert "langchain-google-genai" in deps_str, "must use Gemini, not OpenAI"
-    assert "langchain-openai" not in deps_str, "OpenAI dep must be removed"
+    assert "langchain-google-genai" in deps_str, "Gemini must remain the default provider"
+    # langchain-openai is intentional (not a reintroduced OpenAI-primary
+    # regression): settings.LLM_PROVIDER=="sumopod" routes through it to hit
+    # SumoPod's OpenAI-compatible proxy as an alternate provider — see
+    # app/core/gemini.py's get_chat_model(). Gemini stays the default.
+    assert "langchain-openai" in deps_str, "needed for the sumopod LLM_PROVIDER path"
 
     # RAG stack
     assert "rank-bm25" in deps_str

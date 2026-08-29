@@ -21,6 +21,9 @@ dependencies = [
     "psycopg[binary]>=3.0.0",
     "langchain-core>=0.3.0",
     "langchain-google-genai>=2.0.0",
+    # OpenAI-compatible client — used when LLM_PROVIDER=sumopod (SumoPod AI
+    # proxies OpenAI/DeepSeek/etc. behind an OpenAI-compatible endpoint).
+    "langchain-openai>=0.2.0",
     # RAG
     "pinecone>=5.0.0",
     "langchain-pinecone>=0.2.0",

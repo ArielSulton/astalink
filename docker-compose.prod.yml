@@ -31,9 +31,15 @@ services:
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - SUPABASE_DB_URL=${SUPABASE_DB_URL}
+      # Chat model provider — "gemini" or "sumopod"
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
       # Gemini
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - GEMINI_CHAT_MODEL=${GEMINI_CHAT_MODEL:-gemini-3.1-flash-lite}
+      # SumoPod AI (OpenAI-compatible proxy)
+      - SUMOPOD_API_KEY=${SUMOPOD_API_KEY}
+      - SUMOPOD_BASE_URL=${SUMOPOD_BASE_URL:-https://ai.sumopod.com/v1}
+      - SUMOPOD_CHAT_MODEL=${SUMOPOD_CHAT_MODEL:-gpt-4o-mini}
       # Pinecone
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-astalink-regulations}
