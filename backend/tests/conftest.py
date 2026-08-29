@@ -8,8 +8,12 @@ from fastapi.testclient import TestClient
 # exercise. Clearing them first (before each test file's own env fixture
 # runs) makes that fixture authoritative regardless of the ambient shell.
 _OPTIONAL_SETTINGS_ENV_VARS = [
+    "LLM_PROVIDER",
     "GOOGLE_API_KEY",
     "GEMINI_CHAT_MODEL",
+    "SUMOPOD_API_KEY",
+    "SUMOPOD_BASE_URL",
+    "SUMOPOD_CHAT_MODEL",
     "PINECONE_API_KEY",
     "PINECONE_INDEX_NAME",
     "SUPABASE_SERVICE_ROLE_KEY",

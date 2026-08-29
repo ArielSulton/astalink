@@ -257,3 +257,66 @@ def test_intent_node_sets_clarification_when_low_confidence() -> None:
     # clarification appended as an AI message so the channel layer (WhatsApp /
     # web chat) can surface it
     assert any(isinstance(m, AIMessage) and "tujuan" in m.content for m in update.get("messages", []))
+
+
+def test_build_chain_pins_json_mode_method() -> None:
+    """Regression coverage, verified against the live SumoPod/DeepSeek route:
+    with_structured_output()'s default method ("json_schema") uses OpenAI's
+    strict response_format, which SumoPod's DeepSeek route rejects outright
+    ("This response_format type is unavailable now"). method="function_calling"
+    fails too, differently: this DeepSeek variant runs in an always-on
+    "thinking" mode that rejects a forced tool_choice ("Thinking mode does
+    not support this tool_choice"). method="json_mode" is the one that
+    actually works on both Gemini and this SumoPod route — it needs neither
+    strict response_format nor forced tool_choice, just the literal word
+    "json" somewhere in the prompt (see SYSTEM's closing paragraph)."""
+    from app.agents.intent.node import _build_chain
+
+    _build_chain.cache_clear()
+    fake_llm = MagicMock()
+    with patch("app.agents.intent.node.get_chat_model", return_value=fake_llm):
+        _build_chain()
+
+    fake_llm.with_structured_output.assert_called_once()
+    _, kwargs = fake_llm.with_structured_output.call_args
+    assert kwargs.get("method") == "json_mode"
+    _build_chain.cache_clear()
+
+
+def test_system_prompt_contains_json_keyword_required_by_json_mode() -> None:
+    """OpenAI-compatible json_object response_format (which method="json_mode"
+    uses) 400s outright if the prompt doesn't literally contain the word
+    "json" — confirmed live against SumoPod's DeepSeek route ("Prompt must
+    contain the word 'json' in some form..."). This must never silently
+    regress if SYSTEM is edited later."""
+    from app.agents.intent.node import SYSTEM
+
+    assert "json" in SYSTEM.lower()
+
+
+def test_intent_node_replies_with_apology_instead_of_echoing_user_on_classification_crash() -> None:
+    """Regression: previously, a classifier crash (e.g. the sumopod
+    response_format 400) left `messages` untouched, and
+    build_chat_reply's "N1 couldn't classify" rule just relays
+    messages[-1] — silently echoing the user's own text back at them
+    instead of surfacing that something broke."""
+    from app.agents.intent.node import intent_node
+    from app.agents.state import new_state
+    from langchain_core.messages import AIMessage
+
+    state = new_state()
+    user_text = "Mau investasi 50 juta ke saham IDX, bank atau telco gitu."
+    state["messages"] = [HumanMessage(content=user_text)]
+
+    fake_chain = MagicMock()
+    fake_chain.invoke.side_effect = RuntimeError("response_format type is unavailable now")
+
+    with patch("app.agents.intent.node._build_chain", return_value=fake_chain):
+        update = intent_node(state)
+
+    assert update["_needs_clarification"] is True
+    new_messages = update.get("messages", [])
+    assert new_messages, "must append a reply, not leave messages untouched"
+    last = new_messages[-1]
+    assert isinstance(last, AIMessage)
+    assert last.content != user_text, "must not echo the user's own message back"

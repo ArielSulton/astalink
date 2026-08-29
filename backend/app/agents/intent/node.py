@@ -69,15 +69,30 @@ would understand with no other context, never a bare word or fragment like
 "gimana?" or "maksudnya?". State what was unclear and give a concrete example,
 e.g. "Maaf, saya kurang paham maksud pesan Anda. Bisa dijelaskan lebih detail?
 Misalnya: \"alokasikan 10 juta ke BBCA\" atau \"apa itu RSI?\"."
+
+Respond with a single JSON object matching this shape, and nothing else:
+{"intent": "<one of the values above>", "entities": {...}, "confidence": <0-1>,
+"clarification_question": "<string or null>"}
 """
 
 
 @lru_cache(maxsize=1)
 def _build_chain():
     """Bind the structured output schema once. Cached because LLM client
-    bindings are expensive to rebuild per invocation."""
+    bindings are expensive to rebuild per invocation.
+
+    method="json_mode" is pinned explicitly. Both ChatGoogleGenerativeAI and
+    ChatOpenAI default with_structured_output() to method="json_schema"
+    (OpenAI's newer strict response_format), which SumoPod's DeepSeek route
+    rejects outright ("This response_format type is unavailable now").
+    method="function_calling" fails too, differently: this DeepSeek variant
+    runs in an always-on "thinking" mode that rejects a forced tool_choice
+    ("Thinking mode does not support this tool_choice"). json_mode needs
+    neither strict response_format nor forced tool_choice — just a plain
+    "respond in JSON" instruction — so it's the lowest common denominator
+    that works across Gemini and this SumoPod route alike."""
     llm = get_chat_model()
-    return llm.with_structured_output(IntentDecision)
+    return llm.with_structured_output(IntentDecision, method="json_mode")
 
 
 def _extract_sectors(entities: dict[str, Any]) -> list[str]:
@@ -133,12 +148,21 @@ def intent_node(state: AgentState) -> AgentState:
         ])
     except Exception as exc:
         log.exception("intent_node: classification failed: %s", exc)
+        # _needs_clarification routes straight to END with no further nodes,
+        # and build_chat_reply's "N1 couldn't classify" rule just relays
+        # messages[-1] — without a message appended here, that's still the
+        # user's own HumanMessage, so the reply silently echoes their input
+        # back at them instead of surfacing that something actually broke.
         return {
             "intent": Intent.UNKNOWN.value,
             "entities": {},
             "_needs_clarification": True,
             "errors": [*state.get("errors", []),
                        {"node": "intent", "reason": str(exc)}],
+            "messages": [*state.get("messages", []), AIMessage(
+                content="Maaf, saya lagi mengalami gangguan teknis dan belum "
+                        "bisa memproses pesan Anda. Coba kirim ulang sebentar "
+                        "lagi.")],
         }
 
     _record_audit(state, decision)
