@@ -145,6 +145,71 @@ def test_chat_injects_prior_thread_history_into_invoke(client: TestClient) -> No
     ]
 
 
+def test_chat_persists_the_actual_reply_text_to_thread_history(client: TestClient) -> None:
+    """Live incident: build_chat_reply's output (the report actually shown
+    to the user for the allocation path) is computed from final_state on
+    every call but is never itself appended to state["messages"] by any
+    graph node — only n8_qa's informational path writes a final AIMessage.
+    Without persisting it here, a genuine follow-up on the next turn
+    ("kenapa alokasi bisnis 0%?") has no report text anywhere in its
+    load_thread_history() context to refer back to, and gets misclassified
+    as a fresh allocation request instead of a follow-up. update_state must
+    be called with the reply actually returned to the client."""
+    mock_user = {"sub": "user-123", "email": "test@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    fake_final_state = new_state()
+    fake_final_state["messages"] = [HumanMessage(content="alokasikan 10 juta ke BBCA")]
+    fake_final_state["intent"] = "allocate_stocks"
+    fake_final_state["legal_status"] = "approved"
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.graph.invoke", return_value=fake_final_state), \
+         patch("app.api.v1.chat.graph.update_state") as mock_update_state:
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "alokasikan 10 juta ke BBCA", "workspace_id": "ws-1",
+                  "thread_id": "thread-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    reply_text = response.json()["message"]
+
+    mock_update_state.assert_called_once()
+    _, kwargs = mock_update_state.call_args
+    persisted_messages = kwargs["values"]["messages"]
+    assert persisted_messages[0].content == "alokasikan 10 juta ke BBCA"
+    assert isinstance(persisted_messages[-1], AIMessage)
+    assert persisted_messages[-1].content == reply_text
+    assert kwargs["config"]["configurable"]["thread_id"].startswith("user-123:")
+
+
+def test_chat_reply_persistence_failure_does_not_break_the_response(client: TestClient) -> None:
+    """update_state is a best-effort side channel — if it throws (DB hiccup,
+    etc.), the user must still get their actual answer back."""
+    mock_user = {"sub": "user-123", "email": "test@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    fake_final_state = new_state()
+    fake_final_state["messages"] = [AIMessage(content="Halo!")]
+    fake_final_state["_needs_clarification"] = True
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.graph.invoke", return_value=fake_final_state), \
+         patch("app.api.v1.chat.graph.update_state", side_effect=RuntimeError("db down")):
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "halo", "workspace_id": "ws-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Halo!"
+
+
 def test_chat_history_fetch_failure_degrades_to_single_message(client: TestClient) -> None:
     mock_user = {"sub": "user-123", "email": "test@example.com"}
     fake_admin = _make_fake_admin(owned=True)

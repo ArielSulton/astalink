@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 import app.core.config as _config
@@ -170,6 +170,26 @@ def _process_message(msg: dict[str, Any]) -> None:
         # with no indication anything went wrong.
         log.exception("whatsapp: pipeline failed for thread %s", thread_id)
         reply = "Maaf, terjadi kendala saat memproses permintaan Anda. Silakan coba lagi beberapa saat lagi."
+
+    # build_chat_reply's output (what's actually sent to the user) is
+    # computed from `final` on every call — it is NEVER itself appended to
+    # state["messages"] by any graph node for the allocation path
+    # (l0_allocation -> ... -> legal -> END never writes a final AIMessage;
+    # only n8_qa's informational path does). Without persisting it here,
+    # load_thread_history() on the next turn sees only the user's own
+    # messages with no record of what AstaLink actually said — so a genuine
+    # follow-up has no report text in its context to refer back to. Skipped
+    # when `final` is None (the pipeline itself never completed, so there's
+    # no state to attach the reply to).
+    if final is not None:
+        try:
+            graph.update_state(
+                config={"configurable": {"thread_id": thread_id}},
+                values={"messages": [*final.get("messages", []),
+                                     AIMessage(content=reply)]},
+            )
+        except Exception:
+            log.exception("whatsapp: failed to persist reply to thread %s", thread_id)
 
     if allocation_plan and allocation_plan.get("weights"):
         try:

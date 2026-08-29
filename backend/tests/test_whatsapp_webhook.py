@@ -4,7 +4,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 
 def test_webhook_get_verifies_subscription(client: TestClient, monkeypatch) -> None:
@@ -147,6 +147,64 @@ def test_whatsapp_reply_for_informational_intent_has_no_approval_link(monkeypatc
     assert body == "RSI (Relative Strength Index) mengukur momentum harga."
     assert "approvals" not in body.lower()
     assert "rekomendasi alokasi" not in body.lower()
+
+
+def test_whatsapp_persists_the_actual_reply_text_to_thread_history(monkeypatch, client: TestClient) -> None:
+    """Live incident: build_chat_reply's output (what's actually sent to the
+    user for the allocation path) is computed from `final` on every call but
+    is never itself appended to state["messages"] by any graph node — only
+    n8_qa's informational path writes a final AIMessage. Without persisting
+    it here, a genuine follow-up on the next turn has no report text
+    anywhere in its load_thread_history() context to refer back to, and
+    gets misclassified as a fresh allocation request. update_state must be
+    called with the reply actually sent via send_text."""
+    secret = "appsec"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    import importlib, app.core.config
+    importlib.reload(app.core.config)
+
+    final_state = {
+        "audit_id": "audit-persist-1",
+        "intent": "allocate_stocks",
+        "messages": [HumanMessage(content="alokasikan 10jt ke BBCA")],
+        "legal_status": None,
+        "user_approval": None,
+        "transactions": [],
+        "errors": [],
+    }
+    payload = {
+        "entry": [{"changes": [{"value": {"messages": [{
+            "id": "wamid.PERSIST-1",
+            "from": "6281234567890",
+            "type": "text",
+            "text": {"body": "alokasikan 10jt ke BBCA"},
+        }]}}]}]
+    }
+    body = json.dumps(payload).encode()
+    sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[{}])
+    fake_admin.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data={"user_id": "u1", "workspace_id": "w1"}
+    )
+
+    with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.whatsapp.graph.invoke", return_value=final_state), \
+         patch("app.api.v1.whatsapp.graph.update_state") as mock_update_state, \
+         patch("app.api.v1.whatsapp.send_text") as send_mock:
+        resp = client.post("/api/v1/whatsapp/webhook", content=body,
+                           headers={"X-Hub-Signature-256": sig,
+                                    "Content-Type": "application/json"})
+        assert resp.status_code == 200
+        sent_body = send_mock.call_args.kwargs["body"]
+
+    mock_update_state.assert_called_once()
+    _, kwargs = mock_update_state.call_args
+    persisted_messages = kwargs["values"]["messages"]
+    assert persisted_messages[0].content == "alokasikan 10jt ke BBCA"
+    assert isinstance(persisted_messages[-1], AIMessage)
+    assert persisted_messages[-1].content == sent_body
 
 
 def test_whatsapp_reply_appends_approval_link_when_awaiting_hitl(monkeypatch, client: TestClient) -> None:

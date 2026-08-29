@@ -1,7 +1,7 @@
 import logging
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from app.agents.chat_agent import build_chat_reply
 from app.agents.composition_gate.resume import (
     detect_composition_reply,
@@ -78,8 +78,31 @@ async def chat(
     # No HITL approval or automatic execution — the user decides.
     requires_approval = False
 
+    reply_text = build_chat_reply(final_state, style="report")
+
+    # build_chat_reply's output (the report/prompt actually shown to the
+    # user) is computed from final_state on every call — it is NEVER itself
+    # appended to state["messages"] by any graph node for the allocation
+    # path (l0_allocation -> ... -> legal -> END never writes a final
+    # AIMessage; only n8_qa's informational path does). Without persisting
+    # it here, load_thread_history() on the next turn sees only the user's
+    # messages with no record of what AstaLink actually said — so a genuine
+    # follow-up ("kenapa alokasi bisnis 0%?") has no report text in its
+    # context to refer back to, and gets misclassified as a fresh request
+    # instead of the intent_node history fix (see intent/node.py's
+    # _history()) ever getting a chance to help. Persist explicitly so every
+    # channel's actual reply becomes real conversation history.
+    try:
+        graph.update_state(
+            config={"configurable": {"thread_id": thread_id}},
+            values={"messages": [*final_state.get("messages", []),
+                                 AIMessage(content=reply_text)]},
+        )
+    except Exception:
+        log.exception("chat: failed to persist reply to thread %s", thread_id)
+
     return ChatResponse(
-        message=build_chat_reply(final_state, style="report"),
+        message=reply_text,
         thread_id=raw_thread,
         audit_id=final_state.get("audit_id"),
         requires_approval=requires_approval,
