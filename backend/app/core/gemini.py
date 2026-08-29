@@ -26,11 +26,24 @@ def get_chat_model() -> BaseChatModel:
         if settings.LLM_PROVIDER == "sumopod":
             # SumoPod is an OpenAI-compatible proxy (e.g. fronting DeepSeek) —
             # same client class OpenAI itself uses, just pointed elsewhere.
+            #
+            # thinking: disabled — per DeepSeek's own API docs
+            # (api-docs.deepseek.com/guides/thinking_mode), a DeepSeek model
+            # left in its default "thinking" mode rejects a *forced*
+            # tool_choice ("Thinking mode does not support this tool_choice"),
+            # which breaks with_structured_output(method="function_calling")
+            # everywhere it's used (confirmed live: intent classification).
+            # Disabling thinking mode via extra_body — also per those same
+            # docs — unblocks it. (method="json_schema" still 400s regardless
+            # of this setting — that's SumoPod/litellm not implementing
+            # OpenAI's newer strict response_format at all, a proxy-level
+            # gap, not a thinking-mode one.)
             _chat_model = ChatOpenAI(
                 model=settings.SUMOPOD_CHAT_MODEL,
                 api_key=settings.SUMOPOD_API_KEY,
                 base_url=settings.SUMOPOD_BASE_URL,
                 temperature=0.0,
+                extra_body={"thinking": {"type": "disabled"}},
             )
         else:
             _chat_model = ChatGoogleGenerativeAI(

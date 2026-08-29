@@ -1,3 +1,5 @@
+import pytest
+
 from app.agents.intents import Intent
 
 
@@ -199,7 +201,45 @@ def test_intent_node_resolves_sectors_list_key_and_merges_across_sectors() -> No
     tickers = update["entities"]["tickers"]
     assert tickers
     assert {"BBCA", "BMRI", "BBNI", "BBRI"} & set(tickers), "expected banking tickers"
-    assert {"TLKM", "EXCL", "ISAT", "FREN"} & set(tickers), "expected telco tickers"
+    assert {"TLKM", "EXCL", "ISAT"} & set(tickers), "expected telco tickers"
+
+
+def test_intent_node_resolves_sector_preference_key_shape() -> None:
+    """Live-observed shape, a third variant for the exact same phrasing
+    ("bank atau telco gitu") across separate live calls: {"sector_preference":
+    ["bank", "telco"]} — neither "sector" nor "sectors". Chasing each new key
+    name individually doesn't scale, which is why _resolve_sector_tickers
+    scans every entity value instead of specific key names."""
+    from app.agents.intent.node import intent_node
+    from app.agents.intent.schemas import IntentDecision
+    from app.agents.intents import Intent
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["messages"] = [HumanMessage(
+        content="Mau investasi 50 juta ke saham IDX. Saya pemula, mau yang "
+                "aman dulu aja — bank atau telco gitu.")]
+
+    fake_decision = IntentDecision(
+        intent=Intent.ALLOCATE_STOCKS,
+        entities={"amount": 50_000_000, "market": "IDX",
+                  "sector_preference": ["bank", "telco"],
+                  "risk_profile": "konservatif"},
+        confidence=0.9,
+    )
+    fake_chain = MagicMock()
+    fake_chain.invoke.return_value = fake_decision
+
+    with patch("app.agents.intent.node._build_chain", return_value=fake_chain), \
+         patch("app.agents.intent.node._record_audit"):
+        update = intent_node(state)
+
+    tickers = update["entities"]["tickers"]
+    assert tickers
+    assert {"BBCA", "BMRI", "BBNI", "BBRI"} & set(tickers), "expected banking tickers"
+    assert {"TLKM", "EXCL", "ISAT"} & set(tickers), "expected telco tickers"
+    assert tickers != ["BBCA", "TLKM", "ASII", "BBRI"], \
+        "must not silently fall through to the generic blue-chip basket"
 
 
 def test_intent_node_leaves_unrecognized_sector_without_tickers() -> None:
@@ -259,28 +299,53 @@ def test_intent_node_sets_clarification_when_low_confidence() -> None:
     assert any(isinstance(m, AIMessage) and "tujuan" in m.content for m in update.get("messages", []))
 
 
-def test_build_chain_pins_json_mode_method() -> None:
+def test_build_chain_pins_function_calling_for_sumopod(monkeypatch: pytest.MonkeyPatch) -> None:
     """Regression coverage, verified against the live SumoPod/DeepSeek route:
     with_structured_output()'s default method ("json_schema") uses OpenAI's
-    strict response_format, which SumoPod's DeepSeek route rejects outright
-    ("This response_format type is unavailable now"). method="function_calling"
-    fails too, differently: this DeepSeek variant runs in an always-on
-    "thinking" mode that rejects a forced tool_choice ("Thinking mode does
-    not support this tool_choice"). method="json_mode" is the one that
-    actually works on both Gemini and this SumoPod route — it needs neither
-    strict response_format nor forced tool_choice, just the literal word
-    "json" somewhere in the prompt (see SYSTEM's closing paragraph)."""
-    from app.agents.intent.node import _build_chain
+    strict response_format, which SumoPod's proxy rejects outright regardless
+    of any other setting ("This response_format type is unavailable now") —
+    a proxy-level gap. method="function_calling" (forced tool_choice) is
+    rejected by DeepSeek's default "thinking" mode specifically ("Thinking
+    mode does not support this tool_choice") — fixed at the client level via
+    get_chat_model()'s extra_body={"thinking": {"type": "disabled"}}, not
+    here. With thinking disabled, function_calling works and is more
+    reliable than method="json_mode" (confirmed live: json_mode returned
+    syntactically malformed JSON at least once in the same testing)."""
+    import app.agents.intent.node as node
 
-    _build_chain.cache_clear()
+    monkeypatch.setattr(node.settings, "LLM_PROVIDER", "sumopod")
+    node._build_chain.cache_clear()
     fake_llm = MagicMock()
     with patch("app.agents.intent.node.get_chat_model", return_value=fake_llm):
-        _build_chain()
+        node._build_chain()
 
     fake_llm.with_structured_output.assert_called_once()
     _, kwargs = fake_llm.with_structured_output.call_args
-    assert kwargs.get("method") == "json_mode"
-    _build_chain.cache_clear()
+    assert kwargs.get("method") == "function_calling"
+    node._build_chain.cache_clear()
+
+
+def test_build_chain_pins_json_schema_for_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression coverage, verified live: method="function_calling" breaks
+    entities extraction on Gemini specifically. IntentDecision.entities is
+    `dict[str, Any]`, and Gemini's function-calling schema translation can't
+    represent that openly-typed a field ("Key '$defs' is not supported in
+    schema, ignoring") — entities silently comes back {} every time under
+    that method. json_schema (the with_structured_output() default) handles
+    it correctly, as it always has, so Gemini must keep using it even though
+    sumopod needs function_calling."""
+    import app.agents.intent.node as node
+
+    monkeypatch.setattr(node.settings, "LLM_PROVIDER", "gemini")
+    node._build_chain.cache_clear()
+    fake_llm = MagicMock()
+    with patch("app.agents.intent.node.get_chat_model", return_value=fake_llm):
+        node._build_chain()
+
+    fake_llm.with_structured_output.assert_called_once()
+    _, kwargs = fake_llm.with_structured_output.call_args
+    assert kwargs.get("method") == "json_schema"
+    node._build_chain.cache_clear()
 
 
 def test_system_prompt_contains_json_keyword_required_by_json_mode() -> None:

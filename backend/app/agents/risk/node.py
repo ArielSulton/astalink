@@ -68,8 +68,16 @@ def risk_node(state: AgentState) -> AgentState:
 
     llm = get_chat_model()
     body = f"VaR95={metrics.var_95:.4f}, VaR99={metrics.var_99:.4f}, Sharpe={metrics.sharpe}"
-    narration = extract_text(llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
-                            HumanMessage(content=body)]).content)
+    try:
+        narration = extract_text(llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
+                                HumanMessage(content=body)]).content)
+    except Exception as exc:
+        # metrics above are the actual computed risk numbers (numpy/scipy —
+        # never LLM math, per this codebase's own rule); narration is
+        # decorative color on top. A flaky LLM call here must not cost the
+        # whole risk assessment the way it would if left unguarded.
+        log.error("risk_node: LLM narration failed: %s", exc)
+        narration = ""
 
     ticker_list = list(series.keys())
     er_map = {t: float(er) for t, er in zip(ticker_list, expected_returns)}

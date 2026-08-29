@@ -45,6 +45,47 @@ def test_optimizer_node_increments_revision_count() -> None:
     assert update["allocation_plan"]["narration"]
 
 
+def test_optimizer_node_survives_llm_narration_failure() -> None:
+    """Live incident: a flaky LLM call (malformed response, provider error)
+    used to crash the whole node, discarding the solver's already-computed
+    weights — the actual financial recommendation. A narration failure must
+    degrade to an empty string, not lose the allocation plan."""
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+    state["entities"] = {
+        "tickers": ["BBCA", "BMRI"],
+        "amount": 10_000_000,
+        "market_snapshot": {"tickers": [
+            {"ticker": "BBCA", "last_close": 8000},
+            {"ticker": "BMRI", "last_close": 6000},
+        ]},
+        "risk_metrics": {
+            "metrics": {"var_95": 0.02, "var_99": 0.03, "sharpe": 1.5},
+            "suggested_weights": {"BBCA": 0.5, "BMRI": 0.5},
+        },
+    }
+    state["revision_count"] = 0
+
+    fake_result = SolverResult(status="optimal",
+                               weights={"BBCA": 0.6, "BMRI": 0.35},
+                               objective_value=0.07)
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = RuntimeError("malformed response from provider")
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
+        MagicMock(data=[{"cash_balance": 50_000_000}])
+
+    with patch("app.agents.optimizer.node.solve_with_relaxation",
+               return_value=(fake_result, [])), \
+         patch("app.agents.optimizer.node.get_chat_model", return_value=fake_llm), \
+         patch("app.agents.optimizer.node.get_admin_client", return_value=fake_admin):
+        update = optimizer_node(state)
+
+    assert update["allocation_plan"] is not None, "real solved weights must survive"
+    assert update["allocation_plan"]["weights"][0]["ticker"] in ("BBCA", "BMRI")
+    assert update["allocation_plan"]["narration"] == ""
+
+
 def test_optimizer_node_uses_legal_feedback_to_forbid_tickers() -> None:
     """When legal_status=rejected and citations carry forbidden_tickers,
     the next optimizer pass must respect them."""

@@ -15,6 +15,7 @@ from app.agents.intent.schemas import IntentDecision
 from app.agents.intents import Intent
 from app.agents.optimizer.sectors import sector_to_tickers
 from app.agents.state import AgentState
+from app.core.config import settings
 from app.core.gemini import get_chat_model
 from app.core.metrics import track_node_duration
 from app.core.supabase_admin import get_admin_client
@@ -81,31 +82,72 @@ def _build_chain():
     """Bind the structured output schema once. Cached because LLM client
     bindings are expensive to rebuild per invocation.
 
-    method="json_mode" is pinned explicitly. Both ChatGoogleGenerativeAI and
-    ChatOpenAI default with_structured_output() to method="json_schema"
-    (OpenAI's newer strict response_format), which SumoPod's DeepSeek route
-    rejects outright ("This response_format type is unavailable now").
-    method="function_calling" fails too, differently: this DeepSeek variant
-    runs in an always-on "thinking" mode that rejects a forced tool_choice
-    ("Thinking mode does not support this tool_choice"). json_mode needs
-    neither strict response_format nor forced tool_choice — just a plain
-    "respond in JSON" instruction — so it's the lowest common denominator
-    that works across Gemini and this SumoPod route alike."""
+    method is picked per provider, NOT a single universal choice — the two
+    working methods aren't interchangeable across providers for this exact
+    schema:
+
+    - sumopod: method="function_calling". with_structured_output()'s
+      default ("json_schema", OpenAI's newer strict response_format) 400s
+      outright on SumoPod's proxy regardless of any other setting ("This
+      response_format type is unavailable now") — a proxy-level gap.
+      function_calling uses a forced tool_choice instead, which DeepSeek's
+      default "thinking" mode itself rejects ("Thinking mode does not
+      support this tool_choice") — fixed at the client level, not here: see
+      get_chat_model()'s extra_body={"thinking": {"type": "disabled"}} for
+      this provider (api-docs.deepseek.com/guides/thinking_mode). With
+      thinking disabled, function_calling works and is schema-validated via
+      the tool-call arguments themselves — more reliable than
+      method="json_mode" (confirmed live: json_mode returned syntactically
+      malformed JSON at least once; function_calling has produced none).
+    - gemini: method="json_schema" (the with_structured_output() default).
+      function_calling breaks entities extraction here specifically —
+      confirmed live: IntentDecision.entities is `dict[str, Any]`, and
+      Gemini's function-calling schema translation can't represent that
+      openly-typed a field ("Key '$defs' is not supported in schema,
+      ignoring"), so entities silently comes back {} every time under that
+      method. json_schema handles it correctly, as it always has."""
     llm = get_chat_model()
-    return llm.with_structured_output(IntentDecision, method="json_mode")
+    method = "function_calling" if settings.LLM_PROVIDER == "sumopod" else "json_schema"
+    return llm.with_structured_output(IntentDecision, method=method)
 
 
-def _extract_sectors(entities: dict[str, Any]) -> list[str]:
+def _sector_candidates(entities: dict[str, Any]) -> list[str]:
     """The intent LLM isn't schema-constrained for entities (free-form
-    dict), so a stated sector shows up inconsistently — a single string
-    under "sector", or a list under "sectors" (observed live: "bank atau
-    telco gitu" -> {"sectors": ["banking", "telecommunications"]}, not
-    {"sector": ...}). Normalize both shapes so a real request doesn't
-    silently miss the resolution below just because of key naming."""
-    raw = entities.get("sector") or entities.get("sectors")
-    if raw is None:
-        return []
-    return [raw] if isinstance(raw, str) else [s for s in raw if isinstance(s, str)]
+    dict), so a stated sector shows up under wildly inconsistent key names
+    across calls — observed live, all for the same "bank atau telco gitu"
+    phrasing: {"sector": "bank"}, {"sectors": ["banking", "telecommunications"]},
+    {"sector_preference": ["bank", "telco"]}. Chasing each new key name
+    one-by-one is a losing game, so this matches any key containing "sector"
+    (covers all three observed variants, and any future one like
+    "sector_focus") rather than an exact-name allowlist.
+
+    Deliberately NOT a scan of every entity value: callers rely on knowing
+    whether a sector was stated AT ALL (this function's non-emptiness),
+    separately from whether it resolved to real tickers — a *stated but
+    unmapped* sector (e.g. "perkebunan") must NOT fall through to the
+    generic blue-chip basket, since ASII/TLKM/etc. aren't plantation stocks
+    and that would quietly answer a different question. Scanning unrelated
+    keys like risk_profile/business_name would blur that line; keying off
+    "sector" in the field name keeps it precise to what was actually about
+    a sector."""
+    candidates: list[str] = []
+    for key, value in entities.items():
+        if "sector" not in key.lower():
+            continue
+        if isinstance(value, str):
+            candidates.append(value)
+        elif isinstance(value, list):
+            candidates.extend(v for v in value if isinstance(v, str))
+    return candidates
+
+
+def _resolve_sector_tickers(candidates: list[str]) -> list[str]:
+    tickers: list[str] = []
+    for candidate in candidates:
+        for t in sector_to_tickers(candidate):
+            if t not in tickers:
+                tickers.append(t)
+    return tickers
 
 
 def _last_user_text(state: AgentState) -> str:
@@ -176,8 +218,8 @@ def intent_node(state: AgentState) -> AgentState:
         and not needs_clarification
         and not entities.get("tickers")
     ):
-        sectors = _extract_sectors(entities)
-        if sectors:
+        sector_candidates = _sector_candidates(entities)
+        if sector_candidates:
             # A stated sector ("bank atau telco gitu") resolves to that
             # sector's real constituents — NOT the generic blue-chip basket
             # below, which would ignore what the user actually asked for
@@ -185,11 +227,12 @@ def intent_node(state: AgentState) -> AgentState:
             # leg falls back to the baseline stand-in (engine.py's
             # `effective_stock_score`), producing an uninformative
             # baseline-vs-baseline 50/50 split no matter the user's request.
-            sector_tickers: list[str] = []
-            for s in sectors:
-                for t in sector_to_tickers(s):
-                    if t not in sector_tickers:
-                        sector_tickers.append(t)
+            #
+            # If the sector was stated but doesn't map to anything (e.g.
+            # "perkebunan"), deliberately leave tickers unset rather than
+            # falling through to the basket below — same reasoning as above,
+            # just for the unmapped case.
+            sector_tickers = _resolve_sector_tickers(sector_candidates)
             if sector_tickers:
                 entities = {**entities, "tickers": sector_tickers}
         else:

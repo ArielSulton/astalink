@@ -193,8 +193,17 @@ def optimizer_node(state: AgentState) -> AgentState:
         f"Relaxations applied: {relaxations or 'none'}\n"
         f"Cash buffer: {cash_buffer:.3f}"
     )
-    narration = extract_text(llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
-                            HumanMessage(content=body)]).content)
+    try:
+        narration = extract_text(llm.invoke([SystemMessage(content=NARRATE_SYSTEM),
+                                HumanMessage(content=body)]).content)
+    except Exception as exc:
+        # The solved weights above are the actual financial recommendation —
+        # narration is decorative color on top of it. A flaky LLM call here
+        # (seen live: malformed JSON/unexpected errors from some providers)
+        # must not cost the whole allocation plan the way it would if this
+        # were left unguarded like the rest of this function.
+        log.error("optimizer_node: LLM narration failed: %s", exc)
+        narration = ""
 
     plan = AllocationPlan(
         weights=legs,

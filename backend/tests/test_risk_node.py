@@ -56,3 +56,31 @@ def test_risk_node_handles_single_ticker_without_crashing() -> None:
     assert set(risk["suggested_weights"]) == {"BBCA"}
     assert risk["suggested_weights"]["BBCA"] == 1.0
     assert risk["covariance"]["BBCA"]["BBCA"] > 0
+
+
+def test_risk_node_survives_llm_narration_failure() -> None:
+    """Live incident: a flaky LLM call (malformed response, provider error)
+    used to crash the whole node — narration is decorative color on top of
+    the already-computed VaR/Sharpe numbers (numpy/scipy math, never LLM),
+    so a narration failure must degrade to an empty string, not lose the
+    real analysis."""
+    state = new_state()
+    state["entities"] = {"tickers": ["BBCA", "BMRI"]}
+
+    rng = np.random.default_rng(0)
+    fake_closes = {
+        "BBCA": np.exp(np.cumsum(rng.normal(0.0005, 0.01, 252))) * 8000,
+        "BMRI": np.exp(np.cumsum(rng.normal(0.0003, 0.012, 252))) * 6000,
+    }
+
+    fake_llm = MagicMock()
+    fake_llm.invoke.side_effect = RuntimeError("malformed response from provider")
+
+    with patch("app.agents.risk.node.fetch_close_prices",
+               side_effect=lambda t, **kw: fake_closes[t]), \
+         patch("app.agents.risk.node.get_chat_model", return_value=fake_llm):
+        update = risk_node(state)
+
+    risk = update["entities"]["risk_metrics"]
+    assert risk["metrics"]["var_95"] > 0, "real computed metrics must survive"
+    assert risk["narration"] == ""

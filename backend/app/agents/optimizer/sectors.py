@@ -30,10 +30,15 @@ TICKER_SECTOR: dict[str, str] = {
     "JPFA": "consumer",
     "AMRT": "consumer",
     # Telco
+    # FREN intentionally excluded: Yahoo Finance (this app's sole price data
+    # source, via yfinance) returns zero history for FREN.JK — confirmed live,
+    # not a transient blip. It's handled gracefully (risk_node/prescreen skip
+    # tickers with no data rather than crash), but keeping a guaranteed-dead
+    # ticker in this list means every telco-sector resolution wastes an API
+    # call on it for zero benefit.
     "TLKM": "telco",
     "EXCL": "telco",
     "ISAT": "telco",
-    "FREN": "telco",
     # Mining & energy (coal/oil/gas/metals grouped together)
     "ANTM": "mining",
     "PTBA": "mining",

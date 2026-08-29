@@ -80,3 +80,7 @@ def test_get_chat_model_routes_to_sumopod_when_selected(monkeypatch: pytest.Monk
     assert kwargs["model"] == "deepseek-chat"
     assert kwargs["api_key"] == "sumo-key"
     assert kwargs["base_url"] == "https://ai.sumopod.com/v1"
+    # Per DeepSeek's own docs (api-docs.deepseek.com/guides/thinking_mode):
+    # thinking mode rejects a forced tool_choice, which breaks
+    # with_structured_output(method="function_calling") everywhere it's used.
+    assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
