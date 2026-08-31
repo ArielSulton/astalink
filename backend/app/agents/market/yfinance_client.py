@@ -45,15 +45,22 @@ def _normalize_idx_ticker(ticker: str) -> str:
     return ticker if "." in ticker else f"{ticker}.JK"
 
 
-def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
-    """Return `window` trading days of OHLCV + precomputed indicators.
+def fetch_price_series_with_indicators(
+    ticker: str,
+    period: str = "1mo",
+    interval: str = "1d",
+    window: int | None = None,
+) -> dict:
+    """Return OHLCV + precomputed indicators for a ticker over a yfinance period/interval.
 
-    Fetches 1 year so SMA20/EMA50 are properly warmed before the returned window.
-    Returns a dict with keys: series, last_close, prev_close, rsi14, sma20, macd,
-    bb_upper, bb_lower.  Any uncomputable value is None.
+    Fetches `period` (e.g. "1y") at `interval` (e.g. "1d") and computes the full
+    indicator pack. If `window` is set, only the trailing `window` data points are
+    returned (the fetch still uses `period` for indicator warm-up); if None, the full
+    series is returned. Returns a dict with keys: series, last_close, prev_close,
+    rsi14, sma20, macd, bb_upper, bb_lower. Any uncomputable value is None.
     """
     ticker = _normalize_idx_ticker(ticker)
-    cache_key = f"series:{ticker}"
+    cache_key = f"series:{ticker}:{period}:{interval}"
     now = time.time()
     if (entry := _series_cache.get(cache_key)) and now - entry.fetched_at < _CACHE_TTL:
         return entry.data
@@ -61,50 +68,74 @@ def fetch_price_series_with_indicators(ticker: str, window: int = 90) -> dict:
     from app.agents.market.indicators import compute_indicators  # lazy: avoids TA-Lib at import time
 
     try:
-        df = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
-        # Today's row can carry Close=NaN while the IDX session is still
-        # open (yfinance posts volume-so-far before the close prints) — an
-        # unfiltered NaN propagates into last_close and every indicator
-        # computed off it. Drop it like a day that hasn't happened yet.
+        df = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=True)
+        # Drop still-open-session rows (NaN Close) so they don't pollute indicators.
         df = df[df["Close"].notna()]
     except Exception as exc:
         log.error("yfinance price_series: failed for %s: %s", ticker, exc)
         return {"series": [], "last_close": None, "prev_close": None,
-                "rsi14": None, "sma20": None, "macd": None, "bb_upper": None, "bb_lower": None}
+                "rsi14": None, "sma20": None, "macd": None, "bb_upper": None, "bb_lower": None,
+                **{k: None for k in ("bb_middle", "macd_signal", "macd_hist", "atr14",
+                                     "stoch_k", "stoch_d", "obv", "vwap", "ema9", "ema20")}}
 
     if df.empty or len(df) < 2:
         return {"series": [], "last_close": None, "prev_close": None,
-                "rsi14": None, "sma20": None, "macd": None, "bb_upper": None, "bb_lower": None}
+                "rsi14": None, "sma20": None, "macd": None, "bb_upper": None, "bb_lower": None,
+                **{k: None for k in ("bb_middle", "macd_signal", "macd_hist", "atr14",
+                                     "stoch_k", "stoch_d", "obv", "vwap", "ema9", "ema20")}}
 
     closes = df["Close"].to_numpy().astype(np.float64)
-    dates = [str(idx.date()) for idx in df.index]
+    highs = df["High"].to_numpy().astype(np.float64)
+    lows = df["Low"].to_numpy().astype(np.float64)
+    opens = df["Open"].to_numpy().astype(np.float64)
+    volumes = df["Volume"].to_numpy().astype(np.float64)
+    dates = [str(idx.date()) if hasattr(idx, "date") else str(idx) for idx in df.index]
 
     try:
-        ind = compute_indicators(closes)
+        ind = compute_indicators(
+            closes, high=highs, low=lows, volume=volumes, open_=opens
+        )
     except Exception as exc:
         log.error("yfinance price_series: indicators failed for %s: %s", ticker, exc)
         ind = {}
 
-    def _float_or_none(arr: "np.ndarray | None", i: int) -> "float | None":
+    def _f(arr, i):
         if arr is None or len(arr) == 0:
             return None
         v = float(arr[i])
-        return None if (v != v) else v  # NaN check
+        return None if (v != v) else v
 
-    start = max(0, len(closes) - window)
+    start = 0 if window is None else max(0, len(closes) - window)
     series = [
         {
             "date": dates[i],
+            "open": float(opens[i]),
+            "high": float(highs[i]),
+            "low": float(lows[i]),
             "close": float(closes[i]),
-            "sma20": _float_or_none(ind.get("sma20"), i),
-            "ema50": _float_or_none(ind.get("ema50"), i),
-            "rsi14": _float_or_none(ind.get("rsi14"), i),
+            "volume": float(volumes[i]),
+            "sma20": _f(ind.get("sma20"), i),
+            "ema9": _f(ind.get("ema9"), i),
+            "ema20": _f(ind.get("ema20"), i),
+            "ema50": _f(ind.get("ema50"), i),
+            "vwap": _f(ind.get("vwap"), i),
+            "bb_upper": _f(ind.get("bb_upper"), i),
+            "bb_middle": _f(ind.get("bb_middle"), i),
+            "bb_lower": _f(ind.get("bb_lower"), i),
+            "macd_line": _f(ind.get("macd"), i),
+            "macd_signal": _f(ind.get("macd_signal"), i),
+            "macd_hist": _f(ind.get("macd_hist"), i),
+            "rsi14": _f(ind.get("rsi14"), i),
+            "atr14": _f(ind.get("atr14"), i),
+            "stoch_k": _f(ind.get("stoch_k"), i),
+            "stoch_d": _f(ind.get("stoch_d"), i),
+            "obv": _f(ind.get("obv"), i),
         }
         for i in range(start, len(closes))
     ]
 
-    def _last(key: str) -> "float | None":
-        return _float_or_none(ind.get(key), -1) if ind else None
+    def _last(key):
+        return _f(ind.get(key), -1) if ind else None
 
     result = {
         "series": series,
