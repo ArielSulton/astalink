@@ -380,6 +380,24 @@ export interface AnalyzeResponse {
   stock_engine: StockEngineResult | null;
 }
 
+export interface RecommendationItem {
+  ticker: string;
+  sector: string;
+  rank: number;
+  content_score: number;
+  user_score: number;
+  hybrid_score: number;
+  verdict: StockVerdict | null;
+}
+
+export interface RecommendationsResponse {
+  workspace_id: string;
+  personalized: boolean;
+  fallback_reason: string | null;
+  items: RecommendationItem[];
+  as_of: string;
+}
+
 export interface RegulationDoc {
   id: string;
   source: string;
@@ -570,6 +588,10 @@ export const api = {
   getPortfolio: (workspaceId: string, token: string): Promise<PortfolioResponse> =>
     jsonFetch<PortfolioResponse>(
       `/api/v1/portfolio?workspace_id=${workspaceId}`, { method: "GET" }, token,
+    ),
+  getRecommendations: (workspaceId: string, token: string): Promise<RecommendationsResponse> =>
+    jsonFetch<RecommendationsResponse>(
+      `/api/v1/recommendations?workspace_id=${workspaceId}`, { method: "GET" }, token,
     ),
   getChart: (
     ticker: string,
