@@ -1,99 +1,147 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ArrowLeftRight, ClipboardCheck, FileText, LineChart, MessageSquare, TrendingUp, Wallet } from "lucide-react";
-import { PageHeader } from "@/components/ui/page-header";
+import { ArrowRight, LineChart } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-context";
-import dynamic from "next/dynamic";
-const PriceChart = dynamic(() => import("@/components/price-chart").then(m => ({ default: m.PriceChart })), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono">Memuat chart…</div> });
-import { TickerCard } from "@/components/ticker-card";
 import { createClient } from "@/lib/supabase/client";
-import { api, type PortfolioResponse, type TickerChartData } from "@/lib/api-client";
+import { api, type PortfolioResponse, type TickerChartData, type ChartData } from "@/lib/api-client";
+import {
+  TerminalHeader, WatchlistSidebar, ChartToolbar, MainChartArea, SubplotTabs, BusinessConditionPanel,
+} from "@/components/terminal";
+import { useTimeframe } from "@/lib/hooks/use-timeframe";
+import { useIndicators } from "@/lib/hooks/use-indicators";
+import { useChartType } from "@/lib/hooks/use-chart-type";
+import { useScale } from "@/lib/hooks/use-scale";
+import { useSidebarCollapsed } from "@/lib/hooks/use-sidebar-collapsed";
 
 const DEFAULT_WATCHLIST = ["BBCA.JK", "TLKM.JK", "ASII.JK", "BBRI.JK"];
 
-const QUICK_ACTIONS = [
-  { label: "Chat AI", description: "Tanya analisis & alokasi", href: "/chatbot", icon: MessageSquare, color: "text-chart-2" },
-  { label: "Approvals", description: "Setujui transaksi", href: "/approvals", icon: ClipboardCheck, color: "text-chart-1" },
-  { label: "Transaksi", description: "Riwayat perdagangan", href: "/transactions", icon: ArrowLeftRight, color: "text-chart-3" },
-  { label: "Dokumen Legal", description: "Unggah & kelola", href: "/legal-docs", icon: FileText, color: "text-chart-4" },
-];
-
-function fmtIdr(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return "Rp " + n.toLocaleString("id-ID", { maximumFractionDigits: 0 });
+function fmtIdr(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return "Rp " + v.toLocaleString("id-ID", { maximumFractionDigits: 0 });
 }
 
-function fmtSigned(n: number | null | undefined): string {
-  if (n == null) return "—";
-  const s = Math.abs(n).toLocaleString("id-ID", { maximumFractionDigits: 0 });
-  return (n >= 0 ? "+Rp " : "-Rp ") + s;
+function fmtSigned(v: number | null | undefined): string {
+  if (v == null) return "—";
+  const s = v.toLocaleString("id-ID", { maximumFractionDigits: 0 });
+  return (v >= 0 ? "+Rp " : "-Rp ") + s.replace("-", "");
 }
 
 function MiniStat({ label, value, tone }: { label: string; value: string; tone?: number | null }) {
   const toneClass = tone == null ? "text-foreground" : tone >= 0 ? "text-chart-2" : "text-destructive";
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[9px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-        {label}
-      </p>
+      <p className="text-[9px] font-mono font-bold uppercase tracking-wider text-muted-foreground mb-1.5">{label}</p>
       <p className={`font-mono text-base font-bold tabular-nums leading-none ${toneClass}`}>{value}</p>
     </div>
   );
 }
 
 export default function DashboardPage() {
+  const { workspaceId } = useWorkspace();
+  const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
+  const [cashBalance, setCashBalance] = useState<number | null>(null);
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+
+  // Watchlist (sidebar summaries) + selection
   const [watchlist, setWatchlist] = useState<TickerChartData[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string>(DEFAULT_WATCHLIST[0]);
   const [marketLoading, setMarketLoading] = useState(true);
 
-  const { workspaceId } = useWorkspace();
-  const [cashBalance, setCashBalance] = useState<number | null>(null);
-  const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
+  // Chart series for the SELECTED ticker (full indicator data)
+  const [chart, setChart] = useState<ChartData | null>(null);
 
-  useEffect(() => {
-    api
-      .getWatchlist(DEFAULT_WATCHLIST)
-      .then((data) => setWatchlist(data))
-      .catch(() => {})
-      .finally(() => setMarketLoading(false));
-  }, []);
+  // Terminal state (persisted)
+  const { setTimeframe, config } = useTimeframe();
+  const { indicators, toggle } = useIndicators();
+  const { chartType, setChartType } = useChartType();
+  const { scale, setScale } = useScale();
+  const { collapsed, setCollapsed } = useSidebarCollapsed();
 
-  // Saldo kas sandbox milik workspace terpilih (RLS-scoped).
+  // Watchlist: 30s polling
   useEffect(() => {
-    if (!workspaceId) return;
-    const sb = createClient();
-    sb.from("workspaces")
-      .select("cash_balance")
-      .eq("id", workspaceId)
-      .single()
-      .then(({ data }) => {
-        setCashBalance(data?.cash_balance != null ? Number(data.cash_balance) : null);
-      });
-  }, [workspaceId]);
+    let cancel = false;
+    const fetchWatchlist = async () => {
+      try {
+        const data = await api.getWatchlist(DEFAULT_WATCHLIST, config.period, config.interval);
+        if (cancel) return;
+        setWatchlist(data);
+      } catch {
+        /* noop */
+      } finally {
+        if (!cancel) setMarketLoading(false);
+      }
+    };
+    fetchWatchlist();
+    const interval = setInterval(fetchWatchlist, 30000);
+    return () => { cancel = true; clearInterval(interval); };
+  }, [config.period, config.interval]);
 
-  // Sandbox portfolio summary (holdings + P&L).
+  // Chart series for the selected ticker: fetch whenever selection or timeframe changes
   useEffect(() => {
-    if (!workspaceId) return;
+    let cancel = false;
     (async () => {
       const sb = createClient();
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return;
       try {
-        setPortfolio(await api.getPortfolio(workspaceId, session.access_token));
+        const c = await api.getChart(selectedTicker, config.period, config.interval, session.access_token);
+        if (!cancel) { setChart(c); }
       } catch {
-        setPortfolio(null);
+        if (!cancel) { setChart(null); }
+      }
+    })();
+    return () => { cancel = true; };
+  }, [selectedTicker, config.period, config.interval]);
+
+  // Portfolio + cash + workspace name
+  useEffect(() => {
+    if (!workspaceId) return;
+    const sb = createClient();
+    (async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      try {
+        const [p, wsRows] = await Promise.all([
+          api.getPortfolio(workspaceId, session.access_token),
+          sb.from("workspaces").select("name").eq("id", workspaceId).single(),
+        ]);
+        setPortfolio(p);
+        setWorkspaceName(wsRows.data?.name ?? null);
+        setCashBalance(p ? p.cash_balance : null);
+      } catch {
+        /* noop */
       }
     })();
   }, [workspaceId]);
 
+  const selectedSym = selectedTicker.replace(".JK", "");
   const selectedData = watchlist.find((t) => t.ticker === selectedTicker) ?? null;
+
+  // Build subplots from enabled momentum/volume indicators
+  const subplots = useMemo(() => {
+    const map: Record<string, { id: string; label: string }> = {
+      volume: { id: "volume", label: "Volume" },
+      rsi: { id: "rsi", label: "RSI" },
+      macd: { id: "macd", label: "MACD" },
+      atr: { id: "atr", label: "ATR" },
+      stoch: { id: "stoch", label: "Stoch" },
+      obv: { id: "obv", label: "OBV" },
+    };
+    const order = ["volume", "rsi", "macd", "atr", "stoch", "obv"];
+    return order.filter((id) => indicators.includes(id as never)).map((id) => map[id]);
+  }, [indicators]);
+
+  const chartData = chart?.price_series ?? [];
+  const chartLastClose = chart?.last_close ?? selectedData?.last_close ?? null;
+  const chartPct = chart?.price_change_pct ?? selectedData?.price_change_pct ?? null;
 
   return (
     <div className="min-h-full bg-background">
-      {/* Portfolio summary strip */}
+      {/* Row 1: Portfolio strip (retained) */}
       {portfolio && portfolio.holdings.length > 0 && (
-        <div className="border-b border-border px-6 py-5 bg-card/20 animate-fade-in">
+        <div className="border-b border-border px-6 py-5 bg-card/20">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
               <div className="flex size-8 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25">
@@ -103,139 +151,64 @@ export default function DashboardPage() {
                 Portofolio
               </span>
             </div>
-            <Link
-              href="/portfolio"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-chart-2 hover:text-chart-2/80 transition-colors"
-            >
+            <Link href="/portfolio" className="inline-flex items-center gap-1.5 text-xs font-medium text-chart-2 hover:text-chart-2/80 transition-colors">
               Lihat detail <ArrowRight className="size-3" />
             </Link>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <MiniStat label="Total Ekuitas" value={fmtIdr(portfolio.total_equity)} />
             <MiniStat label="Kas" value={fmtIdr(portfolio.cash_balance)} />
-            <MiniStat label="Unrealized P&L" value={fmtSigned(portfolio.total_unrealized_pnl)}
-              tone={portfolio.total_unrealized_pnl} />
-            <MiniStat label="Realized P&L" value={fmtSigned(portfolio.total_realized_pnl)}
-              tone={portfolio.total_realized_pnl} />
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {portfolio.holdings.slice(0, 6).map((h) => (
-              <span key={h.ticker}
-                className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-secondary border border-border text-muted-foreground">
-                {h.ticker}
-              </span>
-            ))}
-            {portfolio.holdings.length > 6 && (
-              <span className="text-[10px] font-mono text-muted-foreground/60 px-1 py-0.5">
-                +{portfolio.holdings.length - 6}
-              </span>
-            )}
+            <MiniStat label="Unrealized P&L" value={fmtSigned(portfolio.total_unrealized_pnl)} tone={portfolio.total_unrealized_pnl} />
+            <MiniStat label="Realized P&L" value={fmtSigned(portfolio.total_realized_pnl)} tone={portfolio.total_realized_pnl} />
           </div>
         </div>
       )}
 
-      {/* Quick Actions */}
-      <div className="border-b border-border px-6 py-5 bg-card/10">
-        <div className="flex items-center gap-2.5 mb-4">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/25">
-            <TrendingUp className="size-4 text-primary" />
-          </div>
-          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground font-mono">
-            Akses Cepat
-          </span>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {QUICK_ACTIONS.map((action) => (
-            <Link
-              key={action.label}
-              href={action.href}
-              className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:bg-primary/[0.03] transition-all duration-200"
-            >
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary border border-border group-hover:border-primary/30 transition-colors">
-                <action.icon className={`size-4 ${action.color}`} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground leading-tight truncate">{action.label}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight truncate">{action.description}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
+      {/* Row 2: Terminal header */}
+      <TerminalHeader cashBalance={cashBalance} workspaceName={workspaceName} />
 
-      {/* Market Watch Header */}
-      <div className="border-b border-border px-6 py-5 bg-card/30">
-        <PageHeader eyebrow="Pantauan Pasar" title="IDX Blue Chips" className="mb-5">
-          {cashBalance != null && (
-            <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 py-1.5 animate-fade-in">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25">
-                <Wallet className="size-3.5 text-chart-2" />
-              </div>
-              <div className="leading-tight">
-                <p className="text-[9px] font-mono font-bold uppercase tracking-wider text-muted-foreground">
-                  Saldo
-                </p>
-                <p className="font-mono text-sm font-bold text-foreground tabular-nums">
-                  Rp {cashBalance.toLocaleString("id-ID", { maximumFractionDigits: 0 })}
-                </p>
-              </div>
-            </div>
-          )}
-        </PageHeader>
-
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          {DEFAULT_WATCHLIST.map((ticker) => {
-            const data = watchlist.find((t) => t.ticker === ticker);
-            return (
-              <TickerCard
-                key={ticker}
-                ticker={ticker}
-                lastClose={marketLoading ? null : (data?.last_close ?? null)}
-                priceChangePct={marketLoading ? null : (data?.price_change_pct ?? null)}
-                rsi14={marketLoading ? null : (data?.rsi14 ?? null)}
-                series={marketLoading ? null : (data?.price_series.map((p) => p.close) ?? null)}
-                selected={selectedTicker === ticker}
-                onClick={() => setSelectedTicker(ticker)}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Chart Area */}
-      <div className="px-6 py-5">
-        <div className="flex items-center gap-2.5 mb-4">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25">
-            <LineChart className="size-4 text-chart-2" />
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground font-mono">
-              {selectedTicker}
-            </p>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card/50 p-4">
-          {marketLoading ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-chart-2 animate-ping mr-2.5" />
-              Memuat data pasar…
-            </div>
-          ) : selectedData && selectedData.price_series.length > 0 ? (
-            <PriceChart
-              ticker={selectedData.ticker}
-              data={selectedData.price_series}
-              lastClose={selectedData.last_close}
-              priceChangePct={selectedData.price_change_pct}
-              bbUpper={selectedData.bb_upper}
-              bbLower={selectedData.bb_lower}
+      {/* Row 3: Terminal (sidebar + chart) */}
+      <div className="grid grid-cols-[auto_1fr] min-h-0 border-b border-border">
+        <WatchlistSidebar
+          watchlist={watchlist}
+          selectedTicker={selectedTicker}
+          onSelect={setSelectedTicker}
+          collapsed={collapsed}
+          onToggle={() => setCollapsed(!collapsed)}
+          loading={marketLoading}
+        />
+        <main className="flex min-w-0 flex-col">
+          <ChartToolbar
+            ticker={selectedTicker}
+            symLabel={selectedSym}
+            timeframe={config}
+            onTimeframeChange={setTimeframe}
+            indicators={indicators}
+            onToggleIndicator={toggle}
+            chartType={chartType}
+            onChartTypeChange={setChartType}
+            scale={scale}
+            onScaleChange={setScale}
+            onExport={() => undefined}
+          />
+          <div className="flex-1 space-y-3 p-4">
+            <MainChartArea
+              data={chartData}
+              indicators={indicators}
+              chartType={chartType}
+              scale={scale}
+              lastClose={chartLastClose}
+              priceChangePct={chartPct}
             />
-          ) : (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-xs font-mono">
-              Data tidak tersedia untuk {selectedTicker}
-            </div>
-          )}
-        </div>
+            {subplots.length > 0 && subplots.some((s) => s.id !== "volume") && (
+              <SubplotTabs data={chartData} subplots={subplots} />
+            )}
+          </div>
+        </main>
       </div>
+
+      {/* Row 4: Business condition */}
+      <BusinessConditionPanel />
     </div>
   );
 }

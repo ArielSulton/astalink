@@ -464,9 +464,9 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
       token,
     ),
-  getWatchlist: (tickers: string[]): Promise<TickerChartData[]> =>
+  getWatchlist: (tickers: string[], period?: string, interval?: string): Promise<TickerChartData[]> =>
     jsonFetch<TickerChartData[]>(
-      `/api/v1/market/watchlist?tickers=${tickers.join(",")}`,
+      `/api/v1/market/watchlist?tickers=${tickers.join(",")}${period ? `&period=${period}` : ""}${interval ? `&interval=${interval}` : ""}`,
       { method: "GET" },
     ),
   getNews: (ticker: string): Promise<NewsResponse> =>
