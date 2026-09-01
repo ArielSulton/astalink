@@ -1,9 +1,12 @@
 """Hybrid stock recommendations: 50% Content-Based (technical score) +
 50% User-Based (holdings-similarity collaborative filtering), with an
 automatic cold-start fallback to 100% content-based when there isn't
-enough comparable-workspace data. Deliberately outside the LangGraph
-pipeline — read-only discovery, not a transaction (see
-docs/superpowers/specs/2026-09-01-stock-recommendations-design.md)."""
+enough comparable-workspace data. The A1-A4 verdict engine's own
+`eligible_tickers` gate is applied to the full candidate set before
+ranking, so a REJECT/AVOID-band ticker (e.g. a regulatory-sensitive
+tobacco/alcohol name) never appears in the response at all. Deliberately
+outside the LangGraph pipeline — read-only discovery, not a transaction
+(see docs/superpowers/specs/2026-09-01-stock-recommendations-design.md)."""
 from __future__ import annotations
 
 import logging
@@ -181,8 +184,19 @@ _TOP_N_ENRICHED = 8
 
 def build_recommendations(sb, workspace_id: str) -> RecommendationsResponse:
     """Full pipeline: content score every candidate -> holdings-based user
-    score (or cold-start fallback) -> 50/50 hybrid blend -> rank -> enrich
-    the top _TOP_N_ENRICHED with a full A1-A4 verdict for display."""
+    score (or cold-start fallback) -> 50/50 hybrid blend -> A1-A4 verdict
+    for every viable candidate -> filter to the engine's own
+    eligible_tickers (REJECT/AVOID band excluded entirely, not just
+    unbadged — a compliance requirement, since eligible_tickers is what
+    keeps a REJECT-band tobacco/alcohol stock, or any manipulation/gate
+    failure, off a page titled "worth buying") -> rank the eligible set ->
+    keep the verdict field only for the top _TOP_N_ENRICHED of that
+    ranking (payload-size control only; verdicts for the rest of the
+    eligible set were already computed but are dropped from the response).
+
+    Fails closed: if verdict enrichment itself raises, eligibility can't be
+    determined at all, so this returns zero recommendations rather than
+    falling back to an unfiltered (and therefore unvetted) list."""
     content_scores: dict[str, float] = {}
     for ticker in TICKER_SECTOR:
         score = content_score_for(ticker)
@@ -207,16 +221,21 @@ def build_recommendations(sb, workspace_id: str) -> RecommendationsResponse:
         else:
             hybrid_scores[ticker] = content
 
-    ranked = sorted(viable, key=lambda t: hybrid_scores[t], reverse=True)
-    top_n = ranked[:_TOP_N_ENRICHED]
-
     verdicts: dict[str, StockVerdict] = {}
-    if top_n:
+    eligible_tickers: set[str] = set()
+    if viable:
         try:
-            engine = run_stock_engine(top_n, news_by_ticker={t: fetch_news(t) for t in top_n})
+            engine = run_stock_engine(viable, news_by_ticker={t: fetch_news(t) for t in viable})
             verdicts = {t: StockVerdict(**v) for t, v in engine["verdicts"].items()}
+            eligible_tickers = set(engine["eligible_tickers"])
         except Exception as exc:
-            log.warning("recommendations: verdict enrichment failed: %s", exc)
+            log.warning(
+                "recommendations: verdict enrichment failed, returning no candidates: %s", exc
+            )
+
+    eligible = [t for t in viable if t in eligible_tickers]
+    ranked = sorted(eligible, key=lambda t: hybrid_scores[t], reverse=True)
+    top_n_tickers = set(ranked[:_TOP_N_ENRICHED])
 
     items = [
         RecommendationItem(
@@ -226,7 +245,7 @@ def build_recommendations(sb, workspace_id: str) -> RecommendationsResponse:
             content_score=round(content_scores[ticker], 1),
             user_score=round(user_score_map.get(ticker, 0.0), 1),
             hybrid_score=round(hybrid_scores[ticker], 1),
-            verdict=verdicts.get(ticker),
+            verdict=verdicts.get(ticker) if ticker in top_n_tickers else None,
         )
         for i, ticker in enumerate(ranked)
     ]

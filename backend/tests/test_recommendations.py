@@ -150,26 +150,28 @@ def test_user_scores_personalizes_with_enough_similar_workspaces():
     assert scores["TLKM"] == 0.0     # no comparable workspace holds telco
 
 
-def test_build_recommendations_ranks_by_hybrid_score_and_enriches_top_n():
+def test_build_recommendations_ranks_eligible_by_hybrid_score_and_caps_verdicts():
     content_by_ticker = {"BBCA": 80.0, "TLKM": 60.0, "ASII": 40.0}
     user_by_ticker = {"BBCA": 40.0, "TLKM": 80.0, "ASII": 0.0}
-    # user_by_ticker normalized to [0,100] (min=0 at ASII, max=80 at TLKM):
-    # BBCA=50.0, TLKM=100.0, ASII=0.0
-    # hybrid: BBCA=0.5*80+0.5*50=65, TLKM=0.5*60+0.5*100=80, ASII=0.5*40+0.5*0=20
-    # -> ranked TLKM, BBCA, ASII
+    # normalized user: BBCA=50, TLKM=100, ASII=0
+    # hybrid: BBCA=65, TLKM=80, ASII=20 -> ranked TLKM, BBCA, ASII
 
     fake_engine_result = {
         "verdicts": {
-            "TLKM": {
-                "ticker": "TLKM", "band": "buy", "score": 70.0, "horizon": "3-6 bulan",
-                "invalidation_condition": "—", "components": {}, "gate_status": "pass",
-                "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
-                "as_of": "2026-09-01T00:00:00+00:00",
-            },
-            # BBCA/ASII intentionally absent: run_stock_engine already drops
-            # per-ticker failures from its verdicts dict internally.
+            "BBCA": {"ticker": "BBCA", "band": "buy", "score": 75.0, "horizon": "3-6 bulan",
+                      "invalidation_condition": "—", "components": {}, "gate_status": "pass",
+                      "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
+                      "as_of": "2026-09-01T00:00:00+00:00"},
+            "TLKM": {"ticker": "TLKM", "band": "buy", "score": 70.0, "horizon": "3-6 bulan",
+                      "invalidation_condition": "—", "components": {}, "gate_status": "pass",
+                      "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
+                      "as_of": "2026-09-01T00:00:00+00:00"},
+            "ASII": {"ticker": "ASII", "band": "watchlist", "score": 55.0, "horizon": "3-6 bulan",
+                      "invalidation_condition": "—", "components": {}, "gate_status": "pass",
+                      "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
+                      "as_of": "2026-09-01T00:00:00+00:00"},
         },
-        "eligible_tickers": ["TLKM"],
+        "eligible_tickers": ["BBCA", "TLKM", "ASII"],
         "macro": {"score": 50.0, "detail": [], "as_of": "2026-09-01T00:00:00+00:00"},
         "as_of": "2026-09-01T00:00:00+00:00",
     }
@@ -178,34 +180,90 @@ def test_build_recommendations_ranks_by_hybrid_score_and_enriches_top_n():
          patch("app.core.recommendations.content_score_for", side_effect=lambda t: content_by_ticker.get(t)), \
          patch("app.core.recommendations.user_scores", return_value=(user_by_ticker, True, None)), \
          patch("app.core.recommendations.fetch_news", return_value=[]), \
-         patch("app.core.recommendations.run_stock_engine", return_value=fake_engine_result) as mock_engine:
+         patch("app.core.recommendations.run_stock_engine", return_value=fake_engine_result) as mock_engine, \
+         patch("app.core.recommendations._TOP_N_ENRICHED", 2):
         result = build_recommendations(MagicMock(), "ws-1")
 
     assert [item.ticker for item in result.items] == ["TLKM", "BBCA", "ASII"]
     assert result.items[0].hybrid_score == 80.0
     assert result.items[0].rank == 1
-    assert result.items[0].verdict is not None
-    assert result.items[0].verdict.band == "buy"
-    assert result.items[1].verdict is None
-    assert result.items[2].verdict is None
     assert result.personalized is True
     assert result.workspace_id == "ws-1"
 
-    # All 3 candidates fit under the top-8 enrichment cap, so run_stock_engine
-    # must have been called once with every one of them (order = ranked order).
+    # _TOP_N_ENRICHED patched to 2: only the top 2 (TLKM, BBCA) keep their verdict;
+    # ASII (rank 3, still eligible) has verdict=None despite being enriched internally.
+    assert result.items[0].verdict is not None and result.items[0].verdict.band == "buy"
+    assert result.items[1].verdict is not None
+    assert result.items[2].verdict is None
+
+    # run_stock_engine is now called with the FULL viable set, before ranking/filtering
+    # (needed to determine eligible_tickers up front), not just the ranked top-N.
     mock_engine.assert_called_once()
     called_tickers = mock_engine.call_args.args[0]
-    assert called_tickers == ["TLKM", "BBCA", "ASII"]
+    assert called_tickers == ["BBCA", "TLKM", "ASII"]
+
+
+def test_build_recommendations_excludes_ineligible_tickers_entirely():
+    """A ticker whose verdict band is REJECT (fails the engine's own
+    eligible_tickers gate) must not appear anywhere in the ranked results
+    — not just lack a verdict, but be excluded from ranking entirely. This
+    is the compliance-driven behavior: a REJECT-band stock must never be
+    shown on a "worth buying" page regardless of its technical/CF score,
+    even if that score would otherwise rank it #1."""
+    content_by_ticker = {"BBCA": 80.0, "TLKM": 90.0, "ASII": 40.0}
+    # TLKM scores highest on content, but the engine rejects it.
+
+    fake_engine_result = {
+        "verdicts": {
+            "BBCA": {"ticker": "BBCA", "band": "buy", "score": 75.0, "horizon": "3-6 bulan",
+                      "invalidation_condition": "—", "components": {}, "gate_status": "pass",
+                      "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
+                      "as_of": "2026-09-01T00:00:00+00:00"},
+            "TLKM": {"ticker": "TLKM", "band": "reject", "score": None, "horizon": "3-6 bulan",
+                      "invalidation_condition": "—", "components": {}, "gate_status": "fail",
+                      "manipulation_risk": "high", "evidence_gaps": [], "detail": [],
+                      "as_of": "2026-09-01T00:00:00+00:00"},
+            "ASII": {"ticker": "ASII", "band": "watchlist", "score": 55.0, "horizon": "3-6 bulan",
+                      "invalidation_condition": "—", "components": {}, "gate_status": "pass",
+                      "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
+                      "as_of": "2026-09-01T00:00:00+00:00"},
+        },
+        "eligible_tickers": ["BBCA", "ASII"],  # TLKM excluded — REJECT band
+        "macro": {"score": 50.0, "detail": [], "as_of": "2026-09-01T00:00:00+00:00"},
+        "as_of": "2026-09-01T00:00:00+00:00",
+    }
+
+    with patch("app.core.recommendations.TICKER_SECTOR", {"BBCA": "banking", "TLKM": "telco", "ASII": "industrials"}), \
+         patch("app.core.recommendations.content_score_for", side_effect=lambda t: content_by_ticker.get(t)), \
+         patch("app.core.recommendations.user_scores", return_value=({}, False, "cold start")), \
+         patch("app.core.recommendations.fetch_news", return_value=[]), \
+         patch("app.core.recommendations.run_stock_engine", return_value=fake_engine_result):
+        result = build_recommendations(MagicMock(), "ws-1")
+
+    tickers_in_result = [item.ticker for item in result.items]
+    assert "TLKM" not in tickers_in_result, "REJECT-band ticker must be excluded from ranking entirely"
+    assert tickers_in_result == ["BBCA", "ASII"]  # BBCA ranks first: content 80 > ASII's 40
 
 
 def test_build_recommendations_cold_start_uses_content_score_only():
     content_by_ticker = {"BBCA": 80.0}
+    fake_engine_result = {
+        "verdicts": {
+            "BBCA": {"ticker": "BBCA", "band": "buy", "score": 80.0, "horizon": "3-6 bulan",
+                      "invalidation_condition": "—", "components": {}, "gate_status": "pass",
+                      "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
+                      "as_of": "2026-09-01T00:00:00+00:00"},
+        },
+        "eligible_tickers": ["BBCA"],
+        "macro": {"score": None, "detail": [], "as_of": ""},
+        "as_of": "",
+    }
 
     with patch("app.core.recommendations.TICKER_SECTOR", {"BBCA": "banking"}), \
          patch("app.core.recommendations.content_score_for", side_effect=lambda t: content_by_ticker.get(t)), \
          patch("app.core.recommendations.user_scores", return_value=({}, False, "belum ada histori")), \
          patch("app.core.recommendations.fetch_news", return_value=[]), \
-         patch("app.core.recommendations.run_stock_engine", return_value={"verdicts": {}, "eligible_tickers": [], "macro": {"score": None, "detail": [], "as_of": ""}, "as_of": ""}):
+         patch("app.core.recommendations.run_stock_engine", return_value=fake_engine_result):
         result = build_recommendations(MagicMock(), "ws-1")
 
     assert result.personalized is False
@@ -238,6 +296,9 @@ def test_normalize_to_100_empty_dict_returns_empty():
 
 
 def test_build_recommendations_verdict_enrichment_failure_degrades_gracefully():
+    """If run_stock_engine raises, eligibility can't be determined for any
+    candidate at all, so this fails closed: zero recommendations rather
+    than falling back to an unfiltered (and therefore unvetted) list."""
     content_by_ticker = {"BBCA": 80.0, "TLKM": 60.0}
 
     with patch("app.core.recommendations.TICKER_SECTOR", {"BBCA": "banking", "TLKM": "telco"}), \
@@ -248,8 +309,7 @@ def test_build_recommendations_verdict_enrichment_failure_degrades_gracefully():
         result = build_recommendations(MagicMock(), "ws-1")
 
     assert isinstance(result, RecommendationsResponse)
-    assert len(result.items) == 2
-    assert all(item.verdict is None for item in result.items)
+    assert result.items == []
 
 
 def test_recommendations_route_registered():
