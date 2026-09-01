@@ -4,6 +4,7 @@ from app.api.v1 import agent, allocation, audit, auth, business, chat, health, l
 from app.api.v1 import approvals as approvals_router
 from app.api.v1 import pin as pin_router
 from app.api.v1 import portfolio as portfolio_router
+from app.api.v1 import recommendations as recommendations_router
 from app.api.v1 import whatsapp as wa_router
 from app.api.v1 import workspaces as workspaces_router
 
@@ -22,3 +23,4 @@ api_router.include_router(workspaces_router.router, prefix="/workspaces", tags=[
 api_router.include_router(business.router, prefix="/business", tags=["business"])
 api_router.include_router(allocation.router, prefix="/allocation", tags=["allocation"])
 api_router.include_router(portfolio_router.router, prefix="/portfolio", tags=["portfolio"])
+api_router.include_router(recommendations_router.router, prefix="/recommendations", tags=["recommendations"])

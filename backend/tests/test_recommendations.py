@@ -13,6 +13,7 @@ from app.core.recommendations import (
     build_recommendations,
     user_scores,
 )
+from app.models.recommendations import RecommendationsResponse
 
 
 def test_bare_ticker_strips_exchange_suffix():
@@ -206,3 +207,48 @@ def test_build_recommendations_cold_start_uses_content_score_only():
     assert result.personalized is False
     assert result.fallback_reason == "belum ada histori"
     assert result.items[0].hybrid_score == 80.0   # content-only, not 0.5*80
+
+
+def test_recommendations_route_registered():
+    from app.api.v1 import recommendations as recommendations_module
+    seen = {r.path for r in recommendations_module.router.routes}
+    assert "" in seen
+
+
+def test_recommendations_requires_ownership(client) -> None:
+    mock_user = {"sub": str(uuid.uuid4())}
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.recommendations.get_admin_client", return_value=fake_admin):
+        resp = client.get(
+            "/api/v1/recommendations?workspace_id=not-mine",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 403
+
+
+def test_recommendations_returns_build_result(client) -> None:
+    mock_user = {"sub": str(uuid.uuid4())}
+    fake_admin = MagicMock()
+    fake_admin.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[{"id": "ws-1"}])
+
+    fake_response = RecommendationsResponse(
+        workspace_id="ws-1", personalized=False,
+        fallback_reason="belum ada histori", items=[],
+        as_of="2026-09-01T00:00:00+00:00",
+    )
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.recommendations.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.recommendations.build_recommendations", return_value=fake_response):
+        resp = client.get(
+            "/api/v1/recommendations?workspace_id=ws-1",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["personalized"] is False
+    assert body["workspace_id"] == "ws-1"
+    assert body["items"] == []
