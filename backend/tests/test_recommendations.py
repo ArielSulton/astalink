@@ -10,6 +10,7 @@ from app.core.recommendations import (
     _bare_ticker,
     _cosine_similarity,
     _sector_vectors_by_workspace,
+    user_scores,
 )
 
 
@@ -97,3 +98,50 @@ def test_content_score_returns_none_when_all_fields_missing():
     data = {"last_close": None, "sma20": None, "rsi14": None, "macd": None, "bb_upper": None}
     with patch("app.core.recommendations.fetch_price_series_with_indicators", return_value=data):
         assert content_score_for("BBCA") is None
+
+
+def test_user_scores_cold_start_when_workspace_has_no_holdings():
+    fake_sb = MagicMock()
+    fake_sb.table.return_value.select.return_value.execute.return_value = MagicMock(data=[])
+
+    scores, personalized, reason = user_scores(fake_sb, "ws-empty", ["BBCA"])
+
+    assert scores == {}
+    assert personalized is False
+    assert reason is not None
+
+
+def test_user_scores_cold_start_when_too_few_comparable_workspaces():
+    rows = [
+        {"workspace_id": "ws-me", "ticker": "BBCA.JK", "quantity": 10, "avg_cost": 1000},
+        {"workspace_id": "ws-other", "ticker": "BMRI.JK", "quantity": 10, "avg_cost": 1000},
+    ]
+    fake_sb = MagicMock()
+    fake_sb.table.return_value.select.return_value.execute.return_value = MagicMock(data=rows)
+
+    scores, personalized, reason = user_scores(fake_sb, "ws-me", ["BBCA"])
+
+    assert scores == {}
+    assert personalized is False
+    assert reason is not None
+
+
+def test_user_scores_personalizes_with_enough_similar_workspaces():
+    rows = [
+        {"workspace_id": "ws-me", "ticker": "BBCA.JK", "quantity": 10, "avg_cost": 1000},
+    ]
+    # Three "similar" workspaces, all banking-heavy like ws-me.
+    for i in range(3):
+        rows.append({
+            "workspace_id": f"ws-sim-{i}", "ticker": "BMRI.JK",
+            "quantity": 10, "avg_cost": 1000,
+        })
+    fake_sb = MagicMock()
+    fake_sb.table.return_value.select.return_value.execute.return_value = MagicMock(data=rows)
+
+    scores, personalized, reason = user_scores(fake_sb, "ws-me", ["BBCA", "TLKM"])
+
+    assert personalized is True
+    assert reason is None
+    assert scores["BBCA"] == 100.0   # all comparable workspaces are 100% banking
+    assert scores["TLKM"] == 0.0     # no comparable workspace holds telco

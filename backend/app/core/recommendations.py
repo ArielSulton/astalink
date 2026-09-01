@@ -107,3 +107,45 @@ def content_score_for(ticker: str) -> float | None:
     if not known:
         return None
     return (sum(known) / len(known)) * (100.0 / _CHECK_MAX)
+
+
+_MIN_COMPARABLE_WORKSPACES = 3
+
+
+def user_scores(
+    sb, workspace_id: str, candidate_tickers: list[str],
+) -> tuple[dict[str, float], bool, str | None]:
+    """Holdings-based collaborative filtering: how much workspaces with a
+    similar sector-exposure profile favor each candidate ticker's sector.
+    Returns (scores_by_ticker, personalized, fallback_reason) — scores is
+    {} and personalized is False whenever there isn't enough comparable
+    data (see the design spec's "Cold start" section)."""
+    vectors = _sector_vectors_by_workspace(sb)
+    my_vector = vectors.get(workspace_id)
+    if not my_vector:
+        return {}, False, "Workspace Anda belum memiliki histori kepemilikan saham."
+
+    similarities: dict[str, float] = {}
+    for other_id, vector in vectors.items():
+        if other_id == workspace_id:
+            continue
+        sim = _cosine_similarity(my_vector, vector)
+        if sim > 0.0:
+            similarities[other_id] = sim
+
+    if len(similarities) < _MIN_COMPARABLE_WORKSPACES:
+        return {}, False, (
+            f"Hanya menemukan {len(similarities)} workspace dengan profil kepemilikan "
+            "mirip — terlalu sedikit untuk personalisasi."
+        )
+
+    total_similarity = sum(similarities.values())
+    scores: dict[str, float] = {}
+    for ticker in candidate_tickers:
+        sector = sector_of(ticker)
+        weighted = sum(
+            similarities[other_id] * vectors[other_id].get(sector, 0.0)
+            for other_id in similarities
+        )
+        scores[ticker] = 100.0 * weighted / total_similarity
+    return scores, True, None
