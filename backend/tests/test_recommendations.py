@@ -10,6 +10,7 @@ from app.core.recommendations import (
     _bare_ticker,
     _cosine_similarity,
     _sector_vectors_by_workspace,
+    build_recommendations,
     user_scores,
 )
 
@@ -145,3 +146,63 @@ def test_user_scores_personalizes_with_enough_similar_workspaces():
     assert reason is None
     assert scores["BBCA"] == 100.0   # all comparable workspaces are 100% banking
     assert scores["TLKM"] == 0.0     # no comparable workspace holds telco
+
+
+def test_build_recommendations_ranks_by_hybrid_score_and_enriches_top_n():
+    content_by_ticker = {"BBCA": 80.0, "TLKM": 60.0, "ASII": 40.0}
+    user_by_ticker = {"BBCA": 40.0, "TLKM": 80.0, "ASII": 0.0}
+    # hybrid: BBCA=60, TLKM=70, ASII=20 -> ranked TLKM, BBCA, ASII
+
+    fake_engine_result = {
+        "verdicts": {
+            "TLKM": {
+                "ticker": "TLKM", "band": "buy", "score": 70.0, "horizon": "3-6 bulan",
+                "invalidation_condition": "—", "components": {}, "gate_status": "pass",
+                "manipulation_risk": "low", "evidence_gaps": [], "detail": [],
+                "as_of": "2026-09-01T00:00:00+00:00",
+            },
+            # BBCA/ASII intentionally absent: run_stock_engine already drops
+            # per-ticker failures from its verdicts dict internally.
+        },
+        "eligible_tickers": ["TLKM"],
+        "macro": {"score": 50.0, "detail": [], "as_of": "2026-09-01T00:00:00+00:00"},
+        "as_of": "2026-09-01T00:00:00+00:00",
+    }
+
+    with patch("app.core.recommendations.TICKER_SECTOR", {"BBCA": "banking", "TLKM": "telco", "ASII": "industrials"}), \
+         patch("app.core.recommendations.content_score_for", side_effect=lambda t: content_by_ticker.get(t)), \
+         patch("app.core.recommendations.user_scores", return_value=(user_by_ticker, True, None)), \
+         patch("app.core.recommendations.fetch_news", return_value=[]), \
+         patch("app.core.recommendations.run_stock_engine", return_value=fake_engine_result) as mock_engine:
+        result = build_recommendations(MagicMock(), "ws-1")
+
+    assert [item.ticker for item in result.items] == ["TLKM", "BBCA", "ASII"]
+    assert result.items[0].hybrid_score == 70.0
+    assert result.items[0].rank == 1
+    assert result.items[0].verdict is not None
+    assert result.items[0].verdict.band == "buy"
+    assert result.items[1].verdict is None
+    assert result.items[2].verdict is None
+    assert result.personalized is True
+    assert result.workspace_id == "ws-1"
+
+    # All 3 candidates fit under the top-8 enrichment cap, so run_stock_engine
+    # must have been called once with every one of them (order = ranked order).
+    mock_engine.assert_called_once()
+    called_tickers = mock_engine.call_args.args[0]
+    assert called_tickers == ["TLKM", "BBCA", "ASII"]
+
+
+def test_build_recommendations_cold_start_uses_content_score_only():
+    content_by_ticker = {"BBCA": 80.0}
+
+    with patch("app.core.recommendations.TICKER_SECTOR", {"BBCA": "banking"}), \
+         patch("app.core.recommendations.content_score_for", side_effect=lambda t: content_by_ticker.get(t)), \
+         patch("app.core.recommendations.user_scores", return_value=({}, False, "belum ada histori")), \
+         patch("app.core.recommendations.fetch_news", return_value=[]), \
+         patch("app.core.recommendations.run_stock_engine", return_value={"verdicts": {}, "eligible_tickers": [], "macro": {"score": None, "detail": [], "as_of": ""}, "as_of": ""}):
+        result = build_recommendations(MagicMock(), "ws-1")
+
+    assert result.personalized is False
+    assert result.fallback_reason == "belum ada histori"
+    assert result.items[0].hybrid_score == 80.0   # content-only, not 0.5*80

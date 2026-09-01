@@ -6,8 +6,14 @@ pipeline — read-only discovery, not a transaction (see
 docs/superpowers/specs/2026-09-01-stock-recommendations-design.md)."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from app.agents.market.news_client import fetch_news
+from app.agents.market.stock_engine import run_stock_engine
+from app.agents.market.synthesizer import StockVerdict
 from app.agents.market.yfinance_client import fetch_price_series_with_indicators
-from app.agents.optimizer.sectors import sector_of
+from app.agents.optimizer.sectors import TICKER_SECTOR, sector_of
+from app.models.recommendations import RecommendationItem, RecommendationsResponse
 
 
 def _bare_ticker(ticker: str) -> str:
@@ -149,3 +155,57 @@ def user_scores(
         )
         scores[ticker] = 100.0 * weighted / total_similarity
     return scores, True, None
+
+
+_TOP_N_ENRICHED = 8
+
+
+def build_recommendations(sb, workspace_id: str) -> RecommendationsResponse:
+    """Full pipeline: content score every candidate -> holdings-based user
+    score (or cold-start fallback) -> 50/50 hybrid blend -> rank -> enrich
+    the top _TOP_N_ENRICHED with a full A1-A4 verdict for display."""
+    content_scores: dict[str, float] = {}
+    for ticker in TICKER_SECTOR:
+        score = content_score_for(ticker)
+        if score is not None:
+            content_scores[ticker] = score
+
+    viable = list(content_scores.keys())
+    user_score_map, personalized, fallback_reason = user_scores(sb, workspace_id, viable)
+
+    hybrid_scores: dict[str, float] = {}
+    for ticker in viable:
+        content = content_scores[ticker]
+        if personalized:
+            hybrid_scores[ticker] = 0.5 * content + 0.5 * user_score_map.get(ticker, 0.0)
+        else:
+            hybrid_scores[ticker] = content
+
+    ranked = sorted(viable, key=lambda t: hybrid_scores[t], reverse=True)
+    top_n = ranked[:_TOP_N_ENRICHED]
+
+    verdicts: dict[str, StockVerdict] = {}
+    if top_n:
+        engine = run_stock_engine(top_n, news_by_ticker={t: fetch_news(t) for t in top_n})
+        verdicts = {t: StockVerdict(**v) for t, v in engine["verdicts"].items()}
+
+    items = [
+        RecommendationItem(
+            ticker=ticker,
+            sector=sector_of(ticker),
+            rank=i + 1,
+            content_score=round(content_scores[ticker], 1),
+            user_score=round(user_score_map.get(ticker, 0.0), 1),
+            hybrid_score=round(hybrid_scores[ticker], 1),
+            verdict=verdicts.get(ticker),
+        )
+        for i, ticker in enumerate(ranked)
+    ]
+
+    return RecommendationsResponse(
+        workspace_id=workspace_id,
+        personalized=personalized,
+        fallback_reason=fallback_reason,
+        items=items,
+        as_of=datetime.now(timezone.utc).isoformat(),
+    )
