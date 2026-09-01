@@ -17,6 +17,7 @@ import {
   Receipt,
   Scale,
   Settings,
+  Sparkles,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -68,6 +69,7 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
       // gate is the product's own headline differentiator and was previously
       // reachable only via deep link or chat — undiscoverable from nav.
       { href: "/allocation", label: "Alokasi Modal", icon: PieChart },
+      { href: "/recommendations", label: "Rekomendasi", icon: Sparkles },
       { href: "/chatbot", label: "Chatbot AI", icon: Bot },
       { href: "/portfolio", label: "Portofolio", icon: Wallet },
       { href: "/transactions", label: "Transaksi", icon: Receipt },
