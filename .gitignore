@@ -71,3 +71,6 @@ __pycache__/
 frontend/AGENTS.md
 frontend/CLAUDE.md
 DESIGN.md
+
+# git worktrees (agent-created isolated workspaces)
+/.worktrees/
