@@ -210,6 +210,60 @@ export interface BusinessDetail extends Business {
   financial_records: FinancialRecord[];
 }
 
+export interface ExtendedPricePoint {
+  date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+  sma20: number | null;
+  ema9: number | null;
+  ema20: number | null;
+  ema50: number | null;
+  vwap: number | null;
+  bb_upper: number | null;
+  bb_middle: number | null;
+  bb_lower: number | null;
+  macd_line: number | null;
+  macd_signal: number | null;
+  macd_hist: number | null;
+  rsi14: number | null;
+  atr14: number | null;
+  stoch_k: number | null;
+  stoch_d: number | null;
+  obv: number | null;
+}
+
+export interface ChartData {
+  ticker: string;
+  last_close: number | null;
+  prev_close: number | null;
+  price_change_pct: number | null;
+  rsi14: number | null;
+  sma20: number | null;
+  macd: number | null;
+  bb_upper: number | null;
+  bb_lower: number | null;
+  price_series: ExtendedPricePoint[];
+}
+
+export interface BusinessValuation {
+  enterprise_value: number;
+  discount_rate: number;
+  terminal_growth: number;
+  cashflows: number[];
+  projection_years: number;
+  narration: string;
+}
+
+export interface BusinessValuationResponse {
+  business: Business;
+  valuation: BusinessValuation;
+  financial_records: FinancialRecord[];
+  last_updated: string;
+}
+
 // ---------------------------------------------------------------------------
 // Layer 0 capital allocation
 // ---------------------------------------------------------------------------
@@ -517,6 +571,28 @@ export const api = {
     jsonFetch<PortfolioResponse>(
       `/api/v1/portfolio?workspace_id=${workspaceId}`, { method: "GET" }, token,
     ),
+  getChart: (
+    ticker: string,
+    period: string,
+    interval: string,
+    token: string,
+  ): Promise<ChartData> =>
+    jsonFetch<ChartData>(
+      `/api/v1/market/chart?ticker=${encodeURIComponent(ticker)}&period=${period}&interval=${interval}`,
+      { method: "GET" },
+      token,
+    ),
+
+  getBusinessValuation: (
+    businessId: string,
+    token: string,
+  ): Promise<BusinessValuationResponse> =>
+    jsonFetch<BusinessValuationResponse>(
+      `/api/v1/business/${encodeURIComponent(businessId)}/valuation`,
+      { method: "GET" },
+      token,
+    ),
+
   buyHolding: (
     workspaceId: string,
     body: BuyRequest,
