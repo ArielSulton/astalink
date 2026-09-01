@@ -59,10 +59,14 @@ export default function DashboardPage() {
   const { scale, setScale } = useScale();
   const { collapsed, setCollapsed } = useSidebarCollapsed();
 
+  // Poll pause state
+  const [pollPaused, setPollPaused] = useState(false);
+
   // Watchlist: 30s polling
   useEffect(() => {
     let cancel = false;
     const fetchWatchlist = async () => {
+      if (pollPaused) return;
       try {
         const data = await api.getWatchlist(DEFAULT_WATCHLIST, config.period, config.interval);
         if (cancel) return;
@@ -76,7 +80,37 @@ export default function DashboardPage() {
     fetchWatchlist();
     const interval = setInterval(fetchWatchlist, 30000);
     return () => { cancel = true; clearInterval(interval); };
-  }, [config.period, config.interval]);
+  }, [config.period, config.interval, pollPaused]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey) return;
+      const idx = DEFAULT_WATCHLIST.indexOf(selectedTicker);
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          setSelectedTicker(DEFAULT_WATCHLIST[Math.max(0, idx - 1)]);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          setSelectedTicker(DEFAULT_WATCHLIST[Math.min(DEFAULT_WATCHLIST.length - 1, idx + 1)]);
+          break;
+        case "l":
+        case "L":
+          setScale(scale === "linear" ? "log" : "linear");
+          break;
+        case " ":
+          e.preventDefault();
+          setPollPaused((p) => !p);
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedTicker, scale, setScale]);
 
   // Chart series for the selected ticker: fetch whenever selection or timeframe changes
   useEffect(() => {
