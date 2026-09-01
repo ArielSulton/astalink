@@ -6,6 +6,7 @@ pipeline — read-only discovery, not a transaction (see
 docs/superpowers/specs/2026-09-01-stock-recommendations-design.md)."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from app.agents.market.news_client import fetch_news
@@ -14,6 +15,8 @@ from app.agents.market.synthesizer import StockVerdict
 from app.agents.market.yfinance_client import fetch_price_series_with_indicators
 from app.agents.optimizer.sectors import TICKER_SECTOR, sector_of
 from app.models.recommendations import RecommendationItem, RecommendationsResponse
+
+log = logging.getLogger(__name__)
 
 
 def _bare_ticker(ticker: str) -> str:
@@ -99,7 +102,7 @@ def content_score_for(ticker: str) -> float | None:
     excludes that check and renormalizes over the rest; returns None only
     when every check is unavailable (so the caller can drop the ticker
     entirely rather than score it as 0)."""
-    data = fetch_price_series_with_indicators(ticker)
+    data = fetch_price_series_with_indicators(ticker, period="6mo")
     last_close = data.get("last_close")
     rsi14 = data.get("rsi14")
 
@@ -157,6 +160,22 @@ def user_scores(
     return scores, True, None
 
 
+def _normalize_to_100(scores: dict[str, float]) -> dict[str, float]:
+    """Min-max rescale to [0, 100] so this score sits on the same effective
+    scale as content_score before a 50/50 blend. Without this, user_score
+    (typically 0-35 for a diversified peer group) would be silently
+    outweighed roughly 3:1 by content_score (which spans the full 0-100
+    range) despite the stated 50/50 weighting."""
+    if not scores:
+        return {}
+    values = list(scores.values())
+    lo, hi = min(values), max(values)
+    if hi == lo:
+        neutral = 0.0 if hi == 0.0 else 50.0
+        return {t: neutral for t in scores}
+    return {t: 100.0 * (v - lo) / (hi - lo) for t, v in scores.items()}
+
+
 _TOP_N_ENRICHED = 8
 
 
@@ -170,8 +189,15 @@ def build_recommendations(sb, workspace_id: str) -> RecommendationsResponse:
         if score is not None:
             content_scores[ticker] = score
 
+    if len(content_scores) < len(TICKER_SECTOR):
+        log.info(
+            "recommendations: %d/%d candidate tickers had usable technical data",
+            len(content_scores), len(TICKER_SECTOR),
+        )
+
     viable = list(content_scores.keys())
-    user_score_map, personalized, fallback_reason = user_scores(sb, workspace_id, viable)
+    raw_user_scores, personalized, fallback_reason = user_scores(sb, workspace_id, viable)
+    user_score_map = _normalize_to_100(raw_user_scores) if personalized else raw_user_scores
 
     hybrid_scores: dict[str, float] = {}
     for ticker in viable:
@@ -186,8 +212,11 @@ def build_recommendations(sb, workspace_id: str) -> RecommendationsResponse:
 
     verdicts: dict[str, StockVerdict] = {}
     if top_n:
-        engine = run_stock_engine(top_n, news_by_ticker={t: fetch_news(t) for t in top_n})
-        verdicts = {t: StockVerdict(**v) for t, v in engine["verdicts"].items()}
+        try:
+            engine = run_stock_engine(top_n, news_by_ticker={t: fetch_news(t) for t in top_n})
+            verdicts = {t: StockVerdict(**v) for t, v in engine["verdicts"].items()}
+        except Exception as exc:
+            log.warning("recommendations: verdict enrichment failed: %s", exc)
 
     items = [
         RecommendationItem(

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from app.core.recommendations import (
     _bare_ticker,
     _cosine_similarity,
+    _normalize_to_100,
     _sector_vectors_by_workspace,
     build_recommendations,
     user_scores,
@@ -152,7 +153,10 @@ def test_user_scores_personalizes_with_enough_similar_workspaces():
 def test_build_recommendations_ranks_by_hybrid_score_and_enriches_top_n():
     content_by_ticker = {"BBCA": 80.0, "TLKM": 60.0, "ASII": 40.0}
     user_by_ticker = {"BBCA": 40.0, "TLKM": 80.0, "ASII": 0.0}
-    # hybrid: BBCA=60, TLKM=70, ASII=20 -> ranked TLKM, BBCA, ASII
+    # user_by_ticker normalized to [0,100] (min=0 at ASII, max=80 at TLKM):
+    # BBCA=50.0, TLKM=100.0, ASII=0.0
+    # hybrid: BBCA=0.5*80+0.5*50=65, TLKM=0.5*60+0.5*100=80, ASII=0.5*40+0.5*0=20
+    # -> ranked TLKM, BBCA, ASII
 
     fake_engine_result = {
         "verdicts": {
@@ -178,7 +182,7 @@ def test_build_recommendations_ranks_by_hybrid_score_and_enriches_top_n():
         result = build_recommendations(MagicMock(), "ws-1")
 
     assert [item.ticker for item in result.items] == ["TLKM", "BBCA", "ASII"]
-    assert result.items[0].hybrid_score == 70.0
+    assert result.items[0].hybrid_score == 80.0
     assert result.items[0].rank == 1
     assert result.items[0].verdict is not None
     assert result.items[0].verdict.band == "buy"
@@ -207,6 +211,45 @@ def test_build_recommendations_cold_start_uses_content_score_only():
     assert result.personalized is False
     assert result.fallback_reason == "belum ada histori"
     assert result.items[0].hybrid_score == 80.0   # content-only, not 0.5*80
+
+
+def test_normalize_to_100_rescales_min_max():
+    scores = {"BBCA": 40.0, "TLKM": 80.0, "ASII": 0.0}
+    normalized = _normalize_to_100(scores)
+    assert normalized["ASII"] == 0.0
+    assert normalized["TLKM"] == 100.0
+    assert normalized["BBCA"] == 50.0
+
+
+def test_normalize_to_100_all_equal_nonzero_maps_to_fifty():
+    scores = {"BBCA": 25.0, "TLKM": 25.0, "ASII": 25.0}
+    normalized = _normalize_to_100(scores)
+    assert normalized == {"BBCA": 50.0, "TLKM": 50.0, "ASII": 50.0}
+
+
+def test_normalize_to_100_all_zero_maps_to_zero():
+    scores = {"BBCA": 0.0, "TLKM": 0.0}
+    normalized = _normalize_to_100(scores)
+    assert normalized == {"BBCA": 0.0, "TLKM": 0.0}
+
+
+def test_normalize_to_100_empty_dict_returns_empty():
+    assert _normalize_to_100({}) == {}
+
+
+def test_build_recommendations_verdict_enrichment_failure_degrades_gracefully():
+    content_by_ticker = {"BBCA": 80.0, "TLKM": 60.0}
+
+    with patch("app.core.recommendations.TICKER_SECTOR", {"BBCA": "banking", "TLKM": "telco"}), \
+         patch("app.core.recommendations.content_score_for", side_effect=lambda t: content_by_ticker.get(t)), \
+         patch("app.core.recommendations.user_scores", return_value=({}, False, "belum ada histori")), \
+         patch("app.core.recommendations.fetch_news", return_value=[]), \
+         patch("app.core.recommendations.run_stock_engine", side_effect=RuntimeError("boom")):
+        result = build_recommendations(MagicMock(), "ws-1")
+
+    assert isinstance(result, RecommendationsResponse)
+    assert len(result.items) == 2
+    assert all(item.verdict is None for item in result.items)
 
 
 def test_recommendations_route_registered():

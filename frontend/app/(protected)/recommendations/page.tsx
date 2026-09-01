@@ -30,6 +30,7 @@ export default function RecommendationsPage() {
       return;
     }
     setLoading(true);
+    setData(null);
     try {
       const sb = createClient();
       const { data: { session } } = await sb.auth.getSession();
