@@ -1,5 +1,9 @@
 """Execution Engine (N7).
 
+DISABLED (2026-09): not wired into app/agents/graph.py — Astalink moved to
+advisory-only mode, so the pipeline never auto-places broker orders. Kept
+(not deleted) in case automatic execution comes back.
+
 Reads allocation_plan, computes order qty from cash * weight / last_close,
 places orders via the broker adapter, persists fills to the transactions
 table. Idempotent: re-running for the same audit_id reuses prior fills."""

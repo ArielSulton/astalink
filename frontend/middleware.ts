@@ -32,11 +32,14 @@ export async function middleware(request: NextRequest) {
   // Redirect unauthenticated users away from protected routes
   const PROTECTED_PREFIXES = [
     "/dashboard",
-    "/audit",
-    "/approvals",
-    "/transactions",
+    // Hidden per concept change (2026-09) — pages moved to _audit/_approvals/_transactions
+    // (Next.js private-folder convention), so these routes 404 anyway. Kept commented,
+    // not deleted, so re-enabling the pages is a one-line uncomment away.
+    // "/audit",
+    // "/approvals",
+    // "/transactions",
     "/settings",
-    "/portfolio",
+    // "/portfolio", — hidden (2026-09), page moved to _portfolio.
     "/chatbot",
     "/legal-docs",
     "/news",

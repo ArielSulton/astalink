@@ -15,9 +15,16 @@ _TEMPLATE_DIR = Path(__file__).parent.parent / "templates" / "email"
 _configured = False
 
 
+class EmailSendError(Exception):
+    """Raised when email fails to send. Message contains the reason only."""
+    pass
+
+
 def _ensure_configured() -> None:
     global _configured
     if not _configured:
+        if not settings.RESEND_API_KEY:
+            raise EmailSendError("RESEND_API_KEY tidak dikonfigurasi")
         resend.api_key = settings.RESEND_API_KEY
         _configured = True
 
@@ -33,9 +40,12 @@ def render_template(filename: str, **kwargs: str) -> str:
 
 def send_email(to: str, subject: str, html: str) -> None:
     _ensure_configured()
-    resend.Emails.send({
-        "from": settings.RESEND_FROM_EMAIL,
-        "to": to,
-        "subject": subject,
-        "html": html,
-    })
+    try:
+        resend.Emails.send({
+            "from": settings.RESEND_FROM_EMAIL,
+            "to": to,
+            "subject": subject,
+            "html": html,
+        })
+    except Exception as e:
+        raise EmailSendError(f"Gagal mengirim email: {e}") from e

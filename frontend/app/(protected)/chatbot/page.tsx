@@ -473,6 +473,8 @@ export default function ChatbotPage() {
                     {/* Report + approval action — only on replies to an actual
                        "alokasikan dana" request; other intents (explain, risk
                        review, etc.) have nothing here to approve. */}
+                    {/* Hidden per concept change (2026-09) — purchase-status
+                       confirmation removed from chat surface.
                     {isAllocationReply && isAllocated && (
                       <div className="w-full flex items-center gap-2 border-t border-border/60 pt-3">
                         <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-chart-2" />
@@ -487,6 +489,7 @@ export default function ChatbotPage() {
                         </Link>
                       </div>
                     )}
+                    */}
 
                     {isCompositionPending && (
                       <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
@@ -515,6 +518,9 @@ export default function ChatbotPage() {
                       </div>
                     )}
 
+                    {/* Hidden per concept change (2026-09) — purchase-confirmation
+                       action removed from chat surface (buy still possible from
+                       the Portfolio page's own button/modal).
                     {isAllocationReply && !isAllocated && (
                       <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
                         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-chart-2">
@@ -539,6 +545,7 @@ export default function ChatbotPage() {
                         </div>
                       </div>
                     )}
+                    */}
                   </div>
                 )}
               </div>

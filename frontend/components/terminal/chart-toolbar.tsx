@@ -2,7 +2,7 @@
 import { Activity, Cpu, LogIn, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+  DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
 import { INDICATORS, type IndicatorId } from "@/lib/hooks/use-indicators";
 import { type ChartType } from "@/lib/hooks/use-chart-type";
@@ -45,10 +45,10 @@ export function ChartToolbar({
 
       {/* Timeframe dropdown */}
       <DropdownMenu>
-        <DropdownMenuTrigger>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 font-mono">
-            <Activity className="size-3.5" /> {timeframe.label}
-          </Button>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-8 gap-1.5 font-mono" />}
+        >
+          <Activity className="size-3.5" /> {timeframe.label}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-32">
           {TIMEFRAMES.map((tf) => (
@@ -61,19 +61,19 @@ export function ChartToolbar({
 
       {/* Indicators dropdown */}
       <DropdownMenu>
-        <DropdownMenuTrigger>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5">
-            <SlidersHorizontal className="size-3.5" /> Indikator
-            {activeLabels.length > 0 && (
-              <span className="ml-1 rounded-full bg-secondary px-1.5 text-[10px] font-mono font-bold text-muted-foreground">
-                {activeLabels.length}
-              </span>
-            )}
-          </Button>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-8 gap-1.5" />}
+        >
+          <SlidersHorizontal className="size-3.5" /> Indikator
+          {activeLabels.length > 0 && (
+            <span className="ml-1 rounded-full bg-secondary px-1.5 text-[10px] font-mono font-bold text-muted-foreground">
+              {activeLabels.length}
+            </span>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
           {(["trend", "volatility", "momentum", "volume"] as const).map((cat) => (
-            <div key={cat}>
+            <DropdownMenuGroup key={cat}>
               {cat !== "trend" && <DropdownMenuSeparator />}
               <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">{cat}</DropdownMenuLabel>
               {INDICATORS.filter((i) => i.category === cat).map((i) => (
@@ -86,17 +86,17 @@ export function ChartToolbar({
                   </span>
                 </DropdownMenuItem>
               ))}
-            </div>
+            </DropdownMenuGroup>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
 
       {/* Chart type dropdown */}
       <DropdownMenu>
-        <DropdownMenuTrigger>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5">
-            <Cpu className="size-3.5" /> {CHART_TYPES.find((c) => c.value === chartType)?.label}
-          </Button>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-8 gap-1.5" />}
+        >
+          <Cpu className="size-3.5" /> {CHART_TYPES.find((c) => c.value === chartType)?.label}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-40">
           {CHART_TYPES.map((c) => (

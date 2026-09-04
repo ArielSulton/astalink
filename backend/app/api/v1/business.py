@@ -85,7 +85,7 @@ async def get_business_valuation(
         sb.table("business_financial_records")
         .select("id,period_year,aset,omset,profit")
         .eq("business_id", business_id)
-        .order("period_year", asc=True)
+        .order("period_year", desc=False)
         .execute()
     )
     records = records_res.data or []

@@ -51,17 +51,17 @@ class Settings(BaseSettings):
 
     # Resend (transactional email — signup confirmation, password reset)
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "noreply@astalink.my.id"
+    RESEND_FROM_EMAIL: str = "noreply@astalink.my.id"  # must be a verified domain in Resend
 
     # WhatsApp Business API (Meta Cloud API)
     WHATSAPP_VERIFY_TOKEN: str = ""        # used during webhook subscription
     WHATSAPP_APP_SECRET: str = ""          # for signature verification
     WHATSAPP_ACCESS_TOKEN: str = ""        # for outbound messages
     WHATSAPP_PHONE_NUMBER_ID: str = ""     # for outbound messages
-    APP_BASE_URL: str = "http://localhost:3000"  # for deep links
+    APP_BASE_URL: str = "http://localhost:3002"  # for deep links
 
     # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3002"]
 
     # Admin role — emails in this list get admin-only access (e.g. Legal
     # Docs). Not a real RBAC table; role is derived purely from this list

@@ -98,6 +98,7 @@ export default async function Home() {
             {[
               { href: "#fitur", label: "Fitur" },
               { href: "#statistik", label: "Statistik" },
+              { href: "/pricing", label: "Harga" },
               { href: "#mulai", label: "Mulai" },
             ].map(({ href, label }) => (
               <a
@@ -484,6 +485,7 @@ export default async function Home() {
               <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Chatbot AI</Link></li>
               <li><Link href="/news" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Berita Pasar</Link></li>
               <li><Link href="/legal-docs" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dokumen Legal</Link></li>
+              <li><Link href="/pricing" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Harga</Link></li>
             </ul>
           </div>
 

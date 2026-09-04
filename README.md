@@ -40,7 +40,7 @@ make dev
 docker compose up --build
 ```
 
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:3002
 - Backend API: http://localhost:8000
 - API Docs: http://localhost:8000/docs (dev only)
 

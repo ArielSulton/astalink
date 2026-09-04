@@ -1,5 +1,9 @@
 """Human-in-the-Loop gate (N6).
 
+DISABLED (2026-09): not wired into app/agents/graph.py — Astalink moved to
+advisory-only mode, so the pipeline no longer pauses for purchase approval
+before execution. Kept (not deleted) in case HITL execution comes back.
+
 Calls langgraph.types.interrupt(...) which:
 1. On first call (no resume value): raises GraphInterrupt — graph pauses,
    checkpointer persists state.

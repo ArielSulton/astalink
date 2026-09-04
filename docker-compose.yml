@@ -56,11 +56,11 @@ services:
       - WHATSAPP_APP_SECRET=${WHATSAPP_APP_SECRET}
       - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3002}
       # Admin role
       - ADMIN_EMAILS=${ADMIN_EMAILS:-[]}
       # Backend
-      - BACKEND_CORS_ORIGINS=["http://localhost:${FRONTEND_PORT:-3000}"]
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-["http://localhost:3002"]}
       - DEBUG=true
 
   prometheus:

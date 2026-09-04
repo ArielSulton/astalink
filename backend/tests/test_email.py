@@ -24,3 +24,15 @@ def test_send_email_calls_resend_with_correct_params(monkeypatch) -> None:
         "subject": "Test Subject",
         "html": "<p>Hi</p>",
     })
+
+
+def test_resend_from_email_defaults_to_verified_domain() -> None:
+    """Configuration default must be a verified-domain sender.
+
+    If the `config.py` default regresses to ``onboarding@resend.dev``, Resend
+    only delivers to the account owner's own mailbox — so signup confirmation
+    and password-reset emails silently stop reaching real users.
+    """
+    from app.core.config import Settings
+
+    assert Settings.model_fields["RESEND_FROM_EMAIL"].default == "noreply@astalink.my.id"

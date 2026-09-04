@@ -20,6 +20,8 @@ export function TerminalHeader({ cashBalance, workspaceName }: TerminalHeaderPro
           command palette
         </span>
       </div>
+      {/* Hidden per concept change (2026-09) — saldo widget removed from
+         dashboard header along with the Portfolio strip / /portfolio nav entry.
       {cashBalance != null && (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-1.5">
           <div className="flex size-7 items-center justify-center rounded-lg bg-chart-2/10 border border-chart-2/25">
@@ -33,6 +35,7 @@ export function TerminalHeader({ cashBalance, workspaceName }: TerminalHeaderPro
           </div>
         </div>
       )}
+      */}
     </div>
   );
 }

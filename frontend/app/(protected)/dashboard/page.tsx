@@ -173,7 +173,8 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-full bg-background">
-      {/* Row 1: Portfolio strip (retained) */}
+      {/* Hidden per concept change (2026-09) — Portfolio strip (incl. Kas/saldo
+         ministat) removed from dashboard along with the /portfolio nav entry.
       {portfolio && portfolio.holdings.length > 0 && (
         <div className="border-b border-border px-6 py-5 bg-card/20">
           <div className="flex items-center justify-between mb-4">
@@ -197,6 +198,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      */}
 
       {/* Row 2: Terminal header */}
       <TerminalHeader cashBalance={cashBalance} workspaceName={workspaceName} />
