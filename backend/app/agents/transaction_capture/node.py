@@ -91,3 +91,106 @@ def extract_node(state: TransactionCaptureState) -> TransactionCaptureState:
         "media_bytes": None,
         "media_mime_type": None,
     }
+
+
+from datetime import datetime, timezone
+
+from langgraph.types import interrupt
+
+from app.agents.transaction_capture.plausibility import compute_plausibility_flag
+from app.core.supabase_admin import get_admin_client
+
+
+@track_node_duration("transaction_capture_confirm")
+def confirm_node(state: TransactionCaptureState) -> TransactionCaptureState:
+    extraction = state["extraction"]
+    plausibility_flag = compute_plausibility_flag(
+        business_id=state["business_id"],
+        type_=extraction["type"],
+        amount=extraction["amount"],
+    )
+
+    row = get_admin_client().table("business_transactions").insert({
+        "business_id": state["business_id"],
+        "type": extraction["type"],
+        "item_description": extraction["item_description"],
+        "amount": extraction["amount"],
+        "source": state["source"],
+        "raw_input": extraction["raw_input"],
+        "confidence": extraction["confidence"],
+        "plausibility_flag": plausibility_flag,
+        "status": "pending_confirmation",
+    }).execute()
+    transaction_id = row.data[0]["id"]
+
+    resume = interrupt({
+        "transaction_id": transaction_id,
+        "item_description": extraction["item_description"],
+        "amount": extraction["amount"],
+        "type": extraction["type"],
+        "plausibility_flag": plausibility_flag,
+    })
+    decision = resume.get("decision", "rejected")
+    return {
+        "confirmed": decision == "confirmed",
+        "transaction_id": transaction_id,
+        "plausibility_flag": plausibility_flag,
+    }
+
+
+def _upsert_financial_record(sb, *, business_id: str, type_: str, amount: float) -> None:
+    year = datetime.now(timezone.utc).year
+    omset_delta = amount if type_ == "income" else 0.0
+    profit_delta = amount if type_ == "income" else -amount
+
+    existing = (
+        sb.table("business_financial_records").select("id,omset,profit")
+        .eq("business_id", business_id).eq("period_year", year).execute()
+    )
+    rows = existing.data or []
+
+    if rows:
+        rec = rows[0]
+        sb.table("business_financial_records").update({
+            "omset": float(rec["omset"]) + omset_delta,
+            "profit": float(rec["profit"]) + profit_delta,
+        }).eq("id", rec["id"]).execute()
+        return
+
+    prior = (
+        sb.table("business_financial_records").select("aset")
+        .eq("business_id", business_id).order("period_year", desc=True).limit(1).execute()
+    )
+    prior_rows = prior.data or []
+    carried_aset = float(prior_rows[0]["aset"]) if prior_rows else 0.0
+    sb.table("business_financial_records").insert({
+        "business_id": business_id,
+        "period_year": year,
+        "aset": carried_aset,
+        "omset": omset_delta,
+        "profit": profit_delta,
+    }).execute()
+
+
+@track_node_duration("transaction_capture_persist")
+def persist_node(state: TransactionCaptureState) -> TransactionCaptureState:
+    sb = get_admin_client()
+    sb.table("business_transactions").update({
+        "status": "confirmed",
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", state["transaction_id"]).execute()
+
+    extraction = state["extraction"]
+    _upsert_financial_record(
+        sb, business_id=state["business_id"],
+        type_=extraction["type"], amount=extraction["amount"],
+    )
+    return {}
+
+
+@track_node_duration("transaction_capture_rejected")
+def rejected_node(state: TransactionCaptureState) -> TransactionCaptureState:
+    get_admin_client().table("business_transactions").update({
+        "status": "rejected",
+    }).eq("id", state["transaction_id"]).execute()
+    return {}
