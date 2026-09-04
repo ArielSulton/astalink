@@ -123,3 +123,94 @@ def test_rejected_node_marks_row_rejected() -> None:
         rejected_node(state)
 
     assert sb.table.return_value.update.call_args[0][0]["status"] == "rejected"
+
+
+def test_persist_node_carries_forward_nonzero_aset_from_prior_year() -> None:
+    """Verify that aset from prior year is carried forward exactly, not zeroed."""
+    state = {"transaction_id": "txn-1", "business_id": "biz-1",
+             "extraction": {"type": "income", "amount": 10000.0}}
+
+    bt_table = MagicMock()
+    bt_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
+
+    bfr_table = MagicMock()
+    # Query for current year returns empty
+    current_year_select = MagicMock()
+    current_year_select.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+    # Query for prior year returns a record with non-zero aset
+    prior_year_select = MagicMock()
+    prior_year_select.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"aset": 75000.0}]
+    )
+    bfr_table.select.side_effect = [current_year_select, prior_year_select]
+    bfr_table.insert.return_value.execute.return_value = MagicMock(data=[{}])
+
+    sb = MagicMock()
+    sb.table.side_effect = lambda name: bt_table if name == "business_transactions" else bfr_table
+
+    with patch("app.agents.transaction_capture.node.get_admin_client", return_value=sb):
+        persist_node(state)
+
+    # Assert the inserted row carries forward the prior aset exactly
+    inserted = bfr_table.insert.call_args[0][0]
+    assert inserted["aset"] == 75000.0, f"Expected aset=75000.0, got {inserted['aset']}"
+    assert inserted["omset"] == 10000.0
+    assert inserted["profit"] == 10000.0
+
+
+def test_persist_node_increments_existing_year_record_for_income() -> None:
+    """Verify income increments both omset and profit for existing year."""
+    state = {"transaction_id": "txn-1", "business_id": "biz-1",
+             "extraction": {"type": "income", "amount": 25000.0}}
+
+    bt_table = MagicMock()
+    bt_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
+
+    bfr_table = MagicMock()
+    existing_select = MagicMock()
+    existing_select.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{"id": "rec-1", "omset": 100000.0, "profit": 50000.0}],
+    )
+    bfr_table.select.return_value = existing_select
+    bfr_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
+
+    sb = MagicMock()
+    sb.table.side_effect = lambda name: bt_table if name == "business_transactions" else bfr_table
+
+    with patch("app.agents.transaction_capture.node.get_admin_client", return_value=sb):
+        persist_node(state)
+
+    updated = bfr_table.update.call_args[0][0]
+    assert updated["omset"] == 125000.0  # 100000 + 25000
+    assert updated["profit"] == 75000.0  # 50000 + 25000
+
+
+def test_persist_node_creates_new_year_record_for_expense() -> None:
+    """Verify expense creates new year with omset=0.0 and negative profit."""
+    state = {"transaction_id": "txn-1", "business_id": "biz-1",
+             "extraction": {"type": "expense", "amount": 8000.0}}
+
+    bt_table = MagicMock()
+    bt_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
+
+    bfr_table = MagicMock()
+    # Query for current year returns empty
+    current_year_select = MagicMock()
+    current_year_select.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+    # Query for prior year returns empty
+    prior_year_select = MagicMock()
+    prior_year_select.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+    bfr_table.select.side_effect = [current_year_select, prior_year_select]
+    bfr_table.insert.return_value.execute.return_value = MagicMock(data=[{}])
+
+    sb = MagicMock()
+    sb.table.side_effect = lambda name: bt_table if name == "business_transactions" else bfr_table
+
+    with patch("app.agents.transaction_capture.node.get_admin_client", return_value=sb):
+        persist_node(state)
+
+    inserted = bfr_table.insert.call_args[0][0]
+    assert inserted["business_id"] == "biz-1"
+    assert inserted["omset"] == 0.0, f"Expected omset=0.0 for expense new-year, got {inserted['omset']}"
+    assert inserted["profit"] == -8000.0, f"Expected profit=-8000.0 for expense, got {inserted['profit']}"
+    assert inserted["aset"] == 0.0
