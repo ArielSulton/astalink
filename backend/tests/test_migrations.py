@@ -94,3 +94,13 @@ def test_migration_0009_whatsapp_exists() -> None:
     for table in ("whatsapp_bindings", "whatsapp_messages_seen", "whatsapp_pending_codes"):
         assert table in sql
     assert "phone_e164" in sql
+
+
+def test_migration_0016_business_transactions_exists() -> None:
+    sql = _read("0016_business_transactions.sql")
+    assert "create table" in sql
+    assert "business_transactions" in sql
+    assert "business_id" in sql
+    assert "pending_confirmation" in sql
+    assert "plausibility_flag" in sql
+    assert "row level security" in sql
