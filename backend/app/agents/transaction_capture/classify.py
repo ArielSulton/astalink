@@ -14,10 +14,29 @@ from app.core.gemini import extract_text, get_chat_model
 
 log = logging.getLogger(__name__)
 
-_AMOUNT_PATTERN = re.compile(r"\b\d[\d.,]*\s*(rb|ribu|k|jt|juta|rp)\b", re.IGNORECASE)
-_VERB_PATTERN = re.compile(
-    r"\b(jual|beli|bayar|dapat|terima|keluar|masuk|laku|untung|rugi)\b", re.IGNORECASE,
+_AMOUNT_PATTERN = re.compile(
+    r"\b\d[\d.,]*\s*(?:rb|ribu|k|jt|juta|rp)\b"  # suffix form: "15rb", "200 ribu", "3jt"
+    r"|\b(?:rp|rupiah)\.?\s*\d[\d.,]*",           # prefix form: "Rp 60.000", "rupiah 60000"
+    re.IGNORECASE,
 )
+# Root-word forms plus the common meN-/di-/ter- conjugations Indonesian
+# speakers actually use in a sentence ("menjual", not just "jual") — a bare
+# \b-bounded root never matches its own prefixed form, since the prefix
+# attaches with no space (no word boundary appears between them).
+_VERB_PATTERN = re.compile(
+    r"\b(jual|menjual|dijual|terjual|jualan|"
+    r"beli|membeli|dibeli|terbeli|"
+    r"bayar|membayar|dibayar|terbayar|"
+    r"dapat|mendapat|mendapatkan|didapat|"
+    r"terima|menerima|diterima|"
+    r"keluar|mengeluarkan|"
+    r"masuk|memasukkan|"
+    r"laku|laris|"
+    r"untung|keuntungan|menguntungkan|"
+    r"rugi|kerugian|merugikan)\b",
+    re.IGNORECASE,
+)
+_HAS_DIGIT_PATTERN = re.compile(r"\d")
 # Investment-advisory vocabulary. "beli saham BBCA 10 juta" and "jual BBRI 50
 # juta" match both _AMOUNT_PATTERN and _VERB_PATTERN, but they're ordinary
 # advisory requests in this app, not business-transaction records — when
@@ -53,6 +72,11 @@ def looks_like_transaction(text: str) -> bool:
 
     if has_amount and has_verb and not _INVESTMENT_VOCAB_PATTERN.search(text):
         return True
-    if not has_amount and not has_verb:
+    if not has_amount and not has_verb and not _HAS_DIGIT_PATTERN.search(text):
+        # No amount/verb signal at all, and not even a bare digit anywhere —
+        # unambiguously not a transaction. A digit alone doesn't clear the
+        # bar for an automatic decision, but it's enough reason to consult
+        # the LLM rather than silently drop a message our regex vocabulary
+        # simply doesn't cover yet.
         return False
     return _classify_with_llm(text)
