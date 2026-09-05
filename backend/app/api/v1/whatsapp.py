@@ -180,8 +180,20 @@ def _process_message(msg: dict[str, Any]) -> None:
         # deflected back to "answer the pending one first" rather than
         # starting a second capture run on top of it.
         if transaction_reply is not None:
-            result = resume_transaction(txn_thread_id, transaction_reply)
-            send_text(to_phone_e164=phone, body=_build_transaction_ack(result))
+            try:
+                result = resume_transaction(txn_thread_id, transaction_reply)
+                send_text(to_phone_e164=phone, body=_build_transaction_ack(result))
+            except Exception:
+                # _already_seen() already marked this message id as processed
+                # before we got here, so a retry of the SAME webhook delivery
+                # will be silently swallowed — same failure mode the advisory
+                # path guards against below. Without this, an unhandled
+                # exception here (e.g. a Supabase write failure inside
+                # persist_node/rejected_node) would 500 the request and leave
+                # the user with zero indication their confirmation failed.
+                log.exception("whatsapp: transaction resume failed for thread %s", txn_thread_id)
+                send_text(to_phone_e164=phone,
+                          body="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.")
         else:
             send_text(to_phone_e164=phone,
                       body="Anda punya transaksi yang menunggu konfirmasi. "
@@ -201,21 +213,35 @@ def _process_message(msg: dict[str, Any]) -> None:
             return
         media_bytes, mime_type = media
         source = "whatsapp_photo" if msg_type == "image" else "whatsapp_voice"
-        result = capture_graph.invoke(
-            {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
-             "source": source, "media_bytes": media_bytes, "media_mime_type": mime_type},
-            config={"configurable": {"thread_id": txn_thread_id}},
-        )
-        _reply_for_capture_result(phone, result)
+        try:
+            result = capture_graph.invoke(
+                {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
+                 "source": source, "media_bytes": media_bytes, "media_mime_type": mime_type},
+                config={"configurable": {"thread_id": txn_thread_id}},
+            )
+            _reply_for_capture_result(phone, result)
+        except Exception:
+            # See the comment on the resume_transaction try/except above —
+            # same silent-retry-swallow risk via _already_seen(), and the
+            # same "the user must always hear something" guarantee the
+            # advisory path's try/except (further below) already provides.
+            log.exception("whatsapp: capture_graph invoke failed for thread %s", txn_thread_id)
+            send_text(to_phone_e164=phone,
+                      body="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.")
         return
 
     if msg_type == "text" and business_id is not None and looks_like_transaction(text):
-        result = capture_graph.invoke(
-            {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
-             "source": "whatsapp_text", "text_body": text},
-            config={"configurable": {"thread_id": txn_thread_id}},
-        )
-        _reply_for_capture_result(phone, result)
+        try:
+            result = capture_graph.invoke(
+                {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
+                 "source": "whatsapp_text", "text_body": text},
+                config={"configurable": {"thread_id": txn_thread_id}},
+            )
+            _reply_for_capture_result(phone, result)
+        except Exception:
+            log.exception("whatsapp: capture_graph invoke failed for thread %s", txn_thread_id)
+            send_text(to_phone_e164=phone,
+                      body="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.")
         return
 
     from app.api.v1.chat import load_thread_history
