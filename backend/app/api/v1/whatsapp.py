@@ -169,9 +169,39 @@ def _process_message(msg: dict[str, Any]) -> None:
     admin = get_admin_client()
     business_id = resolve_single_business(admin, workspace_id)
     pending_transaction_id = find_pending_transaction(admin, business_id) if business_id else None
-    transaction_reply = detect_transaction_reply(text) if pending_transaction_id and text else None
+    pending_audit_id = find_pending_composition_audit(admin, thread_id)
 
-    if pending_transaction_id:
+    # A tap on the composition-gate card's own button (plain ya/tidak) is
+    # unambiguous proof the reply is for THAT flow, not the transaction —
+    # only trust it while composition is actually pending, otherwise a
+    # stray plain ya/tidak falls through to the transaction logic below as
+    # it always has.
+    is_composition_button_tap = (
+        msg_type == "interactive" and text in ("ya", "tidak") and bool(pending_audit_id)
+    )
+
+    transaction_reply = None
+    if pending_transaction_id and text and not is_composition_button_tap:
+        if msg_type == "interactive":
+            # Button ids are flow-specific (txn_ya/txn_tidak vs the
+            # composition-gate card's plain ya/tidak) — a tap on the OTHER
+            # card must never resolve this one, even though the generic
+            # word would otherwise match detect_transaction_reply.
+            transaction_reply = detect_transaction_reply(text) if text in ("txn_ya", "txn_tidak") else None
+        else:
+            candidate = detect_transaction_reply(text)
+            if candidate is not None and pending_audit_id:
+                # Both flows are simultaneously awaiting a decision and the
+                # user typed free text instead of tapping a button — "ya" is
+                # genuinely ambiguous here. Do not guess which one they mean.
+                send_text(to_phone_e164=phone,
+                          body="Anda punya transaksi dan persetujuan alokasi yang "
+                               "sama-sama menunggu konfirmasi. Balas menggunakan "
+                               "tombol \"Ya\"/\"Tidak\" pada masing-masing pesan.")
+                return
+            transaction_reply = candidate
+
+    if pending_transaction_id and not is_composition_button_tap:
         # A pending confirmation exists on this thread: the bot is waiting
         # on ya/tidak specifically. A plain graph.invoke() on the SAME
         # txn_thread_id (no Command(resume=...)) would silently overwrite
@@ -249,8 +279,9 @@ def _process_message(msg: dict[str, Any]) -> None:
     # A message on a thread paused at the composition gate is treated as a
     # reply to it ("ya"/"tidak") rather than a brand new turn, as long as
     # it's a clear yes/no — anything else falls through to a fresh turn.
-    pending_audit = find_pending_composition_audit(admin, thread_id)
-    composition_reply = detect_composition_reply(text) if pending_audit else None
+    # (pending_audit_id was already fetched above, before the pending-
+    # transaction branch, so the two flows can be disambiguated together.)
+    composition_reply = detect_composition_reply(text) if pending_audit_id else None
 
     allocation_plan = None
     composition_alloc = None

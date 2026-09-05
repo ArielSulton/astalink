@@ -140,7 +140,7 @@ def test_pending_confirmation_reply_resumes_capture_not_advisory(monkeypatch, cl
         "entry": [{"changes": [{"value": {"messages": [{
             "id": "wamid.CONFIRM-1", "from": "6281234567890",
             "type": "interactive",
-            "interactive": {"type": "button_reply", "button_reply": {"id": "ya", "title": "Ya, Benar"}},
+            "interactive": {"type": "button_reply", "button_reply": {"id": "txn_ya", "title": "Ya, Benar"}},
         }]}}]}]
     }
     body = json.dumps(payload).encode()
@@ -150,6 +150,7 @@ def test_pending_confirmation_reply_resumes_capture_not_advisory(monkeypatch, cl
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
          patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
          patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value=None), \
          patch("app.api.v1.whatsapp.resume_transaction", return_value={"confirmed": True}) as resume_mock, \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
          patch("app.api.v1.whatsapp.send_text") as text_mock:
@@ -311,6 +312,89 @@ def test_ambiguous_text_capture_exception_sends_fallback_reply_not_500(monkeypat
     assert "maaf" in reply.lower()
 
 
+def test_composition_button_tap_does_not_resolve_pending_transaction(monkeypatch, client: TestClient) -> None:
+    """The composition-gate card's plain "ya" button must resolve the
+    composition approval, never the transaction, even when a transaction
+    confirmation is also pending on the same phone/workspace at the same
+    time — this is the exact cross-flow collision the txn_ya/txn_tidak
+    button ids exist to prevent."""
+    secret = "appsec"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    import importlib, app.core.config
+    importlib.reload(app.core.config)
+
+    payload = {
+        "entry": [{"changes": [{"value": {"messages": [{
+            "id": "wamid.COLLISION-1", "from": "6281234567890",
+            "type": "interactive",
+            "interactive": {"type": "button_reply", "button_reply": {"id": "ya", "title": "Ya, Lanjutkan"}},
+        }]}}]}]
+    }
+    body = json.dumps(payload).encode()
+    sig = _sign(body, secret)
+    fake_admin = _binding_admin()
+
+    resumed_state = {"audit_id": "audit-1", "intent": "allocate_capital", "messages": [],
+                     "legal_status": None, "user_approval": None, "transactions": [], "errors": []}
+
+    with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
+         patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value="audit-1"), \
+         patch("app.api.v1.whatsapp.resume_transaction") as resume_txn_mock, \
+         patch("app.api.v1.whatsapp.resume_composition", return_value=resumed_state) as resume_comp_mock, \
+         patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
+         patch("app.api.v1.whatsapp.send_text") as text_mock:
+        resp = client.post("/api/v1/whatsapp/webhook", content=body,
+                           headers={"X-Hub-Signature-256": sig, "Content-Type": "application/json"})
+
+    assert resp.status_code == 200
+    resume_txn_mock.assert_not_called()
+    resume_comp_mock.assert_called_once()
+    assert resume_comp_mock.call_args.args[1] == "approved"
+    advisory_invoke_mock.assert_not_called()
+    text_mock.assert_called_once()
+
+
+def test_ambiguous_free_text_reply_deflects_when_both_flows_pending(monkeypatch, client: TestClient) -> None:
+    """A typed (not tapped) "ya" while BOTH a transaction confirmation and a
+    composition-gate approval are pending is genuinely ambiguous — neither
+    flow should be guessed at; the user is asked to use the buttons."""
+    secret = "appsec"
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", secret)
+    import importlib, app.core.config
+    importlib.reload(app.core.config)
+
+    payload = {
+        "entry": [{"changes": [{"value": {"messages": [{
+            "id": "wamid.COLLISION-2", "from": "6281234567890",
+            "type": "text", "text": {"body": "ya"},
+        }]}}]}]
+    }
+    body = json.dumps(payload).encode()
+    sig = _sign(body, secret)
+    fake_admin = _binding_admin()
+
+    with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
+         patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value="audit-1"), \
+         patch("app.api.v1.whatsapp.resume_transaction") as resume_txn_mock, \
+         patch("app.api.v1.whatsapp.resume_composition") as resume_comp_mock, \
+         patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
+         patch("app.api.v1.whatsapp.send_text") as text_mock:
+        resp = client.post("/api/v1/whatsapp/webhook", content=body,
+                           headers={"X-Hub-Signature-256": sig, "Content-Type": "application/json"})
+
+    assert resp.status_code == 200
+    resume_txn_mock.assert_not_called()
+    resume_comp_mock.assert_not_called()
+    advisory_invoke_mock.assert_not_called()
+    text_mock.assert_called_once()
+    body_sent = text_mock.call_args.kwargs["body"].lower()
+    assert "transaksi" in body_sent and "alokasi" in body_sent
+
+
 def test_pending_confirmation_resume_exception_sends_fallback_reply_not_500(monkeypatch, client: TestClient) -> None:
     """Same failure mode again, for the pending-confirmation branch's resume_transaction() call
     site — a failure here (e.g. persist_node's Supabase write) must not 500 or go silent."""
@@ -323,7 +407,7 @@ def test_pending_confirmation_resume_exception_sends_fallback_reply_not_500(monk
         "entry": [{"changes": [{"value": {"messages": [{
             "id": "wamid.CONFIRM-CRASH-1", "from": "6281234567890",
             "type": "interactive",
-            "interactive": {"type": "button_reply", "button_reply": {"id": "ya", "title": "Ya, Benar"}},
+            "interactive": {"type": "button_reply", "button_reply": {"id": "txn_ya", "title": "Ya, Benar"}},
         }]}}]}]
     }
     body = json.dumps(payload).encode()
@@ -333,6 +417,7 @@ def test_pending_confirmation_resume_exception_sends_fallback_reply_not_500(monk
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
          patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
          patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value=None), \
          patch("app.api.v1.whatsapp.resume_transaction", side_effect=Exception("persist failed")), \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
          patch("app.api.v1.whatsapp.send_text") as text_mock:
