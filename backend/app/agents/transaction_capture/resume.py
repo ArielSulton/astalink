@@ -5,12 +5,20 @@ Command(resume=...) invocation, kept out of the webhook handler itself)."""
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 log = logging.getLogger(__name__)
 
-_YES = {"ya", "iya", "yes", "setuju", "oke", "ok", "benar", "betul"}
-_NO = {"tidak", "gak", "ga", "nggak", "no", "batal", "salah"}
+_YES = {"ya", "iya", "yes", "setuju", "oke", "ok", "benar", "betul", "txn_ya"}
+_NO = {"tidak", "gak", "ga", "nggak", "no", "batal", "salah", "txn_tidak"}
+
+# A pending row older than this is treated as stale rather than a live block
+# on new messages — guards against a lost LangGraph checkpoint (e.g. a
+# MemorySaver fallback + process restart, see core/checkpointer.py) leaving
+# a pending_confirmation row that can never be resolved, which would
+# otherwise deflect every future message on the phone number forever.
+PENDING_TRANSACTION_TTL = timedelta(hours=24)
 
 TransactionReply = Literal["confirmed", "rejected"]
 
@@ -39,11 +47,13 @@ def resolve_single_business(admin_client, workspace_id: str) -> str | None:
 
 
 def find_pending_transaction(admin_client, business_id: str) -> str | None:
+    cutoff = (datetime.now(timezone.utc) - PENDING_TRANSACTION_TTL).isoformat()
     try:
         res = (
             admin_client.table("business_transactions").select("id")
             .eq("business_id", business_id)
             .eq("status", "pending_confirmation")
+            .gte("created_at", cutoff)
             .order("created_at", desc=True).limit(1).execute()
         )
     except Exception as exc:

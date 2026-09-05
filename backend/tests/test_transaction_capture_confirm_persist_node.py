@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from app.agents.transaction_capture.node import confirm_node, persist_node, rejected_node
@@ -12,7 +11,7 @@ def _mock_admin() -> MagicMock:
     return sb
 
 
-def test_confirm_node_inserts_pending_row_and_pauses(monkeypatch) -> None:
+def test_confirm_node_inserts_pending_row_and_pauses() -> None:
     state = {
         "business_id": "biz-1",
         "extraction": {"item_description": "Nasi goreng", "amount": 15000.0,
@@ -38,7 +37,7 @@ def test_confirm_node_inserts_pending_row_and_pauses(monkeypatch) -> None:
     assert inserted["business_id"] == "biz-1"
 
 
-def test_confirm_node_returns_rejected_on_tidak(monkeypatch) -> None:
+def test_confirm_node_returns_rejected_on_tidak() -> None:
     state = {
         "business_id": "biz-1",
         "extraction": {"item_description": "Nasi goreng", "amount": 15000.0,

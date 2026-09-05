@@ -18,6 +18,15 @@ _AMOUNT_PATTERN = re.compile(r"\b\d[\d.,]*\s*(rb|ribu|k|jt|juta|rp)\b", re.IGNOR
 _VERB_PATTERN = re.compile(
     r"\b(jual|beli|bayar|dapat|terima|keluar|masuk|laku|untung|rugi)\b", re.IGNORECASE,
 )
+# Investment-advisory vocabulary. "beli saham BBCA 10 juta" and "jual BBRI 50
+# juta" match both _AMOUNT_PATTERN and _VERB_PATTERN, but they're ordinary
+# advisory requests in this app, not business-transaction records — when
+# this vocabulary is present, never auto-return True on the amount+verb
+# signal alone; always fall through to the LLM for a real judgment call.
+_INVESTMENT_VOCAB_PATTERN = re.compile(
+    r"\b(saham|emas|reksa\s?dana|obligasi|investasi|portofolio|alokasi|ihsg|deposito)\b",
+    re.IGNORECASE,
+)
 
 _LLM_SYSTEM = """\
 Answer with exactly one word, "ya" or "tidak": does this WhatsApp message \
@@ -42,7 +51,7 @@ def looks_like_transaction(text: str) -> bool:
     has_amount = bool(_AMOUNT_PATTERN.search(text))
     has_verb = bool(_VERB_PATTERN.search(text))
 
-    if has_amount and has_verb:
+    if has_amount and has_verb and not _INVESTMENT_VOCAB_PATTERN.search(text):
         return True
     if not has_amount and not has_verb:
         return False

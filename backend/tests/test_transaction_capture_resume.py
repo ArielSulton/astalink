@@ -18,6 +18,14 @@ def test_detect_transaction_reply_recognizes_no_variants() -> None:
         assert detect_transaction_reply(text) == "rejected", text
 
 
+def test_detect_transaction_reply_recognizes_button_ids() -> None:
+    """The transaction confirmation card uses distinct button ids
+    (txn_ya/txn_tidak) so a tap on it can never be misinterpreted as a
+    reply to the composition-gate card, which uses plain ya/tidak."""
+    assert detect_transaction_reply("txn_ya") == "confirmed"
+    assert detect_transaction_reply("txn_tidak") == "rejected"
+
+
 def test_detect_transaction_reply_returns_none_for_longer_phrases() -> None:
     assert detect_transaction_reply("jual nasi goreng 15rb") is None
     assert detect_transaction_reply("") is None
@@ -51,7 +59,7 @@ def test_resolve_single_business_degrades_gracefully_on_error() -> None:
 def test_find_pending_transaction_returns_latest_id() -> None:
     fake_admin = MagicMock()
     fake_admin.table.return_value.select.return_value.eq.return_value.eq.return_value \
-        .order.return_value.limit.return_value.execute.return_value = MagicMock(
+        .gte.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
             data=[{"id": "txn-42"}],
         )
     assert find_pending_transaction(fake_admin, "biz-1") == "txn-42"
@@ -60,8 +68,22 @@ def test_find_pending_transaction_returns_latest_id() -> None:
 def test_find_pending_transaction_returns_none_when_empty() -> None:
     fake_admin = MagicMock()
     fake_admin.table.return_value.select.return_value.eq.return_value.eq.return_value \
-        .order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        .gte.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
     assert find_pending_transaction(fake_admin, "biz-1") is None
+
+
+def test_find_pending_transaction_filters_by_created_at_cutoff() -> None:
+    """A pending row is only ever fetched through a query chain that applies
+    a .gte("created_at", ...) cutoff — verifying the chain includes that
+    call (rather than any specific timestamp value) is what matters here,
+    since a stale row older than the cutoff would simply never match the
+    real database's WHERE clause and the query would return empty."""
+    fake_admin = MagicMock()
+    gte_call = fake_admin.table.return_value.select.return_value.eq.return_value.eq.return_value.gte
+    gte_call.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+    assert find_pending_transaction(fake_admin, "biz-1") is None
+    assert gte_call.call_args[0][0] == "created_at"
 
 
 def test_resume_transaction_invokes_capture_graph_with_command_resume() -> None:

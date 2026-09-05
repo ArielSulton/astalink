@@ -98,7 +98,7 @@ def _reply_for_capture_result(phone: str, result: dict) -> None:
             f"{warning}\n\nBenar?"
         )
         send_buttons(to_phone_e164=phone, body=body,
-                     buttons=[("ya", "Ya, Benar"), ("tidak", "Tidak, Batalkan")])
+                     buttons=[("txn_ya", "Ya, Benar"), ("txn_tidak", "Tidak, Batalkan")])
         return
     if result.get("gate_failed"):
         send_text(to_phone_e164=phone,

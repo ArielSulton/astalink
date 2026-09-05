@@ -58,7 +58,7 @@ def test_photo_message_routes_to_capture_not_advisory_graph(monkeypatch, client:
     fake_capture_graph.invoke.assert_called_once()
     advisory_invoke_mock.assert_not_called()
     buttons_mock.assert_called_once()
-    assert buttons_mock.call_args.kwargs["buttons"] == [("ya", "Ya, Benar"), ("tidak", "Tidak, Batalkan")]
+    assert buttons_mock.call_args.kwargs["buttons"] == [("txn_ya", "Ya, Benar"), ("txn_tidak", "Tidak, Batalkan")]
 
 
 def test_gate_failed_sends_clarifying_text_not_confirmation_card(monkeypatch, client: TestClient) -> None:

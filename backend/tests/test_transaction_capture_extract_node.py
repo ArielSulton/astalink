@@ -56,6 +56,54 @@ def test_extract_node_gates_out_low_confidence_even_if_is_transaction_true() -> 
     assert update["gate_failed"] is True
 
 
+def test_extract_node_gates_out_null_amount_even_if_confident() -> None:
+    state = {"source": "whatsapp_text", "text_body": "dapat uang dari seseorang",
+             "business_id": "biz-1", "workspace_id": "ws-1", "phone_e164": "628123"}
+    fake_extraction = TransactionExtraction(
+        is_transaction=True, item_description=None, amount=None,
+        type="income", confidence=0.9, raw_input="dapat uang dari seseorang",
+    )
+    fake_chain = MagicMock()
+    fake_chain.invoke.return_value = fake_extraction
+
+    with patch("app.agents.transaction_capture.node._build_chain", return_value=fake_chain):
+        update = extract_node(state)
+
+    assert update["gate_failed"] is True
+
+
+def test_extract_node_gates_out_null_type_even_if_confident() -> None:
+    state = {"source": "whatsapp_text", "text_body": "ada transaksi 15rb",
+             "business_id": "biz-1", "workspace_id": "ws-1", "phone_e164": "628123"}
+    fake_extraction = TransactionExtraction(
+        is_transaction=True, item_description="?", amount=15000.0,
+        type=None, confidence=0.9, raw_input="ada transaksi 15rb",
+    )
+    fake_chain = MagicMock()
+    fake_chain.invoke.return_value = fake_extraction
+
+    with patch("app.agents.transaction_capture.node._build_chain", return_value=fake_chain):
+        update = extract_node(state)
+
+    assert update["gate_failed"] is True
+
+
+def test_extract_node_gates_out_non_positive_amount() -> None:
+    state = {"source": "whatsapp_text", "text_body": "jual barang -500",
+             "business_id": "biz-1", "workspace_id": "ws-1", "phone_e164": "628123"}
+    fake_extraction = TransactionExtraction(
+        is_transaction=True, item_description="Barang", amount=-500.0,
+        type="income", confidence=0.9, raw_input="jual barang -500",
+    )
+    fake_chain = MagicMock()
+    fake_chain.invoke.return_value = fake_extraction
+
+    with patch("app.agents.transaction_capture.node._build_chain", return_value=fake_chain):
+        update = extract_node(state)
+
+    assert update["gate_failed"] is True
+
+
 def test_extract_node_builds_multimodal_content_for_a_photo() -> None:
     state = {
         "source": "whatsapp_photo", "media_bytes": b"fake-jpeg-bytes",

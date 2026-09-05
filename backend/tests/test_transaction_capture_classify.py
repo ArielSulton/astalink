@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.agents.transaction_capture.classify import looks_like_transaction
 
@@ -23,6 +23,24 @@ def test_looks_like_transaction_falls_back_to_llm_when_ambiguous() -> None:
     with patch("app.agents.transaction_capture.classify._classify_with_llm", return_value=True) as llm_mock:
         assert looks_like_transaction("15rb tadi") is True
     llm_mock.assert_called_once()
+
+
+def test_looks_like_transaction_investment_instruction_falls_back_to_llm() -> None:
+    """'beli saham BBCA 10 juta' matches both the amount and verb patterns,
+    but it's an ordinary investment-advisory request in this app, not a
+    business transaction — investment vocabulary must force the LLM
+    fallback rather than an automatic True."""
+    with patch("app.agents.transaction_capture.classify._classify_with_llm", return_value=False) as llm_mock:
+        looks_like_transaction("beli saham BBCA 10 juta")
+    llm_mock.assert_called_once()
+
+
+def test_looks_like_transaction_business_sale_without_investment_vocab_still_short_circuits() -> None:
+    """Must not regress: an ordinary business sale with no investment
+    vocabulary still auto-returns True without ever consulting the LLM."""
+    with patch("app.agents.transaction_capture.classify._classify_with_llm") as llm_mock:
+        assert looks_like_transaction("jual nasi goreng 15rb") is True
+    llm_mock.assert_not_called()
 
 
 def test_looks_like_transaction_advisory_question_is_not_misrouted() -> None:

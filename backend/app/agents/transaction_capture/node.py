@@ -1,19 +1,23 @@
-"""Nodes for the standalone transaction-capture subgraph. extract_node is
-defined in this task; confirm_node/persist_node/rejected_node are appended
-by the next task in this same file."""
+"""Nodes for the transaction-capture subgraph: extraction, human
+confirmation (via interrupt), and persistence of a confirmed or rejected
+business transaction."""
 from __future__ import annotations
 
 import base64
 import logging
+from datetime import datetime, timezone
 from functools import lru_cache
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.types import interrupt
 
+from app.agents.transaction_capture.plausibility import compute_plausibility_flag
 from app.agents.transaction_capture.schemas import TransactionExtraction
 from app.agents.transaction_capture.state import TransactionCaptureState
 from app.core.config import settings
 from app.core.gemini import get_chat_model
 from app.core.metrics import track_node_duration
+from app.core.supabase_admin import get_admin_client
 
 log = logging.getLogger(__name__)
 
@@ -78,10 +82,16 @@ def extract_node(state: TransactionCaptureState) -> TransactionCaptureState:
             HumanMessage(content=_build_content(state)),
         ])
     except Exception as exc:
-        log.error("transaction_capture.extract_node: extraction failed: %s", exc)
+        log.exception("transaction_capture.extract_node: extraction failed: %s", exc)
         return {"gate_failed": True, "extraction": None, "media_bytes": None, "media_mime_type": None}
 
-    gate_failed = (not extraction.is_transaction) or extraction.confidence < GATE_CONFIDENCE_THRESHOLD
+    gate_failed = (
+        (not extraction.is_transaction)
+        or extraction.confidence < GATE_CONFIDENCE_THRESHOLD
+        or extraction.amount is None
+        or extraction.amount <= 0
+        or extraction.type is None
+    )
     return {
         "extraction": extraction.model_dump(),
         "gate_failed": gate_failed,
@@ -91,14 +101,6 @@ def extract_node(state: TransactionCaptureState) -> TransactionCaptureState:
         "media_bytes": None,
         "media_mime_type": None,
     }
-
-
-from datetime import datetime, timezone
-
-from langgraph.types import interrupt
-
-from app.agents.transaction_capture.plausibility import compute_plausibility_flag
-from app.core.supabase_admin import get_admin_client
 
 
 @track_node_duration("transaction_capture_confirm")
