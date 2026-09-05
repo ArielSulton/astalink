@@ -15,7 +15,7 @@ from app.agents.transaction_capture.plausibility import compute_plausibility_fla
 from app.agents.transaction_capture.schemas import TransactionExtraction
 from app.agents.transaction_capture.state import TransactionCaptureState
 from app.core.config import settings
-from app.core.gemini import get_chat_model
+from app.core.gemini import get_chat_model, get_vision_model
 from app.core.metrics import track_node_duration
 from app.core.supabase_admin import get_admin_client
 
@@ -48,10 +48,14 @@ Respond with a single JSON object matching this shape, and nothing else:
 """
 
 
-@lru_cache(maxsize=1)
-def _build_chain():
-    """Same provider-specific structured-output method split as
-    intent/node.py::_build_chain — see that module's docstring for why."""
+@lru_cache(maxsize=None)
+def _build_chain(source: str | None):
+    """Photo/voice always go to Gemini (get_vision_model()) regardless of
+    LLM_PROVIDER — see get_vision_model()'s docstring for why. Text
+    extraction follows the same provider-specific structured-output method
+    split as intent/node.py::_build_chain."""
+    if source in ("whatsapp_photo", "whatsapp_voice"):
+        return get_vision_model().with_structured_output(TransactionExtraction, method="json_schema")
     llm = get_chat_model()
     method = "function_calling" if settings.LLM_PROVIDER == "sumopod" else "json_schema"
     return llm.with_structured_output(TransactionExtraction, method=method)
@@ -75,7 +79,7 @@ def _build_content(state: TransactionCaptureState) -> list[dict]:
 
 @track_node_duration("transaction_capture_extract")
 def extract_node(state: TransactionCaptureState) -> TransactionCaptureState:
-    chain = _build_chain()
+    chain = _build_chain(state.get("source"))
     try:
         extraction: TransactionExtraction = chain.invoke([
             SystemMessage(content=EXTRACT_SYSTEM),

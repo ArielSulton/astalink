@@ -127,6 +127,62 @@ def test_extract_node_builds_multimodal_content_for_a_photo() -> None:
     assert media_block["mime_type"] == "image/jpeg"
 
 
+def test_build_chain_uses_vision_model_for_photo_source() -> None:
+    """SumoPod's DeepSeek proxy doesn't accept images — photo extraction
+    must always use get_vision_model() (pinned to Gemini), never
+    get_chat_model() (which follows LLM_PROVIDER)."""
+    from app.agents.transaction_capture.node import _build_chain
+    _build_chain.cache_clear()
+    fake_vision_llm = MagicMock()
+    fake_vision_llm.with_structured_output.return_value = "vision-chain"
+
+    with patch("app.agents.transaction_capture.node.get_vision_model", return_value=fake_vision_llm) as vision_mock, \
+         patch("app.agents.transaction_capture.node.get_chat_model") as chat_mock:
+        chain = _build_chain("whatsapp_photo")
+
+    vision_mock.assert_called_once()
+    chat_mock.assert_not_called()
+    fake_vision_llm.with_structured_output.assert_called_once_with(TransactionExtraction, method="json_schema")
+    assert chain == "vision-chain"
+    _build_chain.cache_clear()
+
+
+def test_build_chain_uses_vision_model_for_voice_source() -> None:
+    """Same reasoning as photo — voice notes are also multimodal input the
+    DeepSeek proxy can't accept."""
+    from app.agents.transaction_capture.node import _build_chain
+    _build_chain.cache_clear()
+    fake_vision_llm = MagicMock()
+    fake_vision_llm.with_structured_output.return_value = "vision-chain"
+
+    with patch("app.agents.transaction_capture.node.get_vision_model", return_value=fake_vision_llm) as vision_mock, \
+         patch("app.agents.transaction_capture.node.get_chat_model") as chat_mock:
+        chain = _build_chain("whatsapp_voice")
+
+    vision_mock.assert_called_once()
+    chat_mock.assert_not_called()
+    assert chain == "vision-chain"
+    _build_chain.cache_clear()
+
+
+def test_build_chain_uses_chat_model_for_text_source() -> None:
+    """Plain text extraction keeps following LLM_PROVIDER via
+    get_chat_model() — only multimodal sources are pinned to Gemini."""
+    from app.agents.transaction_capture.node import _build_chain
+    _build_chain.cache_clear()
+    fake_chat_llm = MagicMock()
+    fake_chat_llm.with_structured_output.return_value = "text-chain"
+
+    with patch("app.agents.transaction_capture.node.get_chat_model", return_value=fake_chat_llm) as chat_mock, \
+         patch("app.agents.transaction_capture.node.get_vision_model") as vision_mock:
+        chain = _build_chain("whatsapp_text")
+
+    chat_mock.assert_called_once()
+    vision_mock.assert_not_called()
+    assert chain == "text-chain"
+    _build_chain.cache_clear()
+
+
 def test_extract_node_handles_llm_exception_gracefully() -> None:
     state = {"source": "whatsapp_text", "text_body": "jual nasi goreng 15rb",
              "business_id": "biz-1", "workspace_id": "ws-1", "phone_e164": "628123"}

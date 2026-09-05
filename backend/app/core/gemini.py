@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from app.core.config import settings
 
 _chat_model: BaseChatModel | None = None
+_vision_model: BaseChatModel | None = None
 
 
 def get_chat_model() -> BaseChatModel:
@@ -52,6 +53,24 @@ def get_chat_model() -> BaseChatModel:
                 temperature=0.0,
             )
     return _chat_model
+
+
+def get_vision_model() -> BaseChatModel:
+    """Always Gemini, regardless of settings.LLM_PROVIDER.
+
+    SumoPod's OpenAI-compatible proxy fronts DeepSeek here, which does not
+    accept multimodal (image/audio) input — so transaction-capture's
+    photo/voice extraction pins to Gemini directly instead of routing
+    through get_chat_model()'s provider switch, while text extraction still
+    follows LLM_PROVIDER as normal."""
+    global _vision_model
+    if _vision_model is None:
+        _vision_model = ChatGoogleGenerativeAI(
+            model=settings.GEMINI_CHAT_MODEL,
+            google_api_key=settings.GOOGLE_API_KEY,
+            temperature=0.0,
+        )
+    return _vision_model
 
 
 def extract_text(content: Any) -> str:
