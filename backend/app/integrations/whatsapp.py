@@ -172,3 +172,33 @@ def send_image(*, to_phone_e164: str, image_bytes: bytes, caption: str | None = 
         resp.raise_for_status()
     except Exception as exc:
         log.error("whatsapp.send_image failed: %s", exc)
+
+
+def download_media(media_id: str) -> tuple[bytes, str] | None:
+    """Two-step Meta Media API download: GET /{media_id} returns a
+    short-lived signed URL + mime_type, then GET that URL (still with the
+    bearer token) for the actual bytes. Returns None if credentials are
+    unset or either request fails — callers treat that as "couldn't fetch
+    this attachment" and reply asking the user to resend."""
+    if not settings.WHATSAPP_ACCESS_TOKEN:
+        log.warning("whatsapp.download_media: skipping (creds unset)")
+        return None
+    try:
+        meta_resp = httpx.get(
+            f"{META_BASE}/{media_id}",
+            headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+            timeout=10.0,
+        )
+        meta_resp.raise_for_status()
+        meta = meta_resp.json()
+
+        media_resp = httpx.get(
+            meta["url"],
+            headers={"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"},
+            timeout=15.0,
+        )
+        media_resp.raise_for_status()
+        return media_resp.content, meta.get("mime_type", "application/octet-stream")
+    except Exception as exc:
+        log.error("whatsapp.download_media failed: %s", exc)
+        return None

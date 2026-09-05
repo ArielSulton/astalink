@@ -52,6 +52,52 @@ def test_get_chat_model_is_lazy_and_cached() -> None:
     assert kwargs["google_api_key"] == "d"
 
 
+def test_get_vision_model_is_lazy_and_cached() -> None:
+    import app.core.gemini as g
+    g._vision_model = None
+
+    fake_instance = MagicMock(name="ChatGoogleGenerativeAI-vision-instance")
+    with patch("app.core.gemini.ChatGoogleGenerativeAI", return_value=fake_instance) as ctor:
+        first = g.get_vision_model()
+        second = g.get_vision_model()
+
+    assert first is second, "should return cached singleton"
+    assert ctor.call_count == 1, "constructor must be called exactly once"
+    kwargs = ctor.call_args.kwargs
+    assert kwargs["model"] == "gemini-3.1-flash-lite"
+    assert kwargs["google_api_key"] == "d"
+
+
+def test_get_vision_model_stays_gemini_when_sumopod_is_selected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_PROVIDER=sumopod must NOT affect get_vision_model() — SumoPod's
+    DeepSeek proxy doesn't accept multimodal input, so photo/voice
+    extraction always pins to Gemini regardless of the text-chat provider."""
+    monkeypatch.setenv("LLM_PROVIDER", "sumopod")
+    monkeypatch.setenv("SUMOPOD_API_KEY", "sumo-key")
+    monkeypatch.setenv("SUMOPOD_BASE_URL", "https://ai.sumopod.com/v1")
+    monkeypatch.setenv("SUMOPOD_CHAT_MODEL", "deepseek-chat")
+
+    import importlib
+    from app.core import config as config_module
+    importlib.reload(config_module)
+    config_module.settings = config_module.Settings(_env_file=None)
+    import app.core.gemini as g
+    importlib.reload(g)
+    g._vision_model = None
+
+    fake_instance = MagicMock(name="ChatGoogleGenerativeAI-vision-instance")
+    with patch("app.core.gemini.ChatGoogleGenerativeAI", return_value=fake_instance) as gemini_ctor, \
+         patch("app.core.gemini.ChatOpenAI") as openai_ctor:
+        model = g.get_vision_model()
+
+    assert model is fake_instance
+    openai_ctor.assert_not_called()
+    gemini_ctor.assert_called_once()
+    kwargs = gemini_ctor.call_args.kwargs
+    assert kwargs["model"] == "gemini-3.1-flash-lite"
+    assert kwargs["google_api_key"] == "d"
+
+
 def test_get_chat_model_routes_to_sumopod_when_selected(monkeypatch: pytest.MonkeyPatch) -> None:
     """LLM_PROVIDER=sumopod must construct ChatOpenAI against SumoPod's
     OpenAI-compatible endpoint instead of ChatGoogleGenerativeAI."""
