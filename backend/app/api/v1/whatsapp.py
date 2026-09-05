@@ -15,12 +15,27 @@ from app.agents.composition_gate.resume import (
 )
 from app.agents.graph import graph
 from app.agents.state import LegalStatus, UserApproval, new_state
+from app.agents.transaction_capture.classify import looks_like_transaction
+from app.agents.transaction_capture.graph import capture_graph
+from app.agents.transaction_capture.resume import (
+    detect_transaction_reply,
+    find_pending_transaction,
+    resolve_single_business,
+    resume_transaction,
+)
 from app.api.deps import get_current_user
 from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
 from app.integrations.chart import render_allocation_chart, render_composition_chart, render_report_table_chart
 from app.integrations.pdf_report import render_allocation_pdf
-from app.integrations.whatsapp import send_buttons, send_document, send_image, send_text, verify_signature
+from app.integrations.whatsapp import (
+    download_media,
+    send_buttons,
+    send_document,
+    send_image,
+    send_text,
+    verify_signature,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -71,6 +86,34 @@ def _onboarding_link(phone_e164: str) -> str:
     return f"{_config.settings.APP_BASE_URL}/settings/whatsapp?code={code}"
 
 
+def _reply_for_capture_result(phone: str, result: dict) -> None:
+    if result.get("__interrupt__"):
+        payload = result["__interrupt__"][0].value
+        warning = "\n⚠️ Nominal ini jauh dari biasanya, mohon dicek ulang." \
+            if payload.get("plausibility_flag") else ""
+        body = (
+            f"Transaksi terdeteksi:\n"
+            f"{payload.get('item_description') or '-'} — Rp{payload.get('amount'):,.0f} "
+            f"({'pemasukan' if payload.get('type') == 'income' else 'pengeluaran'})"
+            f"{warning}\n\nBenar?"
+        )
+        send_buttons(to_phone_e164=phone, body=body,
+                     buttons=[("ya", "Ya, Benar"), ("tidak", "Tidak, Batalkan")])
+        return
+    if result.get("gate_failed"):
+        send_text(to_phone_e164=phone,
+                  body="Maaf, saya tidak bisa memahami transaksinya. Bisa dikirim ulang "
+                       "lebih jelas? Misalnya: \"jual nasi goreng 15rb\".")
+        return
+    send_text(to_phone_e164=phone, body="Transaksi tercatat.")
+
+
+def _build_transaction_ack(result: dict) -> str:
+    if result.get("confirmed"):
+        return "Transaksi tercatat, terima kasih!"
+    return "Oke, transaksi dibatalkan."
+
+
 @router.post("/webhook")
 async def receive(
     request: Request,
@@ -96,15 +139,20 @@ def _process_message(msg: dict[str, Any]) -> None:
 
     phone = msg.get("from")
     msg_type = msg.get("type")
+    media_id: str | None = None
     if msg_type == "interactive":
         # Reply to a send_buttons() prompt — the id ("ya"/"tidak") comes back
         # verbatim, so it flows through detect_composition_reply unchanged.
         text = ((msg.get("interactive") or {}).get("button_reply") or {}).get("id", "")
     elif msg_type == "text":
         text = (msg.get("text") or {}).get("body", "")
+    elif msg_type in ("image", "audio"):
+        text = ""
+        media_id = (msg.get(msg_type) or {}).get("id")
     else:
         return
-    if not phone or not text:
+    if not phone or (msg_type not in ("image", "audio") and not text) or \
+       (msg_type in ("image", "audio") and not media_id):
         return
 
     binding = _resolve_user(phone)
@@ -114,14 +162,68 @@ def _process_message(msg: dict[str, Any]) -> None:
                   body=f"Halo! Untuk memulai AstaLink, silakan daftar dan link nomor Anda: {link}")
         return
 
-    thread_id = f"wa-{phone}-{binding['workspace_id']}"
+    workspace_id = binding["workspace_id"]
+    thread_id = f"wa-{phone}-{workspace_id}"
+    txn_thread_id = f"wa-txn-{phone}-{workspace_id}"
+
+    admin = get_admin_client()
+    business_id = resolve_single_business(admin, workspace_id)
+    pending_transaction_id = find_pending_transaction(admin, business_id) if business_id else None
+    transaction_reply = detect_transaction_reply(text) if pending_transaction_id and text else None
+
+    if pending_transaction_id:
+        # A pending confirmation exists on this thread: the bot is waiting
+        # on ya/tidak specifically. A plain graph.invoke() on the SAME
+        # txn_thread_id (no Command(resume=...)) would silently overwrite
+        # the paused checkpoint and orphan the pending row forever instead
+        # of ever marking it rejected — so ANY non-reply message here is
+        # deflected back to "answer the pending one first" rather than
+        # starting a second capture run on top of it.
+        if transaction_reply is not None:
+            result = resume_transaction(txn_thread_id, transaction_reply)
+            send_text(to_phone_e164=phone, body=_build_transaction_ack(result))
+        else:
+            send_text(to_phone_e164=phone,
+                      body="Anda punya transaksi yang menunggu konfirmasi. "
+                           "Balas \"ya\" atau \"tidak\" dulu sebelum mengirim yang baru.")
+        return
+
+    if msg_type in ("image", "audio"):
+        if business_id is None:
+            send_text(to_phone_e164=phone,
+                      body="Untuk mencatat transaksi via WhatsApp, daftarkan tepat satu "
+                           "bisnis dulu di dashboard AstaLink.")
+            return
+        media = download_media(media_id)
+        if media is None:
+            send_text(to_phone_e164=phone,
+                      body="Maaf, gagal mengambil lampiran Anda. Coba kirim ulang.")
+            return
+        media_bytes, mime_type = media
+        source = "whatsapp_photo" if msg_type == "image" else "whatsapp_voice"
+        result = capture_graph.invoke(
+            {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
+             "source": source, "media_bytes": media_bytes, "media_mime_type": mime_type},
+            config={"configurable": {"thread_id": txn_thread_id}},
+        )
+        _reply_for_capture_result(phone, result)
+        return
+
+    if msg_type == "text" and business_id is not None and looks_like_transaction(text):
+        result = capture_graph.invoke(
+            {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
+             "source": "whatsapp_text", "text_body": text},
+            config={"configurable": {"thread_id": txn_thread_id}},
+        )
+        _reply_for_capture_result(phone, result)
+        return
 
     from app.api.v1.chat import load_thread_history
 
     # A message on a thread paused at the composition gate is treated as a
     # reply to it ("ya"/"tidak") rather than a brand new turn, as long as
     # it's a clear yes/no — anything else falls through to a fresh turn.
-    pending_audit = find_pending_composition_audit(get_admin_client(), thread_id)
+    pending_audit = find_pending_composition_audit(admin, thread_id)
     composition_reply = detect_composition_reply(text) if pending_audit else None
 
     allocation_plan = None
