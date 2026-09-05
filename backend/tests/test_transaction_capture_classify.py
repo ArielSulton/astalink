@@ -6,7 +6,7 @@ from app.agents.transaction_capture.classify import looks_like_transaction
 def test_looks_like_transaction_true_for_amount_and_verb() -> None:
     assert looks_like_transaction("jual nasi goreng 15rb") is True
     assert looks_like_transaction("beli bahan baku 200 ribu") is True
-    assert looks_like_transaction("dapat Rp50.000 dari pelanggan") is True
+    assert looks_like_transaction("dapat 50rb dari pelanggan") is True
 
 
 def test_looks_like_transaction_false_for_neither_signal() -> None:
