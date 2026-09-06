@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Paperclip, Send, Trash2, PlusCircle, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Layer0Result } from "@/lib/api-client";
+import { api, type Layer0Result, type PendingTransaction } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { AllocationBar } from "@/components/allocation/allocation-bar";
@@ -19,6 +19,7 @@ import {
   getMessages,
   listConversations,
   titleFrom,
+  transactionRespondedIds,
   updateConversation,
   type ChatConversation,
 } from "@/lib/chat-history";
@@ -79,6 +80,12 @@ interface Message {
   // Layer 0's cash/stocks/business split — renders the same visual
   // AllocationBar the dashboard shows, instead of leaving it as plain text.
   layer0Result?: Layer0Result | null;
+  // Paused at a transaction-capture confirmation — awaiting a Ya/Tidak
+  // reply before the transaction is persisted or rejected.
+  pendingTransaction?: PendingTransaction | null;
+  // The workspace has 0 or 2+ businesses, so a capture attempt was blocked —
+  // renders a CTA to /business instead of a confirmation card.
+  requiresBusinessSetup?: boolean;
 }
 
 export default function ChatbotPage() {
@@ -102,6 +109,8 @@ export default function ChatbotPage() {
   // without this, Setuju/Tidak would reappear forever after a reload.
   const [respondedCompositionIds, setRespondedCompositionIds] = useState<Set<string>>(new Set());
   const [respondingComposition, setRespondingComposition] = useState(false);
+  const [respondedTransactionIds, setRespondedTransactionIds] = useState<Set<string>>(new Set());
+  const [respondingTransaction, setRespondingTransaction] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -121,10 +130,13 @@ export default function ChatbotPage() {
         requiresApproval: r.requires_approval,
         awaitingCompositionApproval: !!r.metadata?.awaiting_composition_approval,
         layer0Result: (r.metadata?.layer0_result as Layer0Result | undefined) ?? null,
+        pendingTransaction: (r.metadata?.pending_transaction as PendingTransaction | undefined) ?? null,
+        requiresBusinessSetup: !!r.metadata?.requires_business_setup,
       })),
     );
     setAllocatedIds(allocatedReplyIds(rows));
     setRespondedCompositionIds(compositionRespondedIds(rows));
+    setRespondedTransactionIds(transactionRespondedIds(rows));
   }, []);
 
   // Load this user's chatbot rooms for the workspace; open the most recent.
@@ -262,6 +274,8 @@ export default function ChatbotPage() {
             metadata: {
               ...(res.awaiting_composition_approval ? { awaiting_composition_approval: true } : {}),
               ...(res.layer0_result ? { layer0_result: res.layer0_result } : {}),
+              ...(res.pending_transaction ? { pending_transaction: res.pending_transaction } : {}),
+              ...(res.requires_business_setup ? { requires_business_setup: true } : {}),
             },
           })
         : null;
@@ -275,6 +289,8 @@ export default function ChatbotPage() {
           requiresApproval: res.requires_approval,
           awaitingCompositionApproval: res.awaiting_composition_approval,
           layer0Result: res.layer0_result,
+          pendingTransaction: res.pending_transaction,
+          requiresBusinessSetup: res.requires_business_setup,
         },
       ]);
       if (cid) {
@@ -383,6 +399,59 @@ export default function ChatbotPage() {
     }
   }
 
+  // Ya/Tidak on a paused transaction-capture confirmation — sends
+  // "txn_ya"/"txn_tidak" (never plain "ya"/"tidak") so it can never be
+  // swallowed by a simultaneously pending composition-gate reply, or vice
+  // versa. No dedicated resume endpoint needed: /chat already transparently
+  // resumes the capture graph on that marker.
+  async function respondToTransaction(messageId: string | null | undefined, decision: "confirmed" | "rejected") {
+    if (!activeId || respondingTransaction) return;
+    setRespondingTransaction(true);
+    const userText = decision === "confirmed" ? "Ya, Benar" : "Tidak, Batalkan";
+    const wireText = decision === "confirmed" ? "txn_ya" : "txn_tidak";
+    setMessages((prev) => [...prev, { role: "user", content: userText }]);
+    await appendMessage(activeId, {
+      role: "user",
+      content: userText,
+      metadata: messageId ? { transaction_for: messageId } : {},
+    });
+    if (messageId) setRespondedTransactionIds((prev) => new Set(prev).add(messageId));
+    try {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session || !workspaceId) return;
+      const res = await api.chat(
+        { message: wireText, workspace_id: workspaceId, thread_id: threadId },
+        session.access_token,
+      );
+      setThreadId(res.thread_id);
+      const msgId = activeId
+        ? await appendMessage(activeId, {
+            role: "assistant",
+            content: res.message,
+            metadata: {
+              ...(res.pending_transaction ? { pending_transaction: res.pending_transaction } : {}),
+            },
+          })
+        : null;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msgId,
+          role: "assistant",
+          content: res.message,
+          pendingTransaction: res.pending_transaction,
+        },
+      ]);
+    } catch {
+      const fail = "Maaf, terjadi kesalahan. Coba lagi.";
+      setMessages((prev) => [...prev, { role: "assistant", content: fail }]);
+      if (activeId) await appendMessage(activeId, { role: "assistant", content: fail });
+    } finally {
+      setRespondingTransaction(false);
+    }
+  }
+
   return (
     <div className="flex h-full bg-background">
       {/* Active room */}
@@ -448,6 +517,10 @@ export default function ChatbotPage() {
               m.role === "assistant" &&
               m.awaitingCompositionApproval &&
               !(m.id && respondedCompositionIds.has(m.id));
+            const isTransactionPending =
+              m.role === "assistant" &&
+              !!m.pendingTransaction &&
+              !(m.id && respondedTransactionIds.has(m.id));
             // The message 2 back is the paused reply this one resumes from
             // (index i-1 is the synthetic "Setuju/Tidak" user bubble) — its
             // Kas/Saham/Bisnis panel already showed the same layer0Result,
@@ -543,6 +616,52 @@ export default function ChatbotPage() {
                             Tidak, Batalkan
                           </button>
                         </div>
+                      </div>
+                    )}
+
+                    {isTransactionPending && m.pendingTransaction && (
+                      <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
+                        <span className="text-[11px] text-muted-foreground leading-relaxed">
+                          {m.pendingTransaction.item_description || "-"} — Rp{" "}
+                          {m.pendingTransaction.amount.toLocaleString("id-ID", { maximumFractionDigits: 0 })}
+                          {" "}({m.pendingTransaction.type === "income" ? "pemasukan" : "pengeluaran"})
+                          {m.pendingTransaction.plausibility_flag && (
+                            <>
+                              <br />
+                              ⚠️ Nominal ini jauh dari biasanya, mohon dicek ulang.
+                            </>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            disabled={respondingTransaction}
+                            onClick={() => respondToTransaction(m.id, "confirmed")}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all shadow-md"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {respondingTransaction ? "Memproses…" : "Ya, Benar"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={respondingTransaction}
+                            onClick={() => respondToTransaction(m.id, "rejected")}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                          >
+                            Tidak, Batalkan
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {m.requiresBusinessSetup && (
+                      <div className="w-full border-t border-border/60 pt-3">
+                        <Link
+                          href="/business"
+                          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 transition-all"
+                        >
+                          Daftarkan Bisnis
+                        </Link>
                       </div>
                     )}
 
