@@ -90,6 +90,14 @@ export interface AgentRunResponse {
   errors: { node: string; reason: string }[];
 }
 
+export interface PendingTransaction {
+  transaction_id: string;
+  item_description: string | null;
+  amount: number;
+  type: "income" | "expense";
+  plausibility_flag: boolean;
+}
+
 export interface ChatResponse {
   message: string;
   thread_id: string;
@@ -100,6 +108,12 @@ export interface ChatResponse {
   // Lets the chatbot page render the same visual AllocationBar the
   // dashboard shows instead of leaving the Kas/Saham/Bisnis split as text.
   layer0_result?: Layer0Result | null;
+  // Present only while a transaction-capture confirmation is pending on
+  // this thread — renders the Ya/Tidak confirmation card.
+  pending_transaction?: PendingTransaction | null;
+  // True when a capture attempt was blocked by the single-business
+  // restriction — renders a CTA to /business.
+  requires_business_setup?: boolean;
 }
 
 export interface HoldingView {
@@ -493,7 +507,13 @@ export const api = {
       { method: "GET" },
     ),
   chat: (
-    body: { message: string; workspace_id: string; thread_id?: string },
+    body: {
+      message: string;
+      workspace_id: string;
+      thread_id?: string;
+      photo_base64?: string;
+      photo_mime_type?: string;
+    },
     token: string,
   ): Promise<ChatResponse> =>
     jsonFetch<ChatResponse>(
