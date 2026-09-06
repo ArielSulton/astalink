@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Send, Trash2, PlusCircle, Wallet } from "lucide-react";
+import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Paperclip, Send, Trash2, PlusCircle, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Layer0Result } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
@@ -88,6 +88,8 @@ export default function ChatbotPage() {
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [pendingPhoto, setPendingPhoto] = useState<{ base64: string; mimeType: string; name: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [buyModalOpen, setBuyModalOpen] = useState(false);
   const [buyTickers, setBuyTickers] = useState<string[]>(["BBCA"]);
@@ -212,17 +214,20 @@ export default function ChatbotPage() {
 
   async function sendMessage() {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && !pendingPhoto) || loading) return;
     if (!workspaceId) { toast.error("Pilih workspace terlebih dahulu."); return; }
 
     const sb = createClient();
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
 
+    const photo = pendingPhoto;
+    const displayText = text || "(Mengirim foto struk)";
+
     let cid = activeId;
     const firstTurn = messages.length === 0;
     if (!cid) {
-      const conv = await createConversation(workspaceId, "chatbot", titleFrom(text));
+      const conv = await createConversation(workspaceId, "chatbot", titleFrom(displayText));
       if (!conv) return;
       cid = conv.id;
       setRooms((prev) => [conv, ...prev]);
@@ -230,13 +235,19 @@ export default function ChatbotPage() {
     }
 
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setPendingPhoto(null);
+    setMessages((prev) => [...prev, { role: "user", content: displayText }]);
     setLoading(true);
-    if (cid) await appendMessage(cid, { role: "user", content: text });
+    if (cid) await appendMessage(cid, { role: "user", content: displayText });
 
     try {
       const res = await api.chat(
-        { message: text, workspace_id: workspaceId, thread_id: threadId },
+        {
+          message: text,
+          workspace_id: workspaceId,
+          thread_id: threadId,
+          ...(photo ? { photo_base64: photo.base64, photo_mime_type: photo.mimeType } : {}),
+        },
         session.access_token,
       );
       setThreadId(res.thread_id);
@@ -294,6 +305,23 @@ export default function ChatbotPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("File harus berupa gambar.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1] ?? "";
+      setPendingPhoto({ base64, mimeType: file.type, name: file.name });
+    };
+    reader.readAsDataURL(file);
   }
 
   // Setuju/Tidak on a paused composition-gate reply — sends "ya"/"tidak" as
@@ -572,7 +600,35 @@ export default function ChatbotPage() {
 
         {/* Input */}
         <div className="px-6 py-4 border-t border-border bg-card/40 shrink-0">
+          {pendingPhoto && (
+            <div className="flex items-center gap-2 max-w-4xl mx-auto mb-2 px-1">
+              <span className="text-xs text-muted-foreground truncate">📎 {pendingPhoto.name}</span>
+              <button
+                type="button"
+                onClick={() => setPendingPhoto(null)}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+              >
+                Hapus
+              </button>
+            </div>
+          )}
           <div className="flex gap-3 items-end max-w-4xl mx-auto">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoSelect}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              aria-label="Lampirkan foto struk"
+              className="shrink-0 size-11 rounded-xl border border-border bg-secondary text-foreground flex items-center justify-center hover:bg-secondary/80 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -590,7 +646,7 @@ export default function ChatbotPage() {
             />
             <button
               onClick={sendMessage}
-              disabled={!input.trim() || loading}
+              disabled={(!input.trim() && !pendingPhoto) || loading}
               aria-label="Kirim pesan"
               className="shrink-0 size-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200"
             >
