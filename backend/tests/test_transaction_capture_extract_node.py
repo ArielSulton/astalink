@@ -183,6 +183,55 @@ def test_build_chain_uses_chat_model_for_text_source() -> None:
     _build_chain.cache_clear()
 
 
+def test_build_chain_uses_vision_model_for_web_photo_source() -> None:
+    """Source-dispatch must be suffix-based, not a WhatsApp-only allowlist —
+    a new channel's "_photo" source must also pin to Gemini vision."""
+    from app.agents.transaction_capture.node import _build_chain
+    _build_chain.cache_clear()
+    fake_vision_llm = MagicMock()
+    fake_vision_llm.with_structured_output.return_value = "vision-chain"
+
+    with patch("app.agents.transaction_capture.node.get_vision_model", return_value=fake_vision_llm) as vision_mock, \
+         patch("app.agents.transaction_capture.node.get_chat_model") as chat_mock:
+        chain = _build_chain("web_photo")
+
+    vision_mock.assert_called_once()
+    chat_mock.assert_not_called()
+    assert chain == "vision-chain"
+    _build_chain.cache_clear()
+
+
+def test_build_chain_uses_chat_model_for_web_text_source() -> None:
+    from app.agents.transaction_capture.node import _build_chain
+    _build_chain.cache_clear()
+    fake_chat_llm = MagicMock()
+    fake_chat_llm.with_structured_output.return_value = "text-chain"
+
+    with patch("app.agents.transaction_capture.node.get_chat_model", return_value=fake_chat_llm) as chat_mock, \
+         patch("app.agents.transaction_capture.node.get_vision_model") as vision_mock:
+        chain = _build_chain("web_text")
+
+    chat_mock.assert_called_once()
+    vision_mock.assert_not_called()
+    assert chain == "text-chain"
+    _build_chain.cache_clear()
+
+
+def test_build_content_uses_text_block_for_web_text_source() -> None:
+    from app.agents.transaction_capture.node import _build_content
+    content = _build_content({"source": "web_text", "text_body": "jual kopi 20rb"})
+    assert content == [{"type": "text", "text": "jual kopi 20rb"}]
+
+
+def test_build_content_uses_media_block_for_web_photo_source() -> None:
+    from app.agents.transaction_capture.node import _build_content
+    content = _build_content({
+        "source": "web_photo", "media_bytes": b"fake-jpeg-bytes", "media_mime_type": "image/jpeg",
+    })
+    media_block = next(b for b in content if b.get("type") == "media")
+    assert media_block["mime_type"] == "image/jpeg"
+
+
 def test_extract_node_handles_llm_exception_gracefully() -> None:
     state = {"source": "whatsapp_text", "text_body": "jual nasi goreng 15rb",
              "business_id": "biz-1", "workspace_id": "ws-1", "phone_e164": "628123"}

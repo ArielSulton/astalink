@@ -17,7 +17,10 @@ class TransactionCaptureState(TypedDict, total=False):
     business_id: str
     workspace_id: str
     phone_e164: str
-    source: Literal["whatsapp_text", "whatsapp_voice", "whatsapp_photo"]
+    source: Literal[
+        "whatsapp_text", "whatsapp_voice", "whatsapp_photo",
+        "web_text", "web_photo",
+    ]
     text_body: str | None
     media_bytes: bytes | None
     media_mime_type: str | None

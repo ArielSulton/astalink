@@ -53,8 +53,10 @@ def _build_chain(source: str | None):
     """Photo/voice always go to Gemini (get_vision_model()) regardless of
     LLM_PROVIDER — see get_vision_model()'s docstring for why. Text
     extraction follows the same provider-specific structured-output method
-    split as intent/node.py::_build_chain."""
-    if source in ("whatsapp_photo", "whatsapp_voice"):
+    split as intent/node.py::_build_chain. Dispatch is suffix-based (any
+    channel's "_photo"/"_voice" source), not a WhatsApp-only allowlist —
+    see the 2026-09-06 chatbot-transaction-capture spec."""
+    if (source or "").endswith(("_photo", "_voice")):
         return get_vision_model().with_structured_output(TransactionExtraction, method="json_schema")
     llm = get_chat_model()
     method = "function_calling" if settings.LLM_PROVIDER == "sumopod" else "json_schema"
@@ -62,7 +64,8 @@ def _build_chain(source: str | None):
 
 
 def _build_content(state: TransactionCaptureState) -> list[dict]:
-    if state.get("source") == "whatsapp_text":
+    source = state.get("source") or ""
+    if not source.endswith(("_photo", "_voice")):
         return [{"type": "text", "text": state.get("text_body") or ""}]
 
     media_bytes = state.get("media_bytes") or b""
