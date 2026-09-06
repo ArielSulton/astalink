@@ -113,8 +113,9 @@ async def chat(
                 # so this is genuinely ambiguous. Do not guess.
                 return ChatResponse(
                     message="Anda punya transaksi dan persetujuan alokasi yang "
-                            "sama-sama menunggu konfirmasi. Balas menggunakan "
-                            "tombol pada masing-masing pesan.",
+                            "sama-sama menunggu konfirmasi. Jawab dulu kartu "
+                            "konfirmasi transaksi (\"Ya, Benar\"/\"Tidak, Batalkan\"), "
+                            "baru balas \"ya\"/\"tidak\" lagi untuk persetujuan alokasi.",
                     thread_id=raw_thread,
                 )
             transaction_reply = candidate
@@ -160,14 +161,7 @@ async def chat(
                 thread_id=raw_thread,
             )
 
-    if looks_like_transaction(request.message):
-        if business_id is None:
-            return ChatResponse(
-                message="Untuk mencatat transaksi lewat chat, daftarkan tepat satu "
-                        "bisnis dulu di halaman Bisnis.",
-                thread_id=raw_thread,
-                requires_business_setup=True,
-            )
+    if business_id is not None and looks_like_transaction(request.message):
         try:
             result = capture_graph.invoke(
                 {"business_id": business_id, "workspace_id": request.workspace_id,

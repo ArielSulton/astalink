@@ -405,6 +405,35 @@ def test_chat_photo_without_single_business_requires_business_setup(client: Test
     fake_capture_graph.invoke.assert_not_called()
 
 
+def test_chat_allocation_request_with_business_reaches_advisory_graph(client: TestClient) -> None:
+    """business_id being set must not force every message through the
+    capture path — an ordinary allocation request must still reach the
+    advisory graph when looks_like_transaction correctly says no."""
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    advisory_final = {"audit_id": "a1", "intent": "allocate_capital",
+                      "messages": [AIMessage(content="ok")], "legal_status": None,
+                      "user_approval": None, "transactions": [], "errors": []}
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.resolve_single_business", return_value="biz-1"), \
+         patch("app.api.v1.chat.find_pending_transaction", return_value=None), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value=None), \
+         patch("app.api.v1.chat.looks_like_transaction", return_value=False), \
+         patch("app.api.v1.chat.capture_graph") as fake_capture_graph, \
+         patch("app.api.v1.chat.graph.invoke", return_value=advisory_final):
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "alokasikan 20 juta ke BBCA", "workspace_id": "ws-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    fake_capture_graph.invoke.assert_not_called()
+
+
 def test_chat_capture_exception_returns_graceful_message_not_500(client: TestClient) -> None:
     mock_user = {"sub": "user-1", "email": "t@example.com"}
     fake_admin = _make_fake_admin(owned=True)

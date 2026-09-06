@@ -1,4 +1,7 @@
+import os
 from unittest.mock import patch
+
+import pytest
 
 from app.agents.transaction_capture.classify import looks_like_transaction
 
@@ -78,3 +81,18 @@ def test_looks_like_transaction_advisory_question_is_not_misrouted() -> None:
             "bisnis warung saya lagi rame, pengaruhnya ke rekomendasi gimana?"
         ) is False
     llm_mock.assert_not_called()
+
+
+@pytest.mark.skipif(
+    not (os.getenv("GOOGLE_API_KEY") or os.getenv("SUMOPOD_API_KEY")),
+    reason="requires a real LLM credential — this test calls the live classifier",
+)
+def test_looks_like_transaction_allocation_requests_are_not_misrouted() -> None:
+    """Regression for a real bug found in final review: 'alokasikan 20 juta ke
+    BBCA' and similar allocation/investment requests must never be classified
+    as a business transaction, since they'd otherwise get captured as a fake
+    transaction and brick the chatbot behind a bogus pending confirmation."""
+    assert looks_like_transaction("alokasikan 20 juta ke BBCA") is False
+    assert looks_like_transaction(
+        "saya baru terima gaji 10 juta, enaknya dialokasikan kemana"
+    ) is False

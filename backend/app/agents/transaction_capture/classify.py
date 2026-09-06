@@ -43,15 +43,30 @@ _HAS_DIGIT_PATTERN = re.compile(r"\d")
 # this vocabulary is present, never auto-return True on the amount+verb
 # signal alone; always fall through to the LLM for a real judgment call.
 _INVESTMENT_VOCAB_PATTERN = re.compile(
-    r"\b(saham|emas|reksa\s?dana|obligasi|investasi|portofolio|alokasi|ihsg|deposito)\b",
+    r"\b(saham|emas|reksa\s?dana|obligasi|"
+    r"investasi|investasikan|menginvestasikan|diinvestasikan|"
+    r"portofolio|"
+    r"alokasi|alokasikan|mengalokasikan|dialokasikan|teralokasi|"
+    r"ihsg|deposito)\b",
     re.IGNORECASE,
 )
 
 _LLM_SYSTEM = """\
 Answer with exactly one word, "ya" or "tidak": does this WhatsApp message \
 record a specific business transaction (a sale or an expense with an \
-amount), as opposed to a general question, comment, or investment-advisory \
-request? Reply "ya" only if it's clearly recording something that happened."""
+amount) that has ALREADY happened, as opposed to a request, instruction, \
+or question about what to do with money (investing, allocating capital, \
+buying stocks, or general financial planning)?
+
+Examples:
+- "jual nasi goreng 15rb" -> ya (a completed sale)
+- "alokasikan 20 juta ke BBCA" -> tidak (an instruction to invest, not a \
+completed transaction)
+- "baru terima gaji 10 juta, enaknya dialokasikan kemana" -> tidak (asking \
+for advice about money, not reporting a business transaction)
+- "beli bahan baku 200rb" -> ya (a completed expense)
+
+Reply "ya" only if it's clearly recording something that already happened."""
 
 
 def _classify_with_llm(text: str) -> bool:
