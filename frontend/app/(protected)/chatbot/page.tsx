@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Paperclip, Send, Trash2, PlusCircle, Wallet } from "lucide-react";
+import { Bot, CheckCircle2, MessageSquare, MessageSquarePlus, Paperclip, Send, Store, Trash2, PlusCircle, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Layer0Result, type PendingTransaction } from "@/lib/api-client";
+import { api, type BusinessOption, type Layer0Result, type PendingBusinessChoice, type PendingTransaction } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { AllocationBar } from "@/components/allocation/allocation-bar";
@@ -13,6 +13,7 @@ import { useWorkspace } from "@/components/workspace-context";
 import {
   allocatedReplyIds,
   appendMessage,
+  businessChoiceRespondedIds,
   compositionRespondedIds,
   createConversation,
   deleteConversation,
@@ -83,7 +84,10 @@ interface Message {
   // Paused at a transaction-capture confirmation — awaiting a Ya/Tidak
   // reply before the transaction is persisted or rejected.
   pendingTransaction?: PendingTransaction | null;
-  // The workspace has 0 or 2+ businesses, so a capture attempt was blocked —
+  // Paused earlier, asking which business the transaction belongs to. Only
+  // ever set when the workspace owns 2+ businesses.
+  pendingBusinessChoice?: PendingBusinessChoice | null;
+  // The workspace owns no business at all, so a capture attempt was blocked —
   // renders a CTA to /business instead of a confirmation card.
   requiresBusinessSetup?: boolean;
 }
@@ -111,6 +115,8 @@ export default function ChatbotPage() {
   const [respondingComposition, setRespondingComposition] = useState(false);
   const [respondedTransactionIds, setRespondedTransactionIds] = useState<Set<string>>(new Set());
   const [respondingTransaction, setRespondingTransaction] = useState(false);
+  const [respondedBusinessIds, setRespondedBusinessIds] = useState<Set<string>>(new Set());
+  const [respondingBusiness, setRespondingBusiness] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -131,12 +137,15 @@ export default function ChatbotPage() {
         awaitingCompositionApproval: !!r.metadata?.awaiting_composition_approval,
         layer0Result: (r.metadata?.layer0_result as Layer0Result | undefined) ?? null,
         pendingTransaction: (r.metadata?.pending_transaction as PendingTransaction | undefined) ?? null,
+        pendingBusinessChoice:
+          (r.metadata?.pending_business_choice as PendingBusinessChoice | undefined) ?? null,
         requiresBusinessSetup: !!r.metadata?.requires_business_setup,
       })),
     );
     setAllocatedIds(allocatedReplyIds(rows));
     setRespondedCompositionIds(compositionRespondedIds(rows));
     setRespondedTransactionIds(transactionRespondedIds(rows));
+    setRespondedBusinessIds(businessChoiceRespondedIds(rows));
   }, []);
 
   // Load this user's chatbot rooms for the workspace; open the most recent.
@@ -275,6 +284,9 @@ export default function ChatbotPage() {
               ...(res.awaiting_composition_approval ? { awaiting_composition_approval: true } : {}),
               ...(res.layer0_result ? { layer0_result: res.layer0_result } : {}),
               ...(res.pending_transaction ? { pending_transaction: res.pending_transaction } : {}),
+              ...(res.pending_business_choice
+                ? { pending_business_choice: res.pending_business_choice }
+                : {}),
               ...(res.requires_business_setup ? { requires_business_setup: true } : {}),
             },
           })
@@ -290,6 +302,7 @@ export default function ChatbotPage() {
           awaitingCompositionApproval: res.awaiting_composition_approval,
           layer0Result: res.layer0_result,
           pendingTransaction: res.pending_transaction,
+          pendingBusinessChoice: res.pending_business_choice,
           requiresBusinessSetup: res.requires_business_setup,
         },
       ]);
@@ -396,6 +409,63 @@ export default function ChatbotPage() {
       if (activeId) await appendMessage(activeId, { role: "assistant", content: fail });
     } finally {
       setRespondingComposition(false);
+    }
+  }
+
+  // Picking a business on a paused capture — sends "bizsel_<id>" (or
+  // "bizsel_batal"), a marker distinct from txn_ya/txn_tidak and from the
+  // composition gate's plain ya/tidak, so no card's reply can ever resolve
+  // another card. /chat resumes the capture graph on that marker.
+  async function respondToBusinessChoice(
+    messageId: string | null | undefined,
+    option: BusinessOption | null,
+  ) {
+    if (!activeId || respondingBusiness) return;
+    setRespondingBusiness(true);
+    const userText = option ? option.name : "Batalkan";
+    const wireText = option ? `bizsel_${option.id}` : "bizsel_batal";
+    setMessages((prev) => [...prev, { role: "user", content: userText }]);
+    await appendMessage(activeId, {
+      role: "user",
+      content: userText,
+      metadata: messageId ? { business_choice_for: messageId } : {},
+    });
+    if (messageId) setRespondedBusinessIds((prev) => new Set(prev).add(messageId));
+    try {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session || !workspaceId) return;
+      const res = await api.chat(
+        { message: wireText, workspace_id: workspaceId, thread_id: threadId },
+        session.access_token,
+      );
+      setThreadId(res.thread_id);
+      const msgId = await appendMessage(activeId, {
+        role: "assistant",
+        content: res.message,
+        metadata: {
+          ...(res.pending_transaction ? { pending_transaction: res.pending_transaction } : {}),
+          ...(res.pending_business_choice
+            ? { pending_business_choice: res.pending_business_choice }
+            : {}),
+        },
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msgId,
+          role: "assistant",
+          content: res.message,
+          pendingTransaction: res.pending_transaction,
+          pendingBusinessChoice: res.pending_business_choice,
+        },
+      ]);
+    } catch {
+      const fail = "Maaf, terjadi kesalahan. Coba lagi.";
+      setMessages((prev) => [...prev, { role: "assistant", content: fail }]);
+      if (activeId) await appendMessage(activeId, { role: "assistant", content: fail });
+    } finally {
+      setRespondingBusiness(false);
     }
   }
 
@@ -521,6 +591,10 @@ export default function ChatbotPage() {
               m.role === "assistant" &&
               !!m.pendingTransaction &&
               !(m.id && respondedTransactionIds.has(m.id));
+            const isBusinessChoicePending =
+              m.role === "assistant" &&
+              !!m.pendingBusinessChoice &&
+              !(m.id && respondedBusinessIds.has(m.id));
             // The message 2 back is the paused reply this one resumes from
             // (index i-1 is the synthetic "Setuju/Tidak" user bubble) — its
             // Kas/Saham/Bisnis panel already showed the same layer0Result,
@@ -619,12 +693,49 @@ export default function ChatbotPage() {
                       </div>
                     )}
 
+                    {isBusinessChoicePending && m.pendingBusinessChoice && (
+                      <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
+                        <span className="text-[11px] text-muted-foreground leading-relaxed">
+                          Workspace ini punya lebih dari satu bisnis — pilih yang mana
+                          transaksi ini dicatat. Pilihan diingat untuk percakapan ini.
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {m.pendingBusinessChoice.options.map((o) => (
+                            <button
+                              key={o.id}
+                              type="button"
+                              disabled={respondingBusiness}
+                              onClick={() => respondToBusinessChoice(m.id, o)}
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all shadow-md"
+                            >
+                              <Store className="w-3.5 h-3.5" />
+                              {o.name}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            disabled={respondingBusiness}
+                            onClick={() => respondToBusinessChoice(m.id, null)}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                          >
+                            Batalkan
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {isTransactionPending && m.pendingTransaction && (
                       <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
                         <span className="text-[11px] text-muted-foreground leading-relaxed">
                           {m.pendingTransaction.item_description || "-"} — Rp{" "}
                           {m.pendingTransaction.amount.toLocaleString("id-ID", { maximumFractionDigits: 0 })}
                           {" "}({m.pendingTransaction.type === "income" ? "pemasukan" : "pengeluaran"})
+                          {m.pendingTransaction.business_name && (
+                            <>
+                              <br />
+                              Bisnis: <strong className="text-foreground">{m.pendingTransaction.business_name}</strong>
+                            </>
+                          )}
                           {m.pendingTransaction.plausibility_flag && (
                             <>
                               <br />

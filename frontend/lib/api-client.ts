@@ -96,6 +96,21 @@ export interface PendingTransaction {
   amount: number;
   type: "income" | "expense";
   plausibility_flag: boolean;
+  // Which business the transaction will be recorded against. Null only on
+  // replies produced before business selection existed.
+  business_name?: string | null;
+}
+
+export interface BusinessOption {
+  id: string;
+  name: string;
+}
+
+// Present while the capture graph is paused asking which business a
+// transaction belongs to (workspaces owning 2+ businesses). Answered by
+// sending "bizsel_<id>" as the next chat message.
+export interface PendingBusinessChoice {
+  options: BusinessOption[];
 }
 
 export interface ChatResponse {
@@ -111,8 +126,11 @@ export interface ChatResponse {
   // Present only while a transaction-capture confirmation is pending on
   // this thread — renders the Ya/Tidak confirmation card.
   pending_transaction?: PendingTransaction | null;
-  // True when a capture attempt was blocked by the single-business
-  // restriction — renders a CTA to /business.
+  // Present only while the capture graph is asking which business this
+  // transaction belongs to — renders one button per business.
+  pending_business_choice?: PendingBusinessChoice | null;
+  // True when a capture attempt was blocked because the workspace owns no
+  // business at all — renders a CTA to /business.
   requires_business_setup?: boolean;
 }
 
