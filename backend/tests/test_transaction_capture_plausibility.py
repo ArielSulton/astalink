@@ -15,13 +15,22 @@ def _mock_admin(amounts: list[float]) -> MagicMock:
     return sb
 
 
-def test_plausibility_flags_true_when_not_enough_history() -> None:
-    """Fewer than 5 confirmed transactions of this type: not enough history
-    to trust a z-score, so this is flagged (not silently trusted) —
-    spec-mandated conservative default, not a bug."""
+def test_plausibility_does_not_flag_when_history_is_too_short() -> None:
+    """A z-score over fewer than 5 samples is noise. The previous conservative
+    default flagged it anyway, so every transaction a new business recorded
+    carried "⚠️ Nominal ini jauh dari biasanya" — observed on 6 of 6 cards on
+    2026-09-07, which is how a warning stops meaning anything. The human
+    confirmation card is the real gate."""
     fake_admin = _mock_admin([10_000.0, 12_000.0])
     with patch("app.agents.transaction_capture.plausibility.get_admin_client", return_value=fake_admin):
-        assert compute_plausibility_flag(business_id="biz-1", type_="income", amount=11_000.0) is True
+        assert compute_plausibility_flag(business_id="biz-1", type_="income", amount=11_000.0) is False
+
+
+def test_plausibility_does_not_flag_when_the_history_query_fails() -> None:
+    fake_admin = MagicMock()
+    fake_admin.table.side_effect = Exception("supabase down")
+    with patch("app.agents.transaction_capture.plausibility.get_admin_client", return_value=fake_admin):
+        assert compute_plausibility_flag(business_id="biz-1", type_="income", amount=11_000.0) is False
 
 
 def test_plausibility_flags_false_for_a_typical_amount() -> None:
