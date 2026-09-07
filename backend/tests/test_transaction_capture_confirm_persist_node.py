@@ -1,6 +1,12 @@
 from unittest.mock import MagicMock, patch
 
-from app.agents.transaction_capture.node import confirm_node, persist_node, rejected_node
+from app.agents.transaction_capture.node import (
+    confirm_node,
+    persist_node,
+    rejected_node,
+    resolve_business_node,
+    stage_node,
+)
 
 
 def _mock_admin() -> MagicMock:
@@ -11,48 +17,118 @@ def _mock_admin() -> MagicMock:
     return sb
 
 
-def test_confirm_node_inserts_pending_row_and_pauses() -> None:
-    state = {
-        "business_id": "biz-1",
-        "extraction": {"item_description": "Nasi goreng", "amount": 15000.0,
-                        "type": "income", "confidence": 0.9, "raw_input": "x",
-                        "is_transaction": True},
-        "source": "whatsapp_text",
-    }
+_EXTRACTION = {"item_description": "Nasi goreng", "amount": 15000.0,
+               "type": "income", "confidence": 0.9, "raw_input": "x",
+               "is_transaction": True}
+
+
+def test_stage_node_inserts_pending_row() -> None:
+    state = {"business_id": "biz-1", "extraction": _EXTRACTION, "source": "whatsapp_text"}
     fake_admin = _mock_admin()
 
-    def fake_interrupt(payload):
-        assert payload["transaction_id"] == "txn-1"
-        assert payload["amount"] == 15000.0
-        return {"decision": "confirmed"}
-
     with patch("app.agents.transaction_capture.node.get_admin_client", return_value=fake_admin), \
-         patch("app.agents.transaction_capture.node.compute_plausibility_flag", return_value=False), \
-         patch("app.agents.transaction_capture.node.interrupt", side_effect=fake_interrupt):
-        update = confirm_node(state)
+         patch("app.agents.transaction_capture.node.compute_plausibility_flag", return_value=False):
+        update = stage_node(state)
 
-    assert update == {"confirmed": True, "transaction_id": "txn-1", "plausibility_flag": False}
+    assert update == {"transaction_id": "txn-1", "plausibility_flag": False}
     inserted = fake_admin.table.return_value.insert.call_args[0][0]
     assert inserted["status"] == "pending_confirmation"
     assert inserted["business_id"] == "biz-1"
 
 
-def test_confirm_node_returns_rejected_on_tidak() -> None:
-    state = {
-        "business_id": "biz-1",
-        "extraction": {"item_description": "Nasi goreng", "amount": 15000.0,
-                        "type": "income", "confidence": 0.9, "raw_input": "x",
-                        "is_transaction": True},
-        "source": "whatsapp_text",
-    }
+def test_confirm_node_pauses_without_touching_the_database() -> None:
+    """confirm_node is replayed from the top when the run resumes, so it must
+    have no side effect other than the interrupt itself — the pending row is
+    stage_node's job."""
+    state = {"business_id": "biz-1", "transaction_id": "txn-1", "plausibility_flag": False,
+             "business_name": "Warung Kopi", "extraction": _EXTRACTION,
+             "source": "whatsapp_text"}
     fake_admin = _mock_admin()
 
+    def fake_interrupt(payload):
+        assert payload["kind"] == "confirmation"
+        assert payload["transaction_id"] == "txn-1"
+        assert payload["amount"] == 15000.0
+        assert payload["business_name"] == "Warung Kopi"
+        return {"decision": "confirmed"}
+
     with patch("app.agents.transaction_capture.node.get_admin_client", return_value=fake_admin), \
-         patch("app.agents.transaction_capture.node.compute_plausibility_flag", return_value=False), \
-         patch("app.agents.transaction_capture.node.interrupt", return_value={"decision": "rejected"}):
+         patch("app.agents.transaction_capture.node.interrupt", side_effect=fake_interrupt):
         update = confirm_node(state)
 
-    assert update["confirmed"] is False
+    assert update == {"confirmed": True}
+    fake_admin.table.assert_not_called()
+
+
+def test_confirm_node_returns_rejected_on_tidak() -> None:
+    state = {"business_id": "biz-1", "transaction_id": "txn-1", "plausibility_flag": False,
+             "extraction": _EXTRACTION, "source": "whatsapp_text"}
+
+    with patch("app.agents.transaction_capture.node.interrupt",
+               return_value={"decision": "rejected"}):
+        assert confirm_node(state)["confirmed"] is False
+
+
+def test_resolve_business_node_uses_the_only_business_without_asking() -> None:
+    state = {"candidate_businesses": [{"id": "biz-1", "name": "Warung Kopi"}]}
+
+    with patch("app.agents.transaction_capture.node.interrupt") as interrupt_mock:
+        update = resolve_business_node(state)
+
+    interrupt_mock.assert_not_called()
+    assert update["business_id"] == "biz-1"
+    assert update["business_name"] == "Warung Kopi"
+    assert update["business_cancelled"] is False
+
+
+def test_resolve_business_node_reuses_what_the_thread_remembers() -> None:
+    state = {"candidate_businesses": [{"id": "biz-1", "name": "Warung Kopi"},
+                                      {"id": "biz-2", "name": "Toko Maju Jaya"}],
+             "business_id": "biz-2"}
+
+    with patch("app.agents.transaction_capture.node.interrupt") as interrupt_mock:
+        update = resolve_business_node(state)
+
+    interrupt_mock.assert_not_called()
+    assert update["business_id"] == "biz-2"
+    assert update["business_name"] == "Toko Maju Jaya"
+
+
+def test_resolve_business_node_asks_again_when_forced() -> None:
+    """WhatsApp's "ganti bisnis" — ignore the remembered choice."""
+    state = {"candidate_businesses": [{"id": "biz-1", "name": "Warung Kopi"},
+                                      {"id": "biz-2", "name": "Toko Maju Jaya"}],
+             "business_id": "biz-2", "force_business_choice": True}
+
+    with patch("app.agents.transaction_capture.node.interrupt",
+               return_value={"business_id": "biz-1"}) as interrupt_mock:
+        update = resolve_business_node(state)
+
+    assert interrupt_mock.call_args[0][0]["kind"] == "business_selection"
+    assert update["business_id"] == "biz-1"
+    assert update["force_business_choice"] is False
+
+
+def test_resolve_business_node_cancels_on_a_null_choice() -> None:
+    state = {"candidate_businesses": [{"id": "biz-1", "name": "Warung Kopi"},
+                                      {"id": "biz-2", "name": "Toko Maju Jaya"}]}
+
+    with patch("app.agents.transaction_capture.node.interrupt",
+               return_value={"business_id": None}):
+        update = resolve_business_node(state)
+
+    assert update["business_cancelled"] is True
+    assert update["business_id"] is None
+
+
+def test_resolve_business_node_cancels_when_there_are_no_businesses() -> None:
+    """The API layer refuses to invoke with zero businesses; this is the belt
+    and braces that stops a bad caller writing an orphan row."""
+    with patch("app.agents.transaction_capture.node.interrupt") as interrupt_mock:
+        update = resolve_business_node({"candidate_businesses": []})
+
+    interrupt_mock.assert_not_called()
+    assert update["business_cancelled"] is True
 
 
 def test_persist_node_marks_confirmed_and_creates_new_year_record() -> None:

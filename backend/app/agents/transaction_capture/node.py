@@ -53,8 +53,10 @@ def _build_chain(source: str | None):
     """Photo/voice always go to Gemini (get_vision_model()) regardless of
     LLM_PROVIDER — see get_vision_model()'s docstring for why. Text
     extraction follows the same provider-specific structured-output method
-    split as intent/node.py::_build_chain."""
-    if source in ("whatsapp_photo", "whatsapp_voice"):
+    split as intent/node.py::_build_chain. Dispatch is suffix-based (any
+    channel's "_photo"/"_voice" source), not a WhatsApp-only allowlist —
+    see the 2026-09-06 chatbot-transaction-capture spec."""
+    if (source or "").endswith(("_photo", "_voice")):
         return get_vision_model().with_structured_output(TransactionExtraction, method="json_schema")
     llm = get_chat_model()
     method = "function_calling" if settings.LLM_PROVIDER == "sumopod" else "json_schema"
@@ -62,7 +64,8 @@ def _build_chain(source: str | None):
 
 
 def _build_content(state: TransactionCaptureState) -> list[dict]:
-    if state.get("source") == "whatsapp_text":
+    source = state.get("source") or ""
+    if not source.endswith(("_photo", "_voice")):
         return [{"type": "text", "text": state.get("text_body") or ""}]
 
     media_bytes = state.get("media_bytes") or b""
@@ -107,8 +110,63 @@ def extract_node(state: TransactionCaptureState) -> TransactionCaptureState:
     }
 
 
-@track_node_duration("transaction_capture_confirm")
-def confirm_node(state: TransactionCaptureState) -> TransactionCaptureState:
+@track_node_duration("transaction_capture_resolve_business")
+def resolve_business_node(state: TransactionCaptureState) -> TransactionCaptureState:
+    """Decides which business this transaction belongs to, asking the user
+    only when it genuinely cannot tell.
+
+    One business in the workspace: no question. Two or more: reuse what this
+    thread already chose (that surviving checkpoint value IS the "remember
+    the last choice per conversation" mechanism — a new chat room is a new
+    thread, so it forgets), otherwise interrupt and ask.
+
+    Its only side effect is that interrupt, so LangGraph replaying this node
+    on resume is harmless — unlike an INSERT, which is why stage_node exists
+    separately."""
+    candidates = state.get("candidate_businesses") or []
+    if not candidates:
+        # The API layer refuses to invoke with zero businesses; belt and
+        # braces so a bad caller can never write an orphan row.
+        return {"business_cancelled": True, "business_id": None, "business_name": None}
+
+    by_id = {c["id"]: c for c in candidates}
+
+    if len(candidates) == 1:
+        chosen = candidates[0]
+    else:
+        remembered = None if state.get("force_business_choice") else state.get("business_id")
+        # A remembered id that is no longer among the candidates (business
+        # deleted, or the thread reused across workspaces) must never
+        # silently become the target — fall through and ask.
+        chosen = by_id.get(remembered) if remembered else None
+        if chosen is None:
+            resume = interrupt({"kind": "business_selection", "options": candidates})
+            chosen = by_id.get(resume.get("business_id"))
+            if chosen is None:
+                return {"business_cancelled": True, "business_id": None,
+                        "business_name": None, "force_business_choice": False}
+
+    return {
+        "business_id": chosen["id"],
+        "business_name": chosen["name"],
+        "business_cancelled": False,
+        "force_business_choice": False,
+    }
+
+
+@track_node_duration("transaction_capture_stage")
+def stage_node(state: TransactionCaptureState) -> TransactionCaptureState:
+    """Writes the pending row, and nothing else.
+
+    Deliberately a separate node rather than the first half of confirm_node.
+    LangGraph re-executes an interrupted task from the top when the run
+    resumes, so an INSERT placed before interrupt() runs a second time and
+    mints a second transaction id — the row the user was shown then stays
+    pending_confirmation forever while a duplicate gets confirmed, and the
+    orphan blocks every later message. A node that finishes before the pause
+    is checkpointed and never replayed. (composition_gate/node.py keeps its
+    write inline because an idempotent UPDATE survives replay; an INSERT
+    does not.)"""
     extraction = state["extraction"]
     plausibility_flag = compute_plausibility_flag(
         business_id=state["business_id"],
@@ -127,21 +185,28 @@ def confirm_node(state: TransactionCaptureState) -> TransactionCaptureState:
         "plausibility_flag": plausibility_flag,
         "status": "pending_confirmation",
     }).execute()
-    transaction_id = row.data[0]["id"]
 
+    return {
+        "transaction_id": row.data[0]["id"],
+        "plausibility_flag": plausibility_flag,
+    }
+
+
+@track_node_duration("transaction_capture_confirm")
+def confirm_node(state: TransactionCaptureState) -> TransactionCaptureState:
+    """Pauses for the human decision. Must stay free of side effects — see
+    stage_node's docstring for why."""
+    extraction = state["extraction"]
     resume = interrupt({
-        "transaction_id": transaction_id,
+        "kind": "confirmation",
+        "transaction_id": state["transaction_id"],
         "item_description": extraction["item_description"],
         "amount": extraction["amount"],
         "type": extraction["type"],
-        "plausibility_flag": plausibility_flag,
+        "plausibility_flag": state["plausibility_flag"],
+        "business_name": state.get("business_name"),
     })
-    decision = resume.get("decision", "rejected")
-    return {
-        "confirmed": decision == "confirmed",
-        "transaction_id": transaction_id,
-        "plausibility_flag": plausibility_flag,
-    }
+    return {"confirmed": resume.get("decision", "rejected") == "confirmed"}
 
 
 def _upsert_financial_record(sb, *, business_id: str, type_: str, amount: float) -> None:

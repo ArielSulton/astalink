@@ -1,3 +1,4 @@
+import pytest
 import hashlib
 import hmac
 import json
@@ -17,6 +18,15 @@ def _binding_admin() -> MagicMock:
         data={"user_id": "u1", "workspace_id": "w1"},
     )
     return fake_admin
+
+
+@pytest.fixture(autouse=True)
+def _no_thread_state():
+    """whatsapp.py reads the capture thread's state (remembered business,
+    "ganti bisnis" flag), which hits the real checkpointer. Default it to
+    empty for every test; the ones that care patch it themselves."""
+    with patch("app.api.v1.whatsapp.thread_values", return_value={}),          patch("app.api.v1.whatsapp.set_thread_values"):
+        yield
 
 
 def test_photo_message_routes_to_capture_not_advisory_graph(monkeypatch, client: TestClient) -> None:
@@ -39,8 +49,8 @@ def test_photo_message_routes_to_capture_not_advisory_graph(monkeypatch, client:
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value=None), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value=None), \
          patch("app.api.v1.whatsapp.download_media", return_value=(b"jpeg-bytes", "image/jpeg")), \
          patch("app.api.v1.whatsapp.capture_graph") as fake_capture_graph, \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
@@ -78,8 +88,8 @@ def test_gate_failed_sends_clarifying_text_not_confirmation_card(monkeypatch, cl
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value=None), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value=None), \
          patch("app.api.v1.whatsapp.looks_like_transaction", return_value=True), \
          patch("app.api.v1.whatsapp.capture_graph") as fake_capture_graph, \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
@@ -116,8 +126,8 @@ def test_advisory_question_with_no_transaction_signal_is_not_misrouted(monkeypat
                       "user_approval": None, "transactions": [], "errors": []}
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value=None), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value=None), \
          patch("app.api.v1.whatsapp.looks_like_transaction", return_value=False), \
          patch("app.api.v1.whatsapp.capture_graph") as fake_capture_graph, \
          patch("app.api.v1.whatsapp.graph.invoke", return_value=advisory_final), \
@@ -148,8 +158,8 @@ def test_pending_confirmation_reply_resumes_capture_not_advisory(monkeypatch, cl
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value={"kind": "confirmation"}), \
          patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value=None), \
          patch("app.api.v1.whatsapp.resume_transaction", return_value={"confirmed": True}) as resume_mock, \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
@@ -184,8 +194,8 @@ def test_new_photo_while_confirmation_pending_is_deflected_not_overwritten(monke
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-existing"), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value={"kind": "confirmation"}), \
          patch("app.api.v1.whatsapp.capture_graph") as fake_capture_graph, \
          patch("app.api.v1.whatsapp.download_media") as download_mock, \
          patch("app.api.v1.whatsapp.send_text") as text_mock:
@@ -216,8 +226,8 @@ def test_zero_or_multiple_businesses_redirects_to_dashboard(monkeypatch, client:
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value=None), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value=None), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value=None), \
          patch("app.api.v1.whatsapp.capture_graph") as fake_capture_graph, \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
          patch("app.api.v1.whatsapp.send_text") as text_mock:
@@ -257,8 +267,8 @@ def test_photo_capture_exception_sends_fallback_reply_not_500(monkeypatch, clien
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value=None), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value=None), \
          patch("app.api.v1.whatsapp.download_media", return_value=(b"jpeg-bytes", "image/jpeg")), \
          patch("app.api.v1.whatsapp.capture_graph") as fake_capture_graph, \
          patch("app.api.v1.whatsapp.send_text") as text_mock, \
@@ -294,8 +304,8 @@ def test_ambiguous_text_capture_exception_sends_fallback_reply_not_500(monkeypat
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value=None), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value=None), \
          patch("app.api.v1.whatsapp.looks_like_transaction", return_value=True), \
          patch("app.api.v1.whatsapp.capture_graph") as fake_capture_graph, \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \
@@ -338,8 +348,8 @@ def test_composition_button_tap_does_not_resolve_pending_transaction(monkeypatch
                      "legal_status": None, "user_approval": None, "transactions": [], "errors": []}
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value={"kind": "confirmation"}), \
          patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value="audit-1"), \
          patch("app.api.v1.whatsapp.resume_transaction") as resume_txn_mock, \
          patch("app.api.v1.whatsapp.resume_composition", return_value=resumed_state) as resume_comp_mock, \
@@ -376,8 +386,8 @@ def test_ambiguous_free_text_reply_deflects_when_both_flows_pending(monkeypatch,
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value={"kind": "confirmation"}), \
          patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value="audit-1"), \
          patch("app.api.v1.whatsapp.resume_transaction") as resume_txn_mock, \
          patch("app.api.v1.whatsapp.resume_composition") as resume_comp_mock, \
@@ -415,8 +425,8 @@ def test_pending_confirmation_resume_exception_sends_fallback_reply_not_500(monk
     fake_admin = _binding_admin()
 
     with patch("app.api.v1.whatsapp.get_admin_client", return_value=fake_admin), \
-         patch("app.api.v1.whatsapp.resolve_single_business", return_value="biz-1"), \
-         patch("app.api.v1.whatsapp.find_pending_transaction", return_value="txn-1"), \
+         patch("app.api.v1.whatsapp.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.whatsapp.pending_interrupt", return_value={"kind": "confirmation"}), \
          patch("app.api.v1.whatsapp.find_pending_composition_audit", return_value=None), \
          patch("app.api.v1.whatsapp.resume_transaction", side_effect=Exception("persist failed")), \
          patch("app.api.v1.whatsapp.graph.invoke") as advisory_invoke_mock, \

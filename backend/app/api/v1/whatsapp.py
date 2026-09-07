@@ -15,13 +15,22 @@ from app.agents.composition_gate.resume import (
 )
 from app.agents.graph import graph
 from app.agents.state import LegalStatus, UserApproval, new_state
-from app.agents.transaction_capture.classify import looks_like_transaction
+from app.agents.transaction_capture.classify import (
+    has_transaction_shape,
+    looks_like_transaction,
+)
 from app.agents.transaction_capture.graph import capture_graph
 from app.agents.transaction_capture.resume import (
+    BUSINESS_CANCEL,
+    detect_business_choice,
     detect_transaction_reply,
-    find_pending_transaction,
-    resolve_single_business,
+    fresh_capture_input,
+    list_businesses,
+    pending_interrupt,
+    resume_business_choice,
     resume_transaction,
+    set_thread_values,
+    thread_values,
 )
 from app.api.deps import get_current_user
 from app.core.ownership import assert_workspace_owned
@@ -86,19 +95,51 @@ def _onboarding_link(phone_e164: str) -> str:
     return f"{_config.settings.APP_BASE_URL}/settings/whatsapp?code={code}"
 
 
+NO_BUSINESS_WA_MESSAGE = (
+    "Sepertinya ini catatan transaksi, tapi saya belum bisa mencatatnya — "
+    "workspace Anda belum punya bisnis terdaftar. Daftarkan bisnis dulu di "
+    "dashboard AstaLink."
+)
+
+
+def _send_business_question(phone: str, options: list[dict]) -> None:
+    """Plain numbered text, not send_buttons(): Meta caps interactive reply
+    buttons at three and a workspace may own more businesses than that. The
+    number the user replies with indexes into the very list the interrupt
+    payload carries, so the numbering they saw and the numbering we resolve
+    against cannot drift apart."""
+    listing = "\n".join(f"{i + 1}. {o['name']}" for i, o in enumerate(options))
+    send_text(
+        to_phone_e164=phone,
+        body=("Transaksi ini untuk bisnis yang mana? Balas nomornya.\n"
+              f"{listing}\n\nKetik \"batal\" untuk membatalkan."),
+    )
+
+
 def _reply_for_capture_result(phone: str, result: dict) -> None:
-    if result.get("__interrupt__"):
-        payload = result["__interrupt__"][0].value
+    """Render whatever the capture graph stopped at. It can now pause twice —
+    first to ask which business, then to confirm — so the interrupt's `kind`
+    decides which message the user gets."""
+    interrupts = result.get("__interrupt__") or []
+    if interrupts:
+        payload = interrupts[0].value
+        if payload.get("kind") == "business_selection":
+            _send_business_question(phone, payload.get("options") or [])
+            return
         warning = "\n⚠️ Nominal ini jauh dari biasanya, mohon dicek ulang." \
             if payload.get("plausibility_flag") else ""
+        business = f"\nBisnis: {payload['business_name']}" if payload.get("business_name") else ""
         body = (
             f"Transaksi terdeteksi:\n"
             f"{payload.get('item_description') or '-'} — Rp{payload.get('amount'):,.0f} "
             f"({'pemasukan' if payload.get('type') == 'income' else 'pengeluaran'})"
-            f"{warning}\n\nBenar?"
+            f"{business}{warning}\n\nBenar?"
         )
         send_buttons(to_phone_e164=phone, body=body,
                      buttons=[("txn_ya", "Ya, Benar"), ("txn_tidak", "Tidak, Batalkan")])
+        return
+    if result.get("business_cancelled"):
+        send_text(to_phone_e164=phone, body="Oke, transaksi dibatalkan.")
         return
     if result.get("gate_failed"):
         send_text(to_phone_e164=phone,
@@ -167,8 +208,12 @@ def _process_message(msg: dict[str, Any]) -> None:
     txn_thread_id = f"wa-txn-{phone}-{workspace_id}"
 
     admin = get_admin_client()
-    business_id = resolve_single_business(admin, workspace_id)
-    pending_transaction_id = find_pending_transaction(admin, business_id) if business_id else None
+    candidates = list_businesses(admin, workspace_id)
+    # What the capture graph is ACTUALLY waiting for, read from its own
+    # checkpoint rather than inferred from a pending row inside a 24h TTL —
+    # see resume.py's module docstring.
+    pending = pending_interrupt(txn_thread_id)
+    pending_kind = (pending or {}).get("kind")
     pending_audit_id = find_pending_composition_audit(admin, thread_id)
 
     # A tap on the composition-gate card's own button (plain ya/tidak) is
@@ -180,8 +225,26 @@ def _process_message(msg: dict[str, Any]) -> None:
         msg_type == "interactive" and text in ("ya", "tidak") and bool(pending_audit_id)
     )
 
+    if pending_kind == "business_selection":
+        options = pending.get("options") or []
+        choice = detect_business_choice(text or "", options)
+        if choice is None:
+            # Unparseable — re-show the list rather than guessing.
+            _send_business_question(phone, options)
+            return
+        try:
+            result = resume_business_choice(
+                txn_thread_id, None if choice == BUSINESS_CANCEL else choice,
+            )
+            _reply_for_capture_result(phone, result)
+        except Exception:
+            log.exception("whatsapp: business-choice resume failed for thread %s", txn_thread_id)
+            send_text(to_phone_e164=phone,
+                      body="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.")
+        return
+
     transaction_reply = None
-    if pending_transaction_id and text and not is_composition_button_tap:
+    if pending_kind == "confirmation" and text and not is_composition_button_tap:
         if msg_type == "interactive":
             # Button ids are flow-specific (txn_ya/txn_tidak vs the
             # composition-gate card's plain ya/tidak) — a tap on the OTHER
@@ -201,7 +264,7 @@ def _process_message(msg: dict[str, Any]) -> None:
                 return
             transaction_reply = candidate
 
-    if pending_transaction_id and not is_composition_button_tap:
+    if pending_kind == "confirmation" and not is_composition_button_tap:
         # A pending confirmation exists on this thread: the bot is waiting
         # on ya/tidak specifically. A plain graph.invoke() on the SAME
         # txn_thread_id (no Command(resume=...)) would silently overwrite
@@ -230,11 +293,44 @@ def _process_message(msg: dict[str, Any]) -> None:
                            "Balas \"ya\" atau \"tidak\" dulu sebelum mengirim yang baru.")
         return
 
-    if msg_type in ("image", "audio"):
-        if business_id is None:
+    # "ganti bisnis" is the WhatsApp equivalent of opening a new chat room on
+    # the web: there is no room concept here, so a keyword is the only way to
+    # drop the business this thread remembers. The answer arrives in the NEXT
+    # message, so the "waiting for it" flag is written straight into the same
+    # thread state that holds the remembered business.
+    normalized = (text or "").strip().lower().rstrip(".!?")
+    values = thread_values(txn_thread_id)
+
+    if normalized in ("ganti bisnis", "ubah bisnis"):
+        if len(candidates) < 2:
             send_text(to_phone_e164=phone,
-                      body="Untuk mencatat transaksi via WhatsApp, daftarkan tepat satu "
-                           "bisnis dulu di dashboard AstaLink.")
+                      body="Workspace Anda hanya punya satu bisnis, jadi tidak ada yang "
+                           "perlu diganti." if candidates else NO_BUSINESS_WA_MESSAGE)
+            return
+        set_thread_values(txn_thread_id,
+                          {"business_id": None, "awaiting_business_preselect": True})
+        _send_business_question(phone, candidates)
+        return
+
+    if values.get("awaiting_business_preselect"):
+        choice = detect_business_choice(text or "", candidates)
+        if choice is None:
+            _send_business_question(phone, candidates)
+            return
+        if choice == BUSINESS_CANCEL:
+            set_thread_values(txn_thread_id, {"awaiting_business_preselect": False})
+            send_text(to_phone_e164=phone, body="Oke, bisnisnya tidak jadi diganti.")
+            return
+        picked = next(c for c in candidates if c["id"] == choice)
+        set_thread_values(txn_thread_id,
+                          {"business_id": choice, "awaiting_business_preselect": False})
+        send_text(to_phone_e164=phone,
+                  body=f"Oke, transaksi berikutnya dicatat ke {picked['name']}.")
+        return
+
+    if msg_type in ("image", "audio"):
+        if not candidates:
+            send_text(to_phone_e164=phone, body=NO_BUSINESS_WA_MESSAGE)
             return
         media = download_media(media_id)
         if media is None:
@@ -245,8 +341,12 @@ def _process_message(msg: dict[str, Any]) -> None:
         source = "whatsapp_photo" if msg_type == "image" else "whatsapp_voice"
         try:
             result = capture_graph.invoke(
-                {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
-                 "source": source, "media_bytes": media_bytes, "media_mime_type": mime_type},
+                fresh_capture_input(
+                    workspace_id=workspace_id, candidate_businesses=candidates,
+                    source=source, media_bytes=media_bytes, media_mime_type=mime_type,
+                    phone_e164=phone,
+                    remembered=values.get("business_id"),
+                ),
                 config={"configurable": {"thread_id": txn_thread_id}},
             )
             _reply_for_capture_result(phone, result)
@@ -260,11 +360,20 @@ def _process_message(msg: dict[str, Any]) -> None:
                       body="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.")
         return
 
-    if msg_type == "text" and business_id is not None and looks_like_transaction(text):
+    if msg_type == "text" and not candidates and has_transaction_shape(text):
+        # LLM-free on purpose: users who own no business must not pay a model
+        # call on every ordinary advisory message just to be told that.
+        send_text(to_phone_e164=phone, body=NO_BUSINESS_WA_MESSAGE)
+        return
+
+    if msg_type == "text" and candidates and looks_like_transaction(text):
         try:
             result = capture_graph.invoke(
-                {"business_id": business_id, "workspace_id": workspace_id, "phone_e164": phone,
-                 "source": "whatsapp_text", "text_body": text},
+                fresh_capture_input(
+                    workspace_id=workspace_id, candidate_businesses=candidates,
+                    source="whatsapp_text", text_body=text, phone_e164=phone,
+                    remembered=values.get("business_id"),
+                ),
                 config={"configurable": {"thread_id": txn_thread_id}},
             )
             _reply_for_capture_result(phone, result)

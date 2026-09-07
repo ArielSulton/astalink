@@ -7,6 +7,11 @@ class ChatRequest(BaseModel):
     message: str
     workspace_id: str
     thread_id: str | None = None
+    # Base64-encoded receipt photo, optional. When present, routes to
+    # transaction-capture's photo path instead of the advisory graph —
+    # see chat.py::chat()'s transaction-capture routing stage.
+    photo_base64: str | None = None
+    photo_mime_type: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -24,3 +29,15 @@ class ChatResponse(BaseModel):
     # visual AllocationBar the dashboard shows, instead of leaving the split
     # as plain text inside `message`.
     layer0_result: dict[str, Any] | None = None
+    # Present only while a transaction-capture confirmation is pending on
+    # this thread — {transaction_id, item_description, amount, type,
+    # plausibility_flag, business_name}, same shape as the interrupt payload.
+    pending_transaction: dict[str, Any] | None = None
+    # Present only while the capture graph is paused asking which business a
+    # transaction belongs to — {"options": [{"id", "name"}, …]}. The frontend
+    # renders one button per option; the reply is sent as "bizsel_<id>".
+    pending_business_choice: dict[str, Any] | None = None
+    # True when a capture attempt (photo or text) was blocked because the
+    # workspace owns no business at all — the frontend should offer a CTA
+    # to /business.
+    requires_business_setup: bool = False

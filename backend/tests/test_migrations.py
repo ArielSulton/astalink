@@ -104,3 +104,11 @@ def test_migration_0016_business_transactions_exists() -> None:
     assert "pending_confirmation" in sql
     assert "plausibility_flag" in sql
     assert "row level security" in sql
+
+
+def test_migration_0017_business_transactions_web_source_exists() -> None:
+    sql = _read("0017_business_transactions_web_source.sql")
+    assert "alter table" in sql
+    assert "business_transactions" in sql
+    assert "web_text" in sql
+    assert "web_photo" in sql

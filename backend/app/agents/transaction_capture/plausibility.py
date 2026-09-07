@@ -31,11 +31,17 @@ def compute_plausibility_flag(*, business_id: str, type_: str, amount: float) ->
         )
     except Exception as exc:
         log.error("compute_plausibility_flag: query failed: %s", exc)
-        return True  # can't verify — treat conservatively, same as too-little-history
+        # Can't verify. Warning anyway would fire on every transaction during
+        # an outage; the human confirmation card is the real gate regardless.
+        return False
 
     amounts = [float(r["amount"]) for r in (res.data or [])]
     if len(amounts) < MIN_HISTORY_FOR_ZSCORE:
-        return True
+        # A z-score over fewer than five samples is noise. Flagging anyway
+        # meant every transaction a new business ever recorded carried
+        # "⚠️ Nominal ini jauh dari biasanya" — observed on 6 of 6 cards in
+        # the 2026-09-07 run — which is how a warning stops meaning anything.
+        return False
 
     mean = statistics.mean(amounts)
     stdev = statistics.pstdev(amounts)

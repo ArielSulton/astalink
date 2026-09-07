@@ -1,3 +1,4 @@
+import base64
 import logging
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,6 +11,22 @@ from app.agents.composition_gate.resume import (
 )
 from app.agents.graph import graph
 from app.agents.state import new_state
+from app.agents.transaction_capture.classify import (
+    has_transaction_shape,
+    looks_like_transaction,
+)
+from app.agents.transaction_capture.graph import capture_graph
+from app.agents.transaction_capture.resume import (
+    BUSINESS_CANCEL,
+    detect_business_choice,
+    detect_transaction_reply,
+    fresh_capture_input,
+    list_businesses,
+    pending_interrupt,
+    remembered_business_id,
+    resume_business_choice,
+    resume_transaction,
+)
 from app.api.deps import get_current_user
 from app.core.ownership import assert_workspace_owned
 from app.core.supabase_admin import get_admin_client
@@ -35,6 +52,73 @@ def load_thread_history(thread_id: str) -> list:
         return []
 
 
+def _transaction_ack_text(result: dict) -> str:
+    if result.get("confirmed"):
+        return "Transaksi tercatat, terima kasih!"
+    return "Oke, transaksi dibatalkan."
+
+
+NO_BUSINESS_MESSAGE = (
+    "Sepertinya ini catatan transaksi, tapi saya belum bisa mencatatnya — "
+    "workspace ini belum punya bisnis terdaftar. Daftarkan bisnis Anda dulu "
+    "di halaman Bisnis."
+)
+
+
+def _business_choice_response(raw_thread: str, options: list[dict]) -> ChatResponse:
+    listing = "\n".join(f"{i + 1}. {o['name']}" for i, o in enumerate(options))
+    return ChatResponse(
+        message=f"Transaksi ini untuk bisnis yang mana?\n{listing}",
+        thread_id=raw_thread,
+        pending_business_choice={"options": options},
+    )
+
+
+def _confirmation_response(raw_thread: str, payload: dict) -> ChatResponse:
+    warning = "\n⚠️ Nominal ini jauh dari biasanya, mohon dicek ulang." \
+        if payload.get("plausibility_flag") else ""
+    business = f"\nBisnis: {payload['business_name']}" if payload.get("business_name") else ""
+    message = (
+        f"Transaksi terdeteksi:\n"
+        f"{payload.get('item_description') or '-'} — Rp{payload.get('amount'):,.0f} "
+        f"({'pemasukan' if payload.get('type') == 'income' else 'pengeluaran'})"
+        f"{business}{warning}\n\nBenar?"
+    )
+    return ChatResponse(
+        message=message,
+        thread_id=raw_thread,
+        pending_transaction={
+            "transaction_id": payload.get("transaction_id"),
+            "item_description": payload.get("item_description"),
+            "amount": payload.get("amount"),
+            "type": payload.get("type"),
+            "plausibility_flag": payload.get("plausibility_flag"),
+            "business_name": payload.get("business_name"),
+        },
+    )
+
+
+def _capture_result_response(raw_thread: str, result: dict) -> ChatResponse:
+    """Render whatever the capture graph stopped at. The graph can now pause
+    twice — first to ask which business, then to confirm — so the interrupt's
+    `kind` decides which card the user gets."""
+    interrupts = result.get("__interrupt__") or []
+    if interrupts:
+        payload = interrupts[0].value
+        if payload.get("kind") == "business_selection":
+            return _business_choice_response(raw_thread, payload.get("options") or [])
+        return _confirmation_response(raw_thread, payload)
+    if result.get("business_cancelled"):
+        return ChatResponse(message="Oke, transaksi dibatalkan.", thread_id=raw_thread)
+    if result.get("gate_failed"):
+        return ChatResponse(
+            message="Maaf, saya tidak bisa memahami transaksinya. Bisa dikirim ulang "
+                    "lebih jelas? Misalnya: \"jual nasi goreng 15rb\".",
+            thread_id=raw_thread,
+        )
+    return ChatResponse(message="Transaksi tercatat.", thread_id=raw_thread)
+
+
 @router.post("/", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -44,14 +128,142 @@ async def chat(
     user_sub = current_user["sub"]
     raw_thread = request.thread_id or str(uuid.uuid4())
     thread_id = f"{user_sub}:{raw_thread}"
+    txn_thread_id = f"txn-{thread_id}"
 
     assert_workspace_owned(get_admin_client(), request.workspace_id, user_sub)
+
+    admin = get_admin_client()
+    candidates = list_businesses(admin, request.workspace_id)
+    # What the capture graph is ACTUALLY waiting for, read from its own
+    # checkpoint. The previous version inferred this from a
+    # pending_confirmation row inside a 24h TTL, so a single orphaned row
+    # deflected every message on the workspace for a day.
+    pending = pending_interrupt(txn_thread_id)
+    pending_kind = (pending or {}).get("kind")
+    pending_audit_id = find_pending_composition_audit(admin, thread_id)
+
+    if pending_kind == "business_selection":
+        options = pending.get("options") or []
+        choice = detect_business_choice(request.message or "", options)
+        if choice is None:
+            # Unparseable — re-show the question rather than guessing which
+            # business the user meant.
+            return _business_choice_response(raw_thread, options)
+        try:
+            result = resume_business_choice(
+                txn_thread_id, None if choice == BUSINESS_CANCEL else choice,
+            )
+        except Exception:
+            log.exception("chat: business-choice resume failed for thread %s", txn_thread_id)
+            return ChatResponse(
+                message="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.",
+                thread_id=raw_thread,
+            )
+        return _capture_result_response(raw_thread, result)
+
+    if pending_kind == "confirmation":
+        transaction_reply = None
+        if request.message:
+            if request.message in ("txn_ya", "txn_tidak"):
+                # Unambiguous — only the transaction card ever sends these.
+                transaction_reply = detect_transaction_reply(request.message)
+            else:
+                candidate = detect_transaction_reply(request.message)
+                if candidate is not None and pending_audit_id:
+                    # Both flows are simultaneously awaiting a decision and the
+                    # message is plain "ya"/"tidak" — on the web there's no
+                    # button-id distinction between the two cards' plain replies,
+                    # so this is genuinely ambiguous. Do not guess.
+                    return ChatResponse(
+                        message="Anda punya transaksi dan persetujuan alokasi yang "
+                                "sama-sama menunggu konfirmasi. Jawab dulu kartu "
+                                "konfirmasi transaksi (\"Ya, Benar\"/\"Tidak, Batalkan\"), "
+                                "baru balas \"ya\"/\"tidak\" lagi untuk persetujuan alokasi.",
+                        thread_id=raw_thread,
+                    )
+                transaction_reply = candidate
+
+        if transaction_reply is not None:
+            try:
+                result = resume_transaction(txn_thread_id, transaction_reply)
+                return ChatResponse(message=_transaction_ack_text(result), thread_id=raw_thread)
+            except Exception:
+                log.exception("chat: transaction resume failed for thread %s", txn_thread_id)
+                return ChatResponse(
+                    message="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.",
+                    thread_id=raw_thread,
+                )
+        return ChatResponse(
+            message="Anda punya transaksi yang menunggu konfirmasi. "
+                    "Balas \"ya\" atau \"tidak\" dulu sebelum mengirim yang baru.",
+            thread_id=raw_thread,
+        )
+
+    if request.photo_base64:
+        if not candidates:
+            return ChatResponse(
+                message="Untuk mencatat transaksi lewat chat, daftarkan bisnis Anda "
+                        "dulu di halaman Bisnis.",
+                thread_id=raw_thread,
+                requires_business_setup=True,
+            )
+        try:
+            media_bytes = base64.b64decode(request.photo_base64)
+            result = capture_graph.invoke(
+                fresh_capture_input(
+                    workspace_id=request.workspace_id,
+                    candidate_businesses=candidates,
+                    source="web_photo",
+                    media_bytes=media_bytes,
+                    media_mime_type=request.photo_mime_type or "image/jpeg",
+                    remembered=remembered_business_id(txn_thread_id),
+                ),
+                config={"configurable": {"thread_id": txn_thread_id}},
+            )
+            return _capture_result_response(raw_thread, result)
+        except Exception:
+            log.exception("chat: capture_graph invoke failed for thread %s", txn_thread_id)
+            return ChatResponse(
+                message="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.",
+                thread_id=raw_thread,
+            )
+
+    if not candidates and request.message and has_transaction_shape(request.message):
+        # Deliberately the LLM-free check: users who own no business at all
+        # must not pay a model call on every ordinary advisory message. Before
+        # this branch existed the message fell through to the advisory graph
+        # and was answered as an investment question, with no hint that
+        # nothing had been recorded.
+        return ChatResponse(
+            message=NO_BUSINESS_MESSAGE,
+            thread_id=raw_thread,
+            requires_business_setup=True,
+        )
+
+    if candidates and looks_like_transaction(request.message):
+        try:
+            result = capture_graph.invoke(
+                fresh_capture_input(
+                    workspace_id=request.workspace_id,
+                    candidate_businesses=candidates,
+                    source="web_text",
+                    text_body=request.message,
+                    remembered=remembered_business_id(txn_thread_id),
+                ),
+                config={"configurable": {"thread_id": txn_thread_id}},
+            )
+            return _capture_result_response(raw_thread, result)
+        except Exception:
+            log.exception("chat: capture_graph invoke failed for thread %s", txn_thread_id)
+            return ChatResponse(
+                message="Maaf, terjadi kendala saat memproses transaksi Anda. Silakan coba lagi.",
+                thread_id=raw_thread,
+            )
 
     # A message on a thread that's paused at the composition gate is treated
     # as a reply to it ("ya"/"tidak") rather than a brand new turn, as long
     # as it's a clear yes/no — anything else falls through to a fresh turn.
-    pending_audit = find_pending_composition_audit(get_admin_client(), thread_id)
-    reply = detect_composition_reply(request.message) if pending_audit else None
+    reply = detect_composition_reply(request.message) if pending_audit_id else None
 
     if reply is not None:
         final_state = resume_composition(thread_id, reply)

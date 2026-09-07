@@ -1,9 +1,20 @@
 import uuid
+
+import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agents.state import LegalStatus, new_state
+
+
+@pytest.fixture(autouse=True)
+def _no_remembered_business():
+    """chat.py asks the capture thread which business it last used, which
+    reads the real checkpointer. Default it to "nothing remembered" for every
+    test; the ones that care patch it themselves."""
+    with patch("app.api.v1.chat.remembered_business_id", return_value=None):
+        yield
 
 
 def _make_fake_admin(owned: bool) -> MagicMock:
@@ -105,7 +116,12 @@ def test_chat_response_carries_audit_and_approval_fields(client: TestClient) -> 
     assert response.status_code == 200
     data = response.json()
     assert data["audit_id"] == "audit-abc"
-    assert data["requires_approval"] is True
+    # Advisory mode (2026-09 concept change): /chat produces reports and
+    # recommendations only — no HITL approval, no automatic execution — so
+    # chat.py always reports requires_approval=False. This assertion said
+    # True and had been failing since that change landed; the audit_id is
+    # what the Approvals CTA actually needs.
+    assert data["requires_approval"] is False
     assert data["intent"] == "allocate_stocks"
 
 
@@ -271,3 +287,189 @@ def test_chat_allows_owned_workspace(client: TestClient) -> None:
 
     assert response.status_code == 200
     mock_graph.assert_called_once()
+
+
+def test_chat_photo_routes_to_capture_not_advisory_graph(client: TestClient) -> None:
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.chat.pending_interrupt", return_value=None), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value=None), \
+         patch("app.api.v1.chat.capture_graph") as fake_capture_graph, \
+         patch("app.api.v1.chat.graph.invoke") as advisory_invoke_mock:
+        fake_capture_graph.invoke.return_value = {
+            "__interrupt__": [type("I", (), {"value": {
+                "transaction_id": "txn-1", "item_description": "Struk belanja",
+                "amount": 50000.0, "type": "expense", "plausibility_flag": False,
+            }})()],
+        }
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "", "workspace_id": "ws-1",
+                  "photo_base64": "ZmFrZS1qcGVn", "photo_mime_type": "image/jpeg"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pending_transaction"]["item_description"] == "Struk belanja"
+    advisory_invoke_mock.assert_not_called()
+    sent = fake_capture_graph.invoke.call_args.args[0]
+    assert sent["source"] == "web_photo"
+    # The graph resolves the business itself now (it may have to ask), so the
+    # caller hands it the candidates rather than a pre-picked id.
+    assert sent["candidate_businesses"] == [{"id": "biz-1", "name": "Warung Kopi"}]
+    assert sent["business_id"] is None  # nothing remembered on a fresh thread
+
+
+def test_chat_ambiguous_text_routes_to_capture(client: TestClient) -> None:
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.chat.pending_interrupt", return_value=None), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value=None), \
+         patch("app.api.v1.chat.looks_like_transaction", return_value=True), \
+         patch("app.api.v1.chat.capture_graph") as fake_capture_graph, \
+         patch("app.api.v1.chat.graph.invoke") as advisory_invoke_mock:
+        fake_capture_graph.invoke.return_value = {"gate_failed": True, "extraction": None}
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "jual nasi goreng 15rb", "workspace_id": "ws-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    advisory_invoke_mock.assert_not_called()
+    assert fake_capture_graph.invoke.call_args.args[0]["source"] == "web_text"
+
+
+def test_chat_pending_transaction_resumes_via_txn_marker(client: TestClient) -> None:
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.chat.pending_interrupt", return_value={"kind": "confirmation"}), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value=None), \
+         patch("app.api.v1.chat.resume_transaction", return_value={"confirmed": True}) as resume_mock, \
+         patch("app.api.v1.chat.graph.invoke") as advisory_invoke_mock:
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "txn_ya", "workspace_id": "ws-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    resume_mock.assert_called_once()
+    assert resume_mock.call_args.args[1] == "confirmed"
+    advisory_invoke_mock.assert_not_called()
+
+
+def test_chat_composition_reply_not_swallowed_when_transaction_also_pending(client: TestClient) -> None:
+    """The exact I4 collision, ported: a plain 'ya' while BOTH a pending
+    transaction and a pending composition approval exist must not silently
+    resolve the transaction — it's ambiguous and must be deflected."""
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.chat.pending_interrupt", return_value={"kind": "confirmation"}), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value="audit-1"), \
+         patch("app.api.v1.chat.resume_transaction") as resume_txn_mock, \
+         patch("app.api.v1.chat.resume_composition") as resume_comp_mock, \
+         patch("app.api.v1.chat.graph.invoke") as advisory_invoke_mock:
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "ya", "workspace_id": "ws-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    resume_txn_mock.assert_not_called()
+    resume_comp_mock.assert_not_called()
+    advisory_invoke_mock.assert_not_called()
+    body = response.json()["message"].lower()
+    assert "transaksi" in body and "alokasi" in body
+
+
+def test_chat_photo_without_single_business_requires_business_setup(client: TestClient) -> None:
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.list_businesses", return_value=[]), \
+         patch("app.api.v1.chat.pending_interrupt", return_value=None), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value=None), \
+         patch("app.api.v1.chat.capture_graph") as fake_capture_graph:
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "", "workspace_id": "ws-1",
+                  "photo_base64": "ZmFrZS1qcGVn", "photo_mime_type": "image/jpeg"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["requires_business_setup"] is True
+    fake_capture_graph.invoke.assert_not_called()
+
+
+def test_chat_allocation_request_with_business_reaches_advisory_graph(client: TestClient) -> None:
+    """business_id being set must not force every message through the
+    capture path — an ordinary allocation request must still reach the
+    advisory graph when looks_like_transaction correctly says no."""
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    advisory_final = {"audit_id": "a1", "intent": "allocate_capital",
+                      "messages": [AIMessage(content="ok")], "legal_status": None,
+                      "user_approval": None, "transactions": [], "errors": []}
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.chat.pending_interrupt", return_value=None), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value=None), \
+         patch("app.api.v1.chat.looks_like_transaction", return_value=False), \
+         patch("app.api.v1.chat.capture_graph") as fake_capture_graph, \
+         patch("app.api.v1.chat.graph.invoke", return_value=advisory_final):
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "alokasikan 20 juta ke BBCA", "workspace_id": "ws-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    fake_capture_graph.invoke.assert_not_called()
+
+
+def test_chat_capture_exception_returns_graceful_message_not_500(client: TestClient) -> None:
+    mock_user = {"sub": "user-1", "email": "t@example.com"}
+    fake_admin = _make_fake_admin(owned=True)
+
+    with patch("app.api.deps.verify_token", return_value=mock_user), \
+         patch("app.api.v1.chat.get_admin_client", return_value=fake_admin), \
+         patch("app.api.v1.chat.list_businesses", return_value=[{"id": "biz-1", "name": "Warung Kopi"}]), \
+         patch("app.api.v1.chat.pending_interrupt", return_value=None), \
+         patch("app.api.v1.chat.find_pending_composition_audit", return_value=None), \
+         patch("app.api.v1.chat.looks_like_transaction", return_value=True), \
+         patch("app.api.v1.chat.capture_graph") as fake_capture_graph:
+        fake_capture_graph.invoke.side_effect = Exception("db write failed")
+        response = client.post(
+            "/api/v1/chat/",
+            json={"message": "jual nasi goreng 15rb", "workspace_id": "ws-1"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    assert response.status_code == 200
+    assert "maaf" in response.json()["message"].lower()
