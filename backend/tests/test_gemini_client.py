@@ -68,10 +68,10 @@ def test_get_vision_model_is_lazy_and_cached() -> None:
     assert kwargs["google_api_key"] == "d"
 
 
-def test_get_vision_model_stays_gemini_when_sumopod_is_selected(monkeypatch: pytest.MonkeyPatch) -> None:
-    """LLM_PROVIDER=sumopod must NOT affect get_vision_model() — SumoPod's
-    DeepSeek proxy doesn't accept multimodal input, so photo/voice
-    extraction always pins to Gemini regardless of the text-chat provider."""
+def test_get_vision_model_stays_gemini_when_llm_provider_is_sumopod(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_PROVIDER (text chat) must NOT affect get_vision_model() — vision
+    has its own independent switch, VISION_PROVIDER, which defaults to
+    gemini regardless of what LLM_PROVIDER is set to."""
     monkeypatch.setenv("LLM_PROVIDER", "sumopod")
     monkeypatch.setenv("SUMOPOD_API_KEY", "sumo-key")
     monkeypatch.setenv("SUMOPOD_BASE_URL", "https://ai.sumopod.com/v1")
@@ -96,6 +96,38 @@ def test_get_vision_model_stays_gemini_when_sumopod_is_selected(monkeypatch: pyt
     kwargs = gemini_ctor.call_args.kwargs
     assert kwargs["model"] == "gemini-3.1-flash-lite"
     assert kwargs["google_api_key"] == "d"
+
+
+def test_get_vision_model_routes_to_sumopod_when_vision_provider_selected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """VISION_PROVIDER=sumopod must construct ChatOpenAI against SumoPod's
+    vision model instead of ChatGoogleGenerativeAI, independent of
+    LLM_PROVIDER."""
+    monkeypatch.setenv("VISION_PROVIDER", "sumopod")
+    monkeypatch.setenv("SUMOPOD_API_KEY", "sumo-key")
+    monkeypatch.setenv("SUMOPOD_BASE_URL", "https://ai.sumopod.com/v1")
+    monkeypatch.setenv("SUMOPOD_VISION_MODEL", "deepseek-v4-flash-vision-exp")
+
+    import importlib
+    from app.core import config as config_module
+    importlib.reload(config_module)
+    config_module.settings = config_module.Settings(_env_file=None)
+    import app.core.gemini as g
+    importlib.reload(g)
+    g._vision_model = None
+
+    fake_instance = MagicMock(name="ChatOpenAI-vision-instance")
+    with patch("app.core.gemini.ChatOpenAI", return_value=fake_instance) as openai_ctor, \
+         patch("app.core.gemini.ChatGoogleGenerativeAI") as gemini_ctor:
+        model = g.get_vision_model()
+
+    assert model is fake_instance
+    gemini_ctor.assert_not_called()
+    openai_ctor.assert_called_once()
+    kwargs = openai_ctor.call_args.kwargs
+    assert kwargs["model"] == "deepseek-v4-flash-vision-exp"
+    assert kwargs["api_key"] == "sumo-key"
+    assert kwargs["base_url"] == "https://ai.sumopod.com/v1"
+    assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
 
 
 def test_get_chat_model_routes_to_sumopod_when_selected(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -56,20 +56,33 @@ def get_chat_model() -> BaseChatModel:
 
 
 def get_vision_model() -> BaseChatModel:
-    """Always Gemini, regardless of settings.LLM_PROVIDER.
+    """Vision/OCR chat client — Gemini or SumoPod, switchable via
+    settings.VISION_PROVIDER. Deliberately separate from LLM_PROVIDER (text
+    chat) so the two can be pointed at different providers independently.
 
-    SumoPod's OpenAI-compatible proxy fronts DeepSeek here, which does not
-    accept multimodal (image/audio) input — so transaction-capture's
-    photo/voice extraction pins to Gemini directly instead of routing
-    through get_chat_model()'s provider switch, while text extraction still
-    follows LLM_PROVIDER as normal."""
+    Historically this was hardcoded to Gemini because SumoPod's default
+    DeepSeek proxy model doesn't accept multimodal (image/audio) input.
+    SumoPod now also exposes a vision-capable model
+    (SUMOPOD_VISION_MODEL, e.g. deepseek-v4-flash-vision-exp) — set
+    VISION_PROVIDER=sumopod to route photo/voice extraction there instead.
+    Gemini stays the default and its code path is untouched, so reverting is
+    just flipping VISION_PROVIDER back."""
     global _vision_model
     if _vision_model is None:
-        _vision_model = ChatGoogleGenerativeAI(
-            model=settings.GEMINI_CHAT_MODEL,
-            google_api_key=settings.GOOGLE_API_KEY,
-            temperature=0.0,
-        )
+        if settings.VISION_PROVIDER == "sumopod":
+            _vision_model = ChatOpenAI(
+                model=settings.SUMOPOD_VISION_MODEL,
+                api_key=settings.SUMOPOD_API_KEY,
+                base_url=settings.SUMOPOD_BASE_URL,
+                temperature=0.0,
+                extra_body={"thinking": {"type": "disabled"}},
+            )
+        else:
+            _vision_model = ChatGoogleGenerativeAI(
+                model=settings.GEMINI_CHAT_MODEL,
+                google_api_key=settings.GOOGLE_API_KEY,
+                temperature=0.0,
+            )
     return _vision_model
 
 

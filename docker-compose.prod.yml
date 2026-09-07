@@ -40,6 +40,9 @@ services:
       - SUMOPOD_API_KEY=${SUMOPOD_API_KEY}
       - SUMOPOD_BASE_URL=${SUMOPOD_BASE_URL:-https://ai.sumopod.com/v1}
       - SUMOPOD_CHAT_MODEL=${SUMOPOD_CHAT_MODEL:-gpt-4o-mini}
+      # Vision (OCR) model provider — "gemini" (default) or "sumopod"
+      - VISION_PROVIDER=${VISION_PROVIDER:-gemini}
+      - SUMOPOD_VISION_MODEL=${SUMOPOD_VISION_MODEL:-deepseek-v4-flash-vision-exp}
       # Pinecone
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-astalink-regulations}

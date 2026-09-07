@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     SUMOPOD_BASE_URL: str = "https://ai.sumopod.com/v1"
     SUMOPOD_CHAT_MODEL: str = "gpt-4o-mini"
 
+    # Vision (OCR) model provider switch — "gemini" (default) or "sumopod".
+    # Separate from LLM_PROVIDER: text chat and vision/OCR can be pointed at
+    # different providers independently. See app/core/gemini.py's
+    # get_vision_model(). SUMOPOD_VISION_MODEL is the SumoPod model string
+    # for a vision-capable model (e.g. a DeepSeek vision model).
+    VISION_PROVIDER: str = "gemini"
+    SUMOPOD_VISION_MODEL: str = "deepseek-v4-flash-vision-exp"
+
     # Pinecone — same lazy-boot philosophy.
     PINECONE_API_KEY: str = ""
     PINECONE_INDEX_NAME: str = "astalink-regulations"

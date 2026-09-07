@@ -50,14 +50,16 @@ Respond with a single JSON object matching this shape, and nothing else:
 
 @lru_cache(maxsize=None)
 def _build_chain(source: str | None):
-    """Photo/voice always go to Gemini (get_vision_model()) regardless of
-    LLM_PROVIDER — see get_vision_model()'s docstring for why. Text
-    extraction follows the same provider-specific structured-output method
-    split as intent/node.py::_build_chain. Dispatch is suffix-based (any
-    channel's "_photo"/"_voice" source), not a WhatsApp-only allowlist —
-    see the 2026-09-06 chatbot-transaction-capture spec."""
+    """Photo/voice always go through get_vision_model() (VISION_PROVIDER),
+    never get_chat_model() (LLM_PROVIDER) — the two providers are switched
+    independently, see get_vision_model()'s docstring. Text extraction
+    follows the same provider-specific structured-output method split as
+    intent/node.py::_build_chain. Dispatch is suffix-based (any channel's
+    "_photo"/"_voice" source), not a WhatsApp-only allowlist — see the
+    2026-09-06 chatbot-transaction-capture spec."""
     if (source or "").endswith(("_photo", "_voice")):
-        return get_vision_model().with_structured_output(TransactionExtraction, method="json_schema")
+        method = "function_calling" if settings.VISION_PROVIDER == "sumopod" else "json_schema"
+        return get_vision_model().with_structured_output(TransactionExtraction, method=method)
     llm = get_chat_model()
     method = "function_calling" if settings.LLM_PROVIDER == "sumopod" else "json_schema"
     return llm.with_structured_output(TransactionExtraction, method=method)
@@ -72,10 +74,13 @@ def _build_content(state: TransactionCaptureState) -> list[dict]:
     b64 = base64.b64encode(media_bytes).decode()
     return [
         {"type": "text", "text": "Ekstrak transaksi dari lampiran ini."},
+        # Standard (v1) LangChain multimodal content block — both
+        # ChatGoogleGenerativeAI and ChatOpenAI understand this shape, so
+        # this doesn't need to branch on VISION_PROVIDER.
         {
-            "type": "media",
+            "type": "image",
             "mime_type": state.get("media_mime_type") or "application/octet-stream",
-            "data": b64,
+            "base64": b64,
         },
     ]
 

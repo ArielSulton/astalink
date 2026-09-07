@@ -123,7 +123,7 @@ def test_extract_node_builds_multimodal_content_for_a_photo() -> None:
     sent_messages = fake_chain.invoke.call_args[0][0]
     human_content = sent_messages[-1].content
     assert isinstance(human_content, list)
-    media_block = next(b for b in human_content if b.get("type") == "media")
+    media_block = next(b for b in human_content if b.get("type") == "image")
     assert media_block["mime_type"] == "image/jpeg"
 
 
@@ -228,7 +228,7 @@ def test_build_content_uses_media_block_for_web_photo_source() -> None:
     content = _build_content({
         "source": "web_photo", "media_bytes": b"fake-jpeg-bytes", "media_mime_type": "image/jpeg",
     })
-    media_block = next(b for b in content if b.get("type") == "media")
+    media_block = next(b for b in content if b.get("type") == "image")
     assert media_block["mime_type"] == "image/jpeg"
 
 
