@@ -18,82 +18,63 @@ import {
 } from "@/components/ui/table";
 import { PricingCards } from "@/components/pricing/pricing-cards";
 
-const PRICING_TIER_NAMES = ["Gratis", "Pro", "Enterprise"] as const;
+const PRICING_TIER_NAMES = ["Gratis", "Pro", "Partner"] as const;
 
 const COMPARISON_FEATURES = [
-  { category: "Analisis AI", features: [
-    { key: "multiAgent", label: "Pipeline multi-agen (fundamental, teknikal, sentimen, risiko)", tiers: [false, true, true] },
-    { key: "fundamental", label: "Analisis fundamental mendalam (rasio keuangan, valuation)", tiers: [false, true, true] },
-    { key: "technical", label: "Indikator teknikal (RSI, MACD, MA, Bollinger, dll)", tiers: [true, true, true] },
-    { key: "sentiment", label: "Analisis sentimen berita & media sosial", tiers: [false, true, true] },
-    { key: "risk", label: "Risk profiling & portfolio optimization", tiers: [false, true, true] },
+  { category: "Akses & Analisis", features: [
+    { key: "chat", label: "Chat literasi keuangan via WhatsApp & Web", tiers: [true, true, true] },
+    { key: "allocation", label: "Analisis alokasi modal personal", tiers: [false, true, true] },
+    { key: "legal", label: "Cek kepatuhan OJK otomatis, tersitasi", tiers: [false, true, true] },
+    { key: "sandbox", label: "Portofolio sandbox", tiers: [true, true, true] },
   ]},
-  { category: "Kepatuhan & Regulasi", features: [
-    { key: "ojk", label: "Verifikasi OJK & IDX compliance otomatis", tiers: [true, true, true] },
-    { key: "customReg", label: "Custom regulasi & whitelist institusi", tiers: [false, false, true] },
-    { key: "audit", label: "Audit trail & compliance logging", tiers: [false, false, true] },
+  { category: "Dashboard & Kontrol", features: [
+    { key: "audit", label: "Audit trail & persetujuan PIN", tiers: [false, true, true] },
+    { key: "dashboard", label: "Dashboard holdings, approvals, transaksi, & berita", tiers: [false, true, true] },
+    { key: "credits", label: "Kredit chat lebih banyak", tiers: [false, true, true] },
   ]},
-  { category: "Data & Notifikasi", features: [
-    { key: "realtime", label: "Data pasar real-time", tiers: [false, true, true] },
-    { key: "alerts", label: "Alert harga, volume, & teknikal custom", tiers: [false, true, true] },
-    { key: "notif", label: "Notifikasi (Email + WhatsApp)", tiers: [true, true, true] },
-    { key: "watchlist", label: "Watchlist tak terbatas", tiers: [false, true, true] },
-  ]},
-  { category: "Tools & Ekspor", features: [
-    { key: "backtest", label: "Backtesting strategi (5 tahun data)", tiers: [false, true, true] },
-    { key: "export", label: "Ekspor laporan PDF/Excel", tiers: [false, true, true] },
-    { key: "api", label: "API access", tiers: [false, true, true] },
-    { key: "webhook", label: "Webhook & integrasi broker", tiers: [false, false, true] },
-  ]},
-  { category: "Support & Akun", features: [
-    { key: "history", label: "Riwayat chat AI", tiers: [true, true, true] },
-    { key: "priority", label: "Prioritas support", tiers: [false, true, true] },
-    { key: "dedicated", label: "Dedicated account manager", tiers: [false, false, true] },
-    { key: "sla", label: "SLA 99.9%", tiers: [false, false, true] },
-    { key: "seats", label: "Multi-user workspace", tiers: [false, false, true] },
-    { key: "training", label: "Training & onboarding", tiers: [false, false, true] },
+  { category: "Kemitraan", features: [
+    { key: "api", label: "Akses REST API untuk integrasi partner", tiers: [false, false, true] },
+    { key: "whiteLabel", label: "White-label (branding sendiri)", tiers: [false, false, true] },
+    { key: "subAccounts", label: "Manajemen multi sub-akun anggota", tiers: [false, false, true] },
+    { key: "aggregate", label: "Laporan agregat & account manager", tiers: [false, false, true] },
   ]},
 ] as const;
 
 const FAQ = [
   {
-    q: "Apakah bisa upgrade/downgrade kapan saja?",
-    a: "Ya, Anda bisa mengubah paket kapan saja. Upgrade berlaku segera, downgrade berlaku di awal siklus billing berikutnya. Tidak ada biaya tambahan untuk perubahan paket.",
+    q: "Apa yang didapat dari paket Gratis?",
+    a: "Paket Gratis mencakup 20 chat ringan per bulan untuk literasi keuangan via WhatsApp dan Web, serta demo portofolio sandbox dengan data contoh.",
   },
   {
-    q: "Apakah ada percobaan gratis untuk paket Pro?",
-    a: "Ya, paket Pro menawarkan uji coba 14 hari gratis tanpa kartu kredit. Selama uji coba, Anda mendapat akses penuh ke semua fitur Pro. Bisa dibatalkan kapan saja.",
+    q: "Apa yang membedakan paket Pro?",
+    a: "Pro menyediakan 100 kredit chat per bulan, analisis alokasi modal, cek kepatuhan OJK tersitasi, audit trail, persetujuan PIN, dan dashboard lengkap.",
   },
   {
-    q: "Bagaimana cara pembayaran?",
-    a: "Menerima transfer bank (BCA, BRI, Mandiri, BNI), e-wallet (GoPay, OVO, DANA, ShopeePay), dan kartu kredit/debit via payment gateway terpercaya. Faktur pajak tersedia untuk Enterprise.",
+    q: "Untuk siapa paket Komunitas & Partner?",
+    a: "Paket ini ditujukan untuk komunitas atau partner yang memerlukan integrasi REST API, branding sendiri, dan pengelolaan sub-akun anggota.",
   },
   {
-    q: "Apakah data saya aman?",
-    a: "Ya. Data terenkripsi AES-256 saat transit dan at-rest. Server di AWS Jakarta region (data residency Indonesia). SOC 2 Type II certified. Tidak menjual data ke pihak ketiga.",
+    q: "Berapa kapasitas paket Partner?",
+    a: "Paket Partner mencakup biaya dasar Rp1 juta ditambah Rp28 ribu per anggota, hingga 500 anggota per komunitas.",
   },
   {
-    q: "Apa beda Gratis vs Pro untuk verifikasi OJK?",
-    a: "Kedua paket mendapat verifikasi OJK otomatis yang sama. Beda utamanya: Gratis terbatas 3 saham & riwayat 7 hari, Pro tak terbatas + analisis fundamental + backtesting + notifikasi real-time.",
-  },
-  {
-    q: "Bisa custom paket Enterprise untuk tim kecil?",
-    a: "Tentu. Enterprise dimulai dari 5 seats. Jika tim Anda <5 orang tapi butuh fitur Enterprise (white-label, API unlimited, dll), hubungi kami untuk penawaran custom.",
+    q: "Apakah paket Partner mencakup semua fitur Pro?",
+    a: "Ya. Paket Partner mencakup seluruh fitur Pro, lalu menambahkan kapabilitas integrasi dan pengelolaan komunitas.",
   },
 ] as const;
 
 const TRUST_INDICATORS = [
-  { label: "Teregulasi OJK", icon: ShieldCheck },
-  { label: "Data Terenkripsi", icon: Lock },
-  { label: "Real-time IDX", icon: Zap },
+  { label: "Cek Regulasi", icon: ShieldCheck },
+  { label: "Kontrol PIN", icon: Lock },
+  { label: "Portofolio Sandbox", icon: Zap },
   { label: "AI Multi-Agen", icon: Brain },
   { label: "Human-in-the-Loop", icon: Users },
-  { label: "Zero Hidden Fees", icon: CreditCard },
+  { label: "Harga Transparan", icon: CreditCard },
 ] as const;
 
 export const metadata = {
   title: "Harga | AstaLink AI",
-  description: "Pilih paket yang tepat untuk analisis portofolio saham IDX dengan AI multi-agen, verifikasi OJK otomatis, dan kontrol penuh di tangan Anda. Mulai dari gratis.",
+  description: "Pilih paket AstaLink untuk literasi keuangan, analisis alokasi modal, dan kebutuhan komunitas Anda.",
 };
 
 export default function PricingPage() {
@@ -164,14 +145,14 @@ export default function PricingPage() {
             <span className="block bg-clip-text text-transparent pb-2" style={{
               backgroundImage: "linear-gradient(130deg, oklch(0.723 0.219 149.579) 0%, oklch(0.871 0.15 154.449) 100%)",
             }}>
-              Harga yang adil untuk
+              Tiga tier, satu jalur
             </span>
-            <span className="block">investasi yang lebih cerdas.</span>
+            <span className="block">monetisasi yang jelas.</span>
           </h1>
 
           <p className="text-muted-foreground text-base md:text-[1.0625rem] leading-relaxed mb-10 max-w-[600px] mx-auto">
-            Pilih paket yang cocok dengan kebutuhan investasi Anda. Semua paket termasuk verifikasi OJK otomatis
-            dan kontrol penuh dengan konfirmasi PIN sebelum transaksi.
+            Mulai dari literasi keuangan dasar, lanjutkan ke analisis alokasi modal, atau kelola kebutuhan komunitas
+            dengan akses partner.
           </p>
         </div>
       </section>
@@ -305,8 +286,7 @@ export default function PricingPage() {
             Siap memulai investasi lebih cerdas?
           </h2>
           <p className="text-muted-foreground text-base mb-10 leading-relaxed">
-            Gabung ribuan investor Indonesia yang sudah menggunakan AstaLink untuk analisis portofolio berbasis AI.
-            Mulai gratis, upgrade kapan saja.
+            Mulai dengan paket Gratis untuk mengenal AstaLink, atau pilih Pro untuk analisis dan kontrol yang lebih lengkap.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
@@ -324,7 +304,7 @@ export default function PricingPage() {
             </Link>
           </div>
           <p className="text-muted-foreground/60 text-xs mt-6 font-mono tracking-wide">
-            Teregulasi OJK · Data Terenkripsi · Tidak Ada Iklan · Batalkan Kapan Saja
+            WhatsApp & Web · Portofolio Sandbox · Audit Trail di Pro
           </p>
         </div>
       </section>
@@ -341,11 +321,11 @@ export default function PricingPage() {
               <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
             </div>
             <p className="text-sidebar-foreground/50 text-sm leading-relaxed">
-              Platform investasi saham IDX dengan AI multi-agen, kepatuhan OJK otomatis,
+              Platform analisis alokasi modal dengan AI multi-agen, cek regulasi berbasis dokumen,
               dan kontrol penuh di tanganmu.
             </p>
             <p className="text-sidebar-foreground/35 text-[10px] font-mono tracking-wide">
-              Teregulasi OJK · IDX Compliance
+              Analisis AI · Cek Regulasi
             </p>
           </div>
 
