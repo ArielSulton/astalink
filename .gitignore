@@ -68,6 +68,7 @@ __pycache__/
 /*.js
 
 # Auto-generated agent files
+.omo/
 frontend/AGENTS.md
 frontend/CLAUDE.md
 DESIGN.md
