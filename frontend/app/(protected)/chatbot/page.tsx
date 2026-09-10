@@ -19,6 +19,7 @@ import {
   deleteConversation,
   getMessages,
   listConversations,
+  purchaseRespondedIds,
   titleFrom,
   transactionRespondedIds,
   updateConversation,
@@ -40,16 +41,7 @@ function extractTickers(text: string): string[] {
   return found.length > 0 ? found : ["BBCA"];
 }
 
-// Whether THIS reply itself carries a real optimizer recommendation —
-// checked on the assistant's own message, not the preceding user request's
-// wording. A regex on the request text ("alokasikan dana") broke as soon as
-// the request came via the composition-gate "Setuju, lanjutkan analisis
-// saham" reply instead of a literal alokasikan-dana phrasing, silently
-// hiding the CTA on every allocate_capital flow.
-function hasAllocationPlan(text: string): boolean {
-  return /Rekomendasi Bobot Saham/i.test(text);
-}
-
+// Seed the purchase review with the amount the user asked the AI to analyze.
 function extractAmount(text: string): number | null {
   const jutaMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:juta|jt)\b/i);
   if (jutaMatch) return Math.round(parseFloat(jutaMatch[1].replace(",", ".")) * 1_000_000);
@@ -105,10 +97,12 @@ export default function ChatbotPage() {
   const [buyModalOpen, setBuyModalOpen] = useState(false);
   const [buyTickers, setBuyTickers] = useState<string[]>(["BBCA"]);
   const [buyAmount, setBuyAmount] = useState<number | null>(null);
+  const [buyAuditId, setBuyAuditId] = useState<string | null>(null);
   // Which reply the open modal belongs to, and the replies already executed —
   // an executed recommendation must not keep offering its allocate button.
   const [buyForMessageId, setBuyForMessageId] = useState<string | null>(null);
   const [allocatedIds, setAllocatedIds] = useState<Set<string>>(new Set());
+  const [respondedPurchaseIds, setRespondedPurchaseIds] = useState<Set<string>>(new Set());
   // Ids of paused replies whose composition gate has already been answered —
   // without this, Setuju/Tidak would reappear forever after a reload.
   const [respondedCompositionIds, setRespondedCompositionIds] = useState<Set<string>>(new Set());
@@ -143,6 +137,7 @@ export default function ChatbotPage() {
       })),
     );
     setAllocatedIds(allocatedReplyIds(rows));
+    setRespondedPurchaseIds(purchaseRespondedIds(rows));
     setRespondedCompositionIds(compositionRespondedIds(rows));
     setRespondedTransactionIds(transactionRespondedIds(rows));
     setRespondedBusinessIds(businessChoiceRespondedIds(rows));
@@ -151,13 +146,16 @@ export default function ChatbotPage() {
   // Load this user's chatbot rooms for the workspace; open the most recent.
   useEffect(() => {
     if (!workspaceId) {
-      setRooms([]);
-      setActiveId(null);
-      setMessages([]);
-      setAllocatedIds(new Set());
-      setRespondedCompositionIds(new Set());
-      setThreadId(undefined);
-      return;
+      const resetTimer = window.setTimeout(() => {
+        setRooms([]);
+        setActiveId(null);
+        setMessages([]);
+        setAllocatedIds(new Set());
+        setRespondedPurchaseIds(new Set());
+        setRespondedCompositionIds(new Set());
+        setThreadId(undefined);
+      }, 0);
+      return () => window.clearTimeout(resetTimer);
     }
     let cancelled = false;
     (async () => {
@@ -169,6 +167,7 @@ export default function ChatbotPage() {
         setActiveId(null);
         setMessages([]);
         setAllocatedIds(new Set());
+        setRespondedPurchaseIds(new Set());
         setRespondedCompositionIds(new Set());
         setThreadId(undefined);
       }
@@ -185,6 +184,7 @@ export default function ChatbotPage() {
     setThreadId(undefined);
     setMessages([]);
     setAllocatedIds(new Set());
+    setRespondedPurchaseIds(new Set());
     setRespondedCompositionIds(new Set());
   }
 
@@ -198,6 +198,7 @@ export default function ChatbotPage() {
         setActiveId(null);
         setMessages([]);
         setAllocatedIds(new Set());
+        setRespondedPurchaseIds(new Set());
         setRespondedCompositionIds(new Set());
         setThreadId(undefined);
       }
@@ -208,12 +209,14 @@ export default function ChatbotPage() {
     content: string,
     requestText: string | undefined,
     messageId: string | null | undefined,
+    auditId: string | null | undefined,
   ) => {
     const tickers = extractTickers(content);
     setBuyTickers(tickers);
     const amount = (requestText ? extractAmount(requestText) : null) ?? extractAnalyzedAmount(content);
     setBuyAmount(amount);
     setBuyForMessageId(messageId ?? null);
+    setBuyAuditId(auditId ?? null);
     setBuyModalOpen(true);
   };
 
@@ -221,6 +224,16 @@ export default function ChatbotPage() {
     setBuyModalOpen(false);
     const target = buyForMessageId;
     if (target) setAllocatedIds((prev) => new Set(prev).add(target));
+    if (target) setRespondedPurchaseIds((prev) => new Set(prev).add(target));
+    if (activeId && target) {
+      const userText = "Ya, lanjutkan pembelian dengan PIN";
+      const userId = await appendMessage(activeId, {
+        role: "user",
+        content: userText,
+        metadata: { purchase_for: target, purchase_decision: "approved" },
+      });
+      setMessages((prev) => [...prev, { id: userId, role: "user", content: userText }]);
+    }
     const confirmMsg = `✓ **Alokasi Berhasil!** Mengalokasikan **${idr(amount)}** ke saham **${ticker}**.\n- Saldo kas tersisa: **${idr(cashRemaining)}**\n- Transaksi telah dicatat di tabel **Riwayat Transaksi** dan posisi diperbarui di halaman **Portofolio**.`;
     // metadata.allocated_for is what marks the original reply as executed on reload.
     const id = activeId
@@ -232,6 +245,37 @@ export default function ChatbotPage() {
       : null;
     setMessages((prev) => [...prev, { id, role: "assistant", content: confirmMsg }]);
   };
+
+  async function declinePurchase(
+    messageId: string | null | undefined,
+    auditId: string | null | undefined,
+  ) {
+    if (!activeId || !messageId || respondedPurchaseIds.has(messageId)) return;
+    try {
+      const sb = createClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      if (auditId) {
+        await api.reject(auditId, "Pembelian ditolak oleh pengguna", session.access_token);
+      }
+      const userText = "Tidak, jangan beli";
+      const userId = await appendMessage(activeId, {
+        role: "user",
+        content: userText,
+        metadata: { purchase_for: messageId, purchase_decision: "rejected" },
+      });
+      const replyText = "Baik, pembelian dibatalkan. Tidak ada saldo atau posisi saham yang berubah.";
+      const replyId = await appendMessage(activeId, { role: "assistant", content: replyText });
+      setRespondedPurchaseIds((prev) => new Set(prev).add(messageId));
+      setMessages((prev) => [
+        ...prev,
+        { id: userId, role: "user", content: userText },
+        { id: replyId, role: "assistant", content: replyText },
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal membatalkan pembelian.");
+    }
+  }
 
   async function sendMessage() {
     const text = input.trim();
@@ -582,7 +626,9 @@ export default function ChatbotPage() {
           {messages.map((m, i) => {
             const precedingUser = i > 0 ? messages[i - 1] : null;
             const isAllocated = !!m.id && allocatedIds.has(m.id);
-            const isAllocationReply = m.role === "assistant" && hasAllocationPlan(m.content);
+            const isAllocationReply = m.role === "assistant" && m.requiresApproval === true;
+            const isPurchasePending =
+              isAllocationReply && !(m.id && respondedPurchaseIds.has(m.id));
             const isCompositionPending =
               m.role === "assistant" &&
               m.awaitingCompositionApproval &&
@@ -648,8 +694,6 @@ export default function ChatbotPage() {
                     {/* Report + approval action — only on replies to an actual
                        "alokasikan dana" request; other intents (explain, risk
                        review, etc.) have nothing here to approve. */}
-                    {/* Hidden per concept change (2026-09) — purchase-status
-                       confirmation removed from chat surface.
                     {isAllocationReply && isAllocated && (
                       <div className="w-full flex items-center gap-2 border-t border-border/60 pt-3">
                         <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-chart-2" />
@@ -664,7 +708,6 @@ export default function ChatbotPage() {
                         </Link>
                       </div>
                     )}
-                    */}
 
                     {isCompositionPending && (
                       <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
@@ -776,22 +819,28 @@ export default function ChatbotPage() {
                       </div>
                     )}
 
-                    {/* Hidden per concept change (2026-09) — purchase-confirmation
-                       action removed from chat surface (buy still possible from
-                       the Portfolio page's own button/modal).
-                    {isAllocationReply && !isAllocated && (
+                    {isPurchasePending && (
                       <div className="w-full flex flex-col gap-2 border-t border-border/60 pt-3">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-chart-2">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Laporan pertimbangan siap — setujui untuk eksekusi
+                        <span className="text-[11px] text-muted-foreground leading-relaxed">
+                          Apakah Anda ingin membeli saham berdasarkan rekomendasi ini?
+                          Pembelian hanya diproses setelah PIN Anda terverifikasi.
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
                           <button
-                            onClick={() => openAllocationModal(m.content, precedingUser?.content, m.id)}
+                            onClick={() => openAllocationModal(
+                              m.content, precedingUser?.content, m.id, m.auditId,
+                            )}
                             className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-md"
                           >
                             <PlusCircle className="w-3.5 h-3.5" />
-                            Setujui &amp; Alokasikan Dana
+                            Ya, lanjut ke PIN
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => declinePurchase(m.id, m.auditId)}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-border bg-secondary text-foreground hover:bg-secondary/80 transition-all"
+                          >
+                            Tidak, jangan beli
                           </button>
                           <Link
                             href="/portfolio"
@@ -803,7 +852,6 @@ export default function ChatbotPage() {
                         </div>
                       </div>
                     )}
-                    */}
                   </div>
                 )}
               </div>
@@ -929,6 +977,7 @@ export default function ChatbotPage() {
           workspaceId={workspaceId}
           suggestedTickers={buyTickers}
           suggestedAmount={buyAmount}
+          auditId={buyAuditId}
           onClose={() => setBuyModalOpen(false)}
           onSuccess={handleAllocationSuccess}
         />

@@ -159,6 +159,7 @@ export interface BuyRequest {
   ticker: string;
   amount: number;
   pin?: string;
+  audit_id?: string;
 }
 
 export interface BuyResponse {

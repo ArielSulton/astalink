@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 def _fake_admin(*, owned: bool, balance: float = 1_000_000_000,
                 holdings: list[dict] | None = None,
                 realized: list[dict] | None = None,
+                audit: dict | None = None,
                 credit_ok: bool = True):
     """Fake service-role client covering the workspaces / holdings /
     transactions chains the portfolio router touches."""
@@ -36,9 +37,14 @@ def _fake_admin(*, owned: bool, balance: float = 1_000_000_000,
     tx_q.select.return_value.eq.return_value.eq.return_value.execute.return_value = \
         MagicMock(data=realized or [])
 
+    audit_q = MagicMock()
+    (audit_q.select.return_value.eq.return_value.limit.return_value
+     .execute.return_value) = MagicMock(data=[audit] if audit else [])
+
     admin = MagicMock()
     admin.table.side_effect = lambda name: {
         "workspaces": ws_q, "holdings": hold_q, "transactions": tx_q,
+        "audit_log": audit_q,
     }[name]
     return admin
 
@@ -120,6 +126,63 @@ def test_buy_success_with_pin(client: TestClient) -> None:
     assert body["ticker"] == "BBCA"
     assert body["allocated_amount"] == 1_000_000
     assert body["quantity"] == 100  # 1_000_000 / 10000
+
+
+def test_ai_recommended_buy_closes_audit_after_pin(client: TestClient) -> None:
+    user_id = str(uuid.uuid4())
+    audit = {
+        "audit_id": "audit-1",
+        "workspace_id": "ws-1",
+        "user_id": user_id,
+        "status": "awaiting_approval",
+    }
+    admin = _fake_admin(owned=True, balance=10_000_000, audit=audit)
+    with patch("app.api.deps.verify_token", return_value={"sub": user_id}), \
+         patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
+         patch("app.api.v1.portfolio.verify_user_pin", return_value=None), \
+         patch("app.api.v1.portfolio._last_price", return_value=10000):
+        resp = client.post(
+            "/api/v1/portfolio/buy?workspace_id=ws-1",
+            json={
+                "ticker": "BBCA", "amount": 1_000_000,
+                "pin": "123456", "audit_id": "audit-1",
+            },
+            headers={"Authorization": "Bearer x"},
+        )
+
+    assert resp.status_code == 200
+    tx_q = admin.table("transactions")
+    inserted = tx_q.insert.call_args.args[0]
+    assert inserted["audit_id"] == "audit-1"
+    assert inserted["payload"]["ai_recommendation"] is True
+    audit_q = admin.table("audit_log")
+    audit_q.update.assert_called_once()
+    assert audit_q.update.call_args.args[0]["status"] == "executed"
+
+
+def test_ai_recommended_buy_rejects_another_users_audit(client: TestClient) -> None:
+    user_id = str(uuid.uuid4())
+    audit = {
+        "audit_id": "audit-other",
+        "workspace_id": "ws-1",
+        "user_id": str(uuid.uuid4()),
+        "status": "awaiting_approval",
+    }
+    admin = _fake_admin(owned=True, balance=10_000_000, audit=audit)
+    with patch("app.api.deps.verify_token", return_value={"sub": user_id}), \
+         patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
+         patch("app.api.v1.portfolio.verify_user_pin") as verify_pin_mock:
+        resp = client.post(
+            "/api/v1/portfolio/buy?workspace_id=ws-1",
+            json={
+                "ticker": "BBCA", "amount": 1_000_000,
+                "pin": "123456", "audit_id": "audit-other",
+            },
+            headers={"Authorization": "Bearer x"},
+        )
+
+    assert resp.status_code == 404
+    verify_pin_mock.assert_not_called()
 
 
 def test_sell_rejects_insufficient_quantity(client: TestClient) -> None:

@@ -31,6 +31,9 @@ class BuyRequest(BaseModel):
     ticker: str
     amount: float                      # Total Rp yang dialokasikan/diinvestasikan (misal 10,000,000)
     pin: str | None = None
+    # Set when the buy came from an AI recommendation, so the matching
+    # approval/audit can be closed only after the order has filled.
+    audit_id: str | None = None
 
 
 class BuyResponse(BaseModel):
@@ -55,4 +58,3 @@ class SellResponse(BaseModel):
     realized_pnl: float
     remaining_quantity: float
     cash_balance: float
-

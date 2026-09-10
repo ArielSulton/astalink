@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import agent, allocation, audit, auth, business, chat, health, legal, market
+from app.api.v1 import agent, allocation, auth, business, chat, health, legal, market
 from app.api.v1 import approvals as approvals_router
 from app.api.v1 import pin as pin_router
 from app.api.v1 import portfolio as portfolio_router
@@ -17,7 +17,9 @@ api_router.include_router(agent.router, prefix="/agent", tags=["agent"])
 api_router.include_router(market.router, prefix="/market", tags=["market"])
 api_router.include_router(pin_router.router, prefix="/users", tags=["pin"])
 api_router.include_router(approvals_router.router, prefix="/approvals", tags=["approvals"])
-api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
+# Jejak Audit is intentionally not exposed as a product API. The audit_log
+# table remains an internal control for approval ownership and transaction
+# traceability; app.api.v1.audit is kept dormant for a future re-enable.
 api_router.include_router(wa_router.router, prefix="/whatsapp", tags=["whatsapp"])
 api_router.include_router(workspaces_router.router, prefix="/workspaces", tags=["workspaces"])
 api_router.include_router(business.router, prefix="/business", tags=["business"])

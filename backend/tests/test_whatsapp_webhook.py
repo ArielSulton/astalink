@@ -222,7 +222,7 @@ def test_whatsapp_reply_appends_approval_link_when_awaiting_hitl(monkeypatch, cl
     body = _post_wa_message(client, monkeypatch, message_id="wamid.HITL-1",
                             text="alokasikan 10jt ke BBCA", final_state=final_state)
 
-    assert "Approvals" in body
+    assert "putuskan pembelian" in body.lower()
     assert "audit-hitl-1" in body
     assert body.endswith("/approvals/audit-hitl-1")
 
@@ -246,7 +246,7 @@ def test_whatsapp_reply_appends_audit_link_after_execution(monkeypatch, client: 
 
     assert "BBCA" in body
     assert "berhasil dieksekusi" in body.lower()
-    assert body.endswith("/audit/audit-exec-1")
+    assert body.endswith("/transactions")
 
 
 def test_whatsapp_sends_fallback_reply_when_pipeline_raises(monkeypatch, client: TestClient) -> None:

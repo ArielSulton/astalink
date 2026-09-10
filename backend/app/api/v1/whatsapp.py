@@ -425,10 +425,10 @@ def _process_message(msg: dict[str, Any]) -> None:
             # none of which have anything to approve).
             legal_status = final.get("legal_status")
             if legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL) and final.get("user_approval") is None:
-                reply += f"\nReview & approve di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
+                reply += f"\nTinjau dan putuskan pembelian di: {_config.settings.APP_BASE_URL}/approvals/{audit_id}"
                 allocation_plan = final.get("allocation_plan")
             elif final.get("user_approval") == UserApproval.APPROVED and final.get("transactions"):
-                reply += f"\nDetail: {_config.settings.APP_BASE_URL}/audit/{audit_id}"
+                reply += f"\nRiwayat transaksi: {_config.settings.APP_BASE_URL}/transactions"
                 allocation_plan = final.get("allocation_plan")
     except Exception:
         # Any unhandled exception anywhere in the pipeline (market data

@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, type ApprovalDetail } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
-import { PinModal } from "@/components/pin-modal";
 import { AllocationBuyModal } from "@/components/allocation-buy-modal";
 import { AllocationChart } from "@/components/allocation-chart";
 import { ShieldCheck, Scale, ArrowLeft } from "lucide-react";
@@ -16,8 +15,6 @@ export default function ApprovalDetailPage() {
   const { auditId } = useParams<{ auditId: string }>();
   const router = useRouter();
   const [detail, setDetail] = useState<ApprovalDetail | null>(null);
-  const [pinOpen, setPinOpen] = useState(false);
-  const [pinError, setPinError] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   // A WhatsApp user landing here from the "Review & approve" link had no way
   // to actually execute the recommendation without separately finding the
@@ -27,8 +24,6 @@ export default function ApprovalDetailPage() {
 
   useEffect(() => {
     let stale = false;
-    setDetail(null);
-    setFetchError(null);
     const load = async () => {
       try {
         const sb = createClient();
@@ -40,22 +35,13 @@ export default function ApprovalDetailPage() {
         if (!stale) setFetchError(err instanceof Error ? err.message : "Gagal memuat");
       }
     };
-    load();
-    return () => { stale = true; };
+    const timer = window.setTimeout(() => {
+      setDetail(null);
+      setFetchError(null);
+      void load();
+    }, 0);
+    return () => { stale = true; window.clearTimeout(timer); };
   }, [auditId]);
-
-  const submitPin = async (pin: string) => {
-    setPinError(null);
-    const sb = createClient();
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) return;
-    try {
-      await api.approve(auditId, pin, session.access_token);
-      router.push(`/audit/${auditId}`);
-    } catch (err) {
-      setPinError(err instanceof Error ? err.message : "Gagal");
-    }
-  };
 
   const reject = async () => {
     const sb = createClient();
@@ -181,10 +167,9 @@ export default function ApprovalDetailPage() {
         </div>
       ) : (
         <p className="text-xs text-muted-foreground leading-relaxed bg-secondary border border-border rounded-xl p-3">
-          AstaLink beroperasi dalam mode advisory: &ldquo;Setujui Analisis (PIN)&rdquo; hanya
-          mencatat bahwa Anda meninjau dan setuju dengan rekomendasi ini —{" "}
-          <strong>tidak mengeksekusi apa pun</strong>. Untuk benar-benar mengalokasikan dana,
-          gunakan &ldquo;Setujui &amp; Alokasikan Dana&rdquo; di bawah.
+          Apakah Anda ingin membeli saham berdasarkan rekomendasi ini? Pilih saham dan
+          nominalnya, lalu masukkan PIN untuk mengotorisasi pembelian. Tanpa PIN yang valid,
+          saldo dan portofolio tidak akan berubah.
         </p>
       )}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -193,14 +178,7 @@ export default function ApprovalDetailPage() {
           disabled={isRejected || allocated}
           className="flex-1 py-3 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 hover:border-border/60 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
         >
-          Tolak
-        </button>
-        <button
-          onClick={() => setPinOpen(true)}
-          className="flex-1 py-3 rounded-xl border border-border bg-secondary text-foreground text-sm font-semibold hover:bg-secondary/80 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
-          disabled={isRejected || allocated}
-        >
-          Setujui Analisis (PIN)
+          Tidak, Jangan Beli
         </button>
         {!allocated && plan && rankedWeights.length > 0 && (
           <button
@@ -208,23 +186,17 @@ export default function ApprovalDetailPage() {
             disabled={isRejected}
             className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-all duration-200"
           >
-            Setujui &amp; Alokasikan Dana
+            Ya, Beli Saham (PIN)
           </button>
         )}
       </div>
-
-      <PinModal
-        open={pinOpen}
-        onSubmit={submitPin}
-        onClose={() => setPinOpen(false)}
-        error={pinError}
-      />
 
       {buyOpen && (
         <AllocationBuyModal
           workspaceId={detail.workspace_id}
           suggestedTickers={suggestedTickers}
           suggestedAmount={suggestedAmount}
+          auditId={auditId}
           onClose={() => setBuyOpen(false)}
           onSuccess={() => {
             setBuyOpen(false);

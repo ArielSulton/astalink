@@ -6,11 +6,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bot,
-  Briefcase,
   Building2,
   ChevronRight,
   ClipboardCheck,
-  History,
   LayoutDashboard,
   Newspaper,
   PieChart,
@@ -63,8 +61,7 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
     items: [{ href: "/dashboard", label: "Dasbor", icon: LayoutDashboard }],
   },
   // Portofolio + Kepatuhan + Bisnis merged into one section per user request
-  // (2026-09) — was 3 separate sections, collapsed to reduce sidebar clutter
-  // after Persetujuan/Jejak Audit/Transaksi got hidden below.
+  // (2026-09) — kept as one section to reduce sidebar clutter.
   {
     label: "Portofolio",
     items: [
@@ -74,20 +71,10 @@ const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
       { href: "/allocation", label: "Alokasi Modal", icon: PieChart },
       { href: "/recommendations", label: "Rekomendasi", icon: Sparkles },
       { href: "/chatbot", label: "Chatbot AI", icon: Bot },
-      // Hidden per concept change (2026-09) — page moved to
-      // app/(protected)/_portfolio. Uncomment + rename folder back to restore.
-      // { href: "/portfolio", label: "Portofolio", icon: Wallet },
-      // Hidden per concept change (2026-09) — page moved to
-      // app/(protected)/_transactions (Next.js private-folder convention),
-      // route no longer exists. Uncomment + rename folder back to restore.
-      // { href: "/transactions", label: "Transaksi", icon: Receipt },
+      { href: "/portfolio", label: "Portofolio", icon: Wallet },
+      { href: "/transactions", label: "Transaksi", icon: Receipt },
       { href: "/legal-docs", label: "Dokumen Legal", icon: Scale },
-      // Hidden per concept change (2026-09) — page moved to
-      // app/(protected)/_approvals. Uncomment + rename folder back to restore.
-      // { href: "/approvals", label: "Persetujuan", icon: ClipboardCheck },
-      // Hidden per concept change (2026-09) — page moved to
-      // app/(protected)/_audit. Uncomment + rename folder back to restore.
-      // { href: "/audit", label: "Jejak Audit", icon: History },
+      { href: "/approvals", label: "Persetujuan", icon: ClipboardCheck },
       { href: "/news", label: "Berita Pasar", icon: Newspaper },
       {
         label: "Bisnis Saya",

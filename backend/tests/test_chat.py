@@ -102,6 +102,10 @@ def test_chat_response_carries_audit_and_approval_fields(client: TestClient) -> 
     fake_final_state["audit_id"] = "audit-abc"
     fake_final_state["intent"] = "allocate_stocks"
     fake_final_state["legal_status"] = LegalStatus.APPROVED
+    fake_final_state["allocation_plan"] = {
+        "weights": [{"ticker": "BBCA", "weight": 1.0}],
+        "cash": 20_000_000,
+    }
     fake_final_state["messages"] = [AIMessage(content="ok")]
 
     with patch("app.api.deps.verify_token", return_value=mock_user), \
@@ -116,12 +120,11 @@ def test_chat_response_carries_audit_and_approval_fields(client: TestClient) -> 
     assert response.status_code == 200
     data = response.json()
     assert data["audit_id"] == "audit-abc"
-    # Advisory mode (2026-09 concept change): /chat produces reports and
+    # The graph still produces recommendations without automatic execution.
     # recommendations only — no HITL approval, no automatic execution — so
-    # chat.py always reports requires_approval=False. This assertion said
-    # True and had been failing since that change landed; the audit_id is
-    # what the Approvals CTA actually needs.
-    assert data["requires_approval"] is False
+    # An actionable, legally approved plan asks the user for an explicit
+    # purchase decision. Execution remains a separate PIN-gated API call.
+    assert data["requires_approval"] is True
     assert data["intent"] == "allocate_stocks"
 
 

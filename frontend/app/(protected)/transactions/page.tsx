@@ -31,23 +31,28 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!workspaceId) {
-      setItems([]);
-      return;
-    }
-    setLoading(true);
-    const sb = createClient();
-    sb.from("transactions")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("Failed to load transactions:", error);
-        }
-        setItems((data as Tx[] | null) || []);
-        setLoading(false);
-      });
+    let stale = false;
+    const timer = window.setTimeout(() => {
+      if (!workspaceId) {
+        setItems([]);
+        return;
+      }
+      setLoading(true);
+      const sb = createClient();
+      sb.from("transactions")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (stale) return;
+          if (error) {
+            console.error("Failed to load transactions:", error);
+          }
+          setItems((data as Tx[] | null) || []);
+          setLoading(false);
+        });
+    }, 0);
+    return () => { stale = true; window.clearTimeout(timer); };
   }, [workspaceId]);
 
   return (

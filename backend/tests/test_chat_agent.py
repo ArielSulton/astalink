@@ -49,6 +49,7 @@ def test_build_chat_reply_confirms_analysis_complete_when_approved() -> None:
     reply = build_chat_reply(state)
     assert "audit-456" in reply
     assert "analisis selesai" in reply.lower()
+    assert "ingin membeli saham" in reply.lower()
     assert "keputusan" in reply.lower()
 
 

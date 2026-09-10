@@ -16,11 +16,12 @@ function idr(n: number | null | undefined): string {
 // chatbot page and the dashboard AI panel — both surfaces let the user act
 // on an AI recommendation, so both need the same real execution step.
 export function AllocationBuyModal({
-  workspaceId, suggestedTickers, suggestedAmount, onClose, onSuccess,
+  workspaceId, suggestedTickers, suggestedAmount, auditId, onClose, onSuccess,
 }: {
   workspaceId: string;
   suggestedTickers: string[];
   suggestedAmount?: number | null;
+  auditId?: string | null;
   onClose: () => void;
   onSuccess: (ticker: string, amount: number, cashRemaining: number) => void;
 }) {
@@ -73,7 +74,12 @@ export function AllocationBuyModal({
 
       const res = await api.buyHolding(
         workspaceId,
-        { ticker: selectedTicker.toUpperCase().trim(), amount: amountNum, pin },
+        {
+          ticker: selectedTicker.toUpperCase().trim(),
+          amount: amountNum,
+          pin,
+          ...(auditId ? { audit_id: auditId } : {}),
+        },
         session.access_token,
       );
 

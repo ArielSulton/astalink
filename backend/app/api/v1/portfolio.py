@@ -119,6 +119,25 @@ async def buy_holding(
     sb = get_admin_client()
     assert_workspace_owned(sb, workspace_id, user["sub"])
 
+    recommendation_audit: dict | None = None
+    if body.audit_id:
+        audit_rows = (
+            sb.table("audit_log").select("audit_id, workspace_id, user_id, status")
+            .eq("audit_id", body.audit_id).limit(1).execute()
+        ).data or []
+        recommendation_audit = audit_rows[0] if audit_rows else None
+        if (
+            not recommendation_audit
+            or recommendation_audit.get("workspace_id") != workspace_id
+            or recommendation_audit.get("user_id") != user["sub"]
+        ):
+            raise HTTPException(status_code=404, detail="recommendation audit not found")
+        if recommendation_audit.get("status") not in ("awaiting_approval", "acknowledged"):
+            raise HTTPException(
+                status_code=409,
+                detail="recommendation is no longer awaiting purchase approval",
+            )
+
     # A buy moves real (sandbox) money exactly like a sell — it must not be
     # weaker-gated than sell's unconditional PIN check.
     if not body.pin:
@@ -156,7 +175,7 @@ async def buy_holding(
 
     # 4. Insert buy transaction log
     try:
-        sb.table("transactions").insert({
+        transaction_row = {
             "workspace_id": workspace_id,
             "ticker": ticker,
             "side": OrderSide.BUY.value,
@@ -164,10 +183,26 @@ async def buy_holding(
             "price": price,
             "status": "filled",
             "executed_at": datetime.now(timezone.utc).isoformat(),
-            "payload": {"account_id": workspace_id, "amount_idr": body.amount, "manual": True},
-        }).execute()
+            "payload": {
+                "account_id": workspace_id,
+                "amount_idr": body.amount,
+                "manual": body.audit_id is None,
+                "ai_recommendation": body.audit_id is not None,
+            },
+        }
+        if body.audit_id:
+            transaction_row["audit_id"] = body.audit_id
+        sb.table("transactions").insert(transaction_row).execute()
     except Exception as exc:
         log.warning("portfolio: buy transaction insert failed: %s", exc)
+
+    # The approval completes only after the PIN-gated order and portfolio
+    # update succeeded. A failed buy must remain available for retry.
+    if recommendation_audit:
+        sb.table("audit_log").update({
+            "status": "executed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("audit_id", body.audit_id).execute()
 
     # Construct resulting HoldingView
     res_qty = float(holding_data["quantity"])

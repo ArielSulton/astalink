@@ -95,6 +95,17 @@ def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
         if report:
             return report
 
+    if state.get("user_approval") == UserApproval.APPROVED and state.get("transactions"):
+        filled = [
+            str(tx.get("ticker")) for tx in state.get("transactions", [])
+            if tx.get("status") == "filled" and tx.get("ticker")
+        ]
+        tickers = ", ".join(filled) or "saham pilihan Anda"
+        return (
+            f"Pembelian {tickers} berhasil dieksekusi dan dicatat di portofolio. "
+            f"Audit ID: {audit_id}."
+        )
+
     if legal_status in (LegalStatus.REJECTED, LegalStatus.REJECTED_AFTER_MAX_REVISIONS):
         return (
             f"Rekomendasi alokasi ini tidak lolos validasi legal. "
@@ -106,6 +117,7 @@ def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
         return (
             "Analisis selesai dan rekomendasi lolos validasi legal. "
             f"Lihat laporan lengkap di atas untuk detail rekomendasi. "
+            "Apakah Anda ingin membeli saham berdasarkan rekomendasi ini? "
             f"Keputusan akhir ada di tangan Anda. Audit ID: {audit_id}."
         )
 

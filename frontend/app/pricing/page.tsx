@@ -28,7 +28,7 @@ const COMPARISON_FEATURES = [
     { key: "sandbox", label: "Portofolio sandbox", tiers: [true, true, true] },
   ]},
   { category: "Dashboard & Kontrol", features: [
-    { key: "audit", label: "Audit trail & persetujuan PIN", tiers: [false, true, true] },
+    { key: "approval", label: "Persetujuan transaksi dengan PIN", tiers: [false, true, true] },
     { key: "dashboard", label: "Dashboard holdings, approvals, transaksi, & berita", tiers: [false, true, true] },
     { key: "credits", label: "Kredit chat lebih banyak", tiers: [false, true, true] },
   ]},
@@ -47,7 +47,7 @@ const FAQ = [
   },
   {
     q: "Apa yang membedakan paket Pro?",
-    a: "Pro menyediakan 100 kredit chat per bulan, analisis alokasi modal, cek kepatuhan OJK tersitasi, audit trail, persetujuan PIN, dan dashboard lengkap.",
+    a: "Pro menyediakan 100 kredit chat per bulan, analisis alokasi modal, cek kepatuhan OJK tersitasi, persetujuan PIN, dan dashboard lengkap.",
   },
   {
     q: "Untuk siapa paket Komunitas & Partner?",
@@ -304,7 +304,7 @@ export default function PricingPage() {
             </Link>
           </div>
           <p className="text-muted-foreground/60 text-xs mt-6 font-mono tracking-wide">
-            WhatsApp & Web · Portofolio Sandbox · Audit Trail di Pro
+            WhatsApp & Web · Portofolio Sandbox · Persetujuan PIN di Pro
           </p>
         </div>
       </section>

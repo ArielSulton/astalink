@@ -10,7 +10,7 @@ from app.agents.composition_gate.resume import (
     resume_composition,
 )
 from app.agents.graph import graph
-from app.agents.state import new_state
+from app.agents.state import LegalStatus, new_state
 from app.agents.transaction_capture.classify import (
     has_transaction_shape,
     looks_like_transaction,
@@ -288,7 +288,16 @@ async def chat(
 
     # Advisory mode: the pipeline produces reports and recommendations only.
     # No HITL approval or automatic execution — the user decides.
-    requires_approval = False
+    # The graph remains advisory-only: it never places an order itself. A
+    # legally eligible stock plan is nevertheless actionable, so tell the UI
+    # to render the explicit Beli/Tidak gate. Choosing Beli opens the
+    # PIN-gated /portfolio/buy flow; no order can happen from this response.
+    legal_status = final_state.get("legal_status")
+    plan = final_state.get("allocation_plan") or {}
+    requires_approval = (
+        legal_status in (LegalStatus.APPROVED, LegalStatus.PARTIAL)
+        and any(float(leg.get("weight") or 0) > 0 for leg in plan.get("weights", []))
+    )
 
     reply_text = build_chat_reply(final_state, style="report")
 

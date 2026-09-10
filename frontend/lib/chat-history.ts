@@ -130,6 +130,18 @@ export function allocatedReplyIds(rows: ChatMessageRow[]): Set<string> {
   return ids;
 }
 
+/** Replies whose final purchase question has been answered. The decision is
+ * appended as a separate chat row because chat_messages intentionally has no
+ * browser-side update policy. */
+export function purchaseRespondedIds(rows: ChatMessageRow[]): Set<string> {
+  const ids = new Set<string>();
+  for (const r of rows) {
+    const target = r.metadata?.purchase_for;
+    if (typeof target === "string") ids.add(target);
+  }
+  return ids;
+}
+
 // Same append-only marker pattern as allocatedReplyIds — a Setuju/Tidak
 // answer on the composition gate appends a new row pointing back at the
 // paused reply, since chat_messages has no update policy under RLS.

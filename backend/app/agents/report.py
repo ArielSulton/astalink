@@ -261,7 +261,7 @@ def _next_steps_section(state: AgentState, layer0: dict[str, Any]) -> str:
             "Rekomendasi ini tidak lolos validasi legal. Anda bisa: \n"
             "- Meminta analisis ulang dengan saham atau nominal berbeda\n"
             "- Mengecek regulasi terkait di halaman Legal Docs\n"
-            f"- Melihat detail di halaman Audit (Audit ID: {audit_id})")
+            f"- Meminta analisis baru dengan menyertakan referensi {audit_id}")
         return "\n".join(lines)
 
     allocation = layer0.get("allocation") or {}
@@ -281,9 +281,17 @@ def _next_steps_section(state: AgentState, layer0: dict[str, Any]) -> str:
             f"- **Kas ({_fmt_pct(allocation.get('cash'))}):** "
             "Pertahankan sebagian dana dalam bentuk kas untuk fleksibilitas dan keamanan")
 
+    if allocation.get("stocks", 0) > 0:
+        lines += [
+            "",
+            "**Apakah Anda ingin membeli saham berdasarkan rekomendasi ini?** "
+            "Pilih **Ya, lanjut ke PIN** untuk meninjau nominal dan mengotorisasi pembelian, "
+            "atau **Tidak, jangan beli** untuk membatalkannya.",
+        ]
+
     lines += [
         "",
-        f"Detail lengkap tersedia di halaman Audit (Audit ID: {audit_id}).",
+        f"Referensi analisis: `{audit_id}`.",
         "",
         "> 💡 **Ingat:** AstaLink memberikan analisis dan rekomendasi. "
         "Keputusan investasi akhir sepenuhnya ada di tangan Anda.",

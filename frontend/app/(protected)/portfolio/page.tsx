@@ -55,7 +55,8 @@ export default function PortfolioPage() {
   }, [workspaceId]);
 
   useEffect(() => {
-    load();
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   const hasHoldings = data && data.holdings.length > 0;
@@ -123,7 +124,7 @@ export default function PortfolioPage() {
             {!hasHoldings ? (
               <div className="p-8">
                 <EmptyState icon={TrendingUp} title="Belum Ada Kepemilikan Saham">
-                  Portofolio masih kosong. Klik tombol <strong>"Alokasikan Dana / Beli Saham"</strong> di atas
+                  Portofolio masih kosong. Klik tombol <strong>&ldquo;Alokasikan Dana / Beli Saham&rdquo;</strong> di atas
                   atau gunakan Asisten AI untuk memulai alokasi investasi.
                 </EmptyState>
               </div>
