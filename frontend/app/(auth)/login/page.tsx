@@ -20,7 +20,7 @@ export default function LoginPage() {
               <div className="flex flex-col items-center gap-2 text-center">
                 <div className="mb-2 flex items-center gap-2">
                   <div className="flex size-8 items-center justify-center">
-                    <Image src="/astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
+                    <Image src="/logo_astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
                   </div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-foreground font-bold tracking-tight">Astalink</span>

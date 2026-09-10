@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   icons: {
-    icon: "/astalink.png",
+    icon: "/logo_astalink.png",
   },
   openGraph: {
     title: SITE_TITLE,

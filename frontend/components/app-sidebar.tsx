@@ -128,7 +128,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
               <div className="flex aspect-square size-8 items-center justify-center">
-                <Image src="/astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
+                <Image src="/logo_astalink.png" alt="Astalink" width={32} height={32} className="size-8 object-contain" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-bold tracking-tight">Astalink</span>
