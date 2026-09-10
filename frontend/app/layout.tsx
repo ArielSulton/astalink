@@ -26,9 +26,6 @@ export const metadata: Metadata = {
     template: "%s — Astalink AI",
   },
   description: SITE_DESCRIPTION,
-  icons: {
-    icon: "/logo_astalink.png",
-  },
   openGraph: {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
