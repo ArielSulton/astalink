@@ -112,10 +112,11 @@ export default function DashboardPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedTicker, scale, setScale]);
 
-  // Chart series for the selected ticker: fetch whenever selection or timeframe changes
+  // Chart series for the selected ticker: fetch on selection/timeframe change, then poll every 30s
   useEffect(() => {
     let cancel = false;
-    (async () => {
+    const fetchChart = async () => {
+      if (pollPaused) return;
       const sb = createClient();
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return;
@@ -125,9 +126,11 @@ export default function DashboardPage() {
       } catch {
         if (!cancel) { setChart(null); }
       }
-    })();
-    return () => { cancel = true; };
-  }, [selectedTicker, config.period, config.interval]);
+    };
+    fetchChart();
+    const interval = setInterval(fetchChart, 30000);
+    return () => { cancel = true; clearInterval(interval); };
+  }, [selectedTicker, config.period, config.interval, pollPaused]);
 
   // Portfolio + cash + workspace name
   useEffect(() => {
