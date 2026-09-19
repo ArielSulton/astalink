@@ -81,12 +81,14 @@ omit the key entirely if the user didn't name a specific business. Estimate
 `confidence` honestly: if the message is ambiguous, set confidence < 0.6 and
 provide a `clarification_question` in Indonesian.
 
-The clarification_question is the ONLY thing the user sees when confidence is
-low — it must stand alone as a complete, friendly sentence a first-time user
-would understand with no other context, never a bare word or fragment like
-"gimana?" or "maksudnya?". State what was unclear and give a concrete example,
-e.g. "Maaf, saya kurang paham maksud pesan Anda. Bisa dijelaskan lebih detail?
-Misalnya: \"alokasikan 10 juta ke BBCA\" atau \"apa itu RSI?\"."
+The clarification_question is NOT shown to the user. It is an internal note
+handed to the reply writer, which composes the actual message against this
+conversation. So write it as a diagnosis, not as a script: state precisely
+WHAT was ambiguous and WHICH piece of information would resolve it — e.g.
+"nominal tidak disebut dan tidak ada rujukan ke saldo" or "tidak jelas apakah
+maksudnya menilai bisnisnya atau menaruh modal ke sana". Never write a
+ready-made user-facing sentence here; a canned sentence is what made every
+stuck turn read identically before.
 
 Blok "KONTEKS WORKSPACE" (bila ada) berisi saldo, transaksi terakhir, saham
 yang dipegang, dan bisnis terdaftar milik pengguna. Rujukan implisit seperti

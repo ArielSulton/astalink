@@ -8,7 +8,11 @@ from app.agents.state import new_state
 def test_summary_node_portfolio_status_reports_real_cash_balance() -> None:
     """"berapa saldo saya" used to always get the hardcoded "belum tersedia"
     message, even though workspaces.cash_balance has held a real number
-    since the sandbox-wallet feature shipped. The reply must include it."""
+    since the sandbox-wallet feature shipped. The reply must include it.
+
+    The wording is now composed rather than templated, so this asserts the
+    balance reaches the writer as a fact — that is what guarantees the
+    number comes from the database and never from the model."""
     state = new_state()
     state["intent"] = Intent.PORTFOLIO_STATUS.value
     state["_workspace_id"] = "ws-1"
@@ -18,18 +22,25 @@ def test_summary_node_portfolio_status_reports_real_cash_balance() -> None:
     fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
         MagicMock(data=[{"cash_balance": 987_654_321}])
 
-    with patch("app.agents.summary.get_admin_client", return_value=fake_admin):
+    with patch("app.agents.summary.get_admin_client", return_value=fake_admin), \
+         patch("app.agents.summary.load_snapshot"), \
+         patch("app.agents.summary.compose_dead_end_reply",
+               return_value="komposisi") as compose:
         update = summary_node(state)
 
-    reply = update["messages"][-1].content
-    assert "987.654.321" in reply
-    assert "Asset View" in reply
+    assert update["messages"][-1].content == "komposisi"
+    facts = compose.call_args.kwargs["facts"]
+    assert facts["saldo_kas"] == "Rp 987.654.321"
+    assert "Asset View" in facts["halaman_tersedia"]
 
 
 def test_summary_node_portfolio_status_falls_back_when_workspace_missing() -> None:
     """No _workspace_id (shouldn't normally happen, but defensively) or a
     workspace row that doesn't exist — keep the honest fallback message
-    instead of crashing or reporting a bogus balance."""
+    instead of crashing or reporting a bogus balance.
+
+    Gemini is made to fail here so the reply writer takes its fallback path:
+    the canned sentence is exactly what a model outage must degrade to."""
     state = new_state()
     state["intent"] = Intent.PORTFOLIO_STATUS.value
     state["_workspace_id"] = "ws-missing"
@@ -39,7 +50,10 @@ def test_summary_node_portfolio_status_falls_back_when_workspace_missing() -> No
     fake_admin.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = \
         MagicMock(data=[])
 
-    with patch("app.agents.summary.get_admin_client", return_value=fake_admin):
+    with patch("app.agents.summary.get_admin_client", return_value=fake_admin), \
+         patch("app.agents.summary.load_snapshot"), \
+         patch("app.agents.reply_writer.get_chat_model",
+               side_effect=RuntimeError("gemini down")):
         update = summary_node(state)
 
     reply = update["messages"][-1].content

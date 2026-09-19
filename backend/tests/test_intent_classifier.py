@@ -290,13 +290,21 @@ def test_intent_node_sets_clarification_when_low_confidence() -> None:
     fake_chain.invoke.return_value = fake_decision
 
     with patch("app.agents.intent.node._build_chain", return_value=fake_chain), \
-         patch("app.agents.intent.node._record_audit"):
+         patch("app.agents.intent.node._record_audit"), \
+         patch("app.agents.intent.node.load_snapshot"), \
+         patch("app.agents.intent.node.compose_dead_end_reply",
+               return_value="Boleh diperjelas sedikit?") as compose:
         update = intent_node(state)
 
     assert update["intent"] == Intent.UNKNOWN.value
     # clarification appended as an AI message so the channel layer (WhatsApp /
-    # web chat) can surface it
-    assert any(isinstance(m, AIMessage) and "tujuan" in m.content for m in update.get("messages", []))
+    # web chat) can surface it. The wording is composed rather than relayed
+    # verbatim now, so what matters is that the model's own note about what
+    # was unclear reaches the writer as a fact.
+    assert any(isinstance(m, AIMessage) and m.content.strip()
+               for m in update.get("messages", []))
+    assert compose.call_args.kwargs["facts"]["catatan_ambiguitas"] == \
+        "Apa tujuan investasi Anda?"
 
 
 def test_build_chain_pins_function_calling_for_sumopod(monkeypatch: pytest.MonkeyPatch) -> None:
