@@ -11,8 +11,10 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
+from app.agents.context_snapshot import load_snapshot
 from app.agents.intent.schemas import IntentDecision
 from app.agents.intents import Intent
+from app.agents.reply_writer import DeadEndReason, compose_dead_end_reply
 from app.agents.optimizer.sectors import sector_to_tickers
 from app.agents.state import AgentState
 from app.core.config import settings
@@ -85,6 +87,13 @@ would understand with no other context, never a bare word or fragment like
 "gimana?" or "maksudnya?". State what was unclear and give a concrete example,
 e.g. "Maaf, saya kurang paham maksud pesan Anda. Bisa dijelaskan lebih detail?
 Misalnya: \"alokasikan 10 juta ke BBCA\" atau \"apa itu RSI?\"."
+
+Blok "KONTEKS WORKSPACE" (bila ada) berisi saldo, transaksi terakhir, saham
+yang dipegang, dan bisnis terdaftar milik pengguna. Rujukan implisit seperti
+"uang ini", "uang yang barusan masuk", "sisanya", atau "dana kemarin" MERUJUK
+ke data itu — selesaikan rujukannya, isi entities.amount dari angka tersebut,
+dan JANGAN menurunkan confidence hanya karena nominal tidak ditulis ulang
+oleh pengguna.
 
 Respond with a single JSON object matching this shape, and nothing else:
 {"intent": "<one of the values above>", "entities": {...}, "confidence": <0-1>,
@@ -205,13 +214,30 @@ def _record_audit(state: AgentState, decision: IntentDecision) -> None:
 @track_node_duration("n1_intent")
 def intent_node(state: AgentState) -> AgentState:
     user_text = _last_user_text(state)
+    # Loaded before the classifier runs: N1 used to decide blind, so an
+    # ordinary "uang yang barusan masuk ini enaknya ke mana?" scored low
+    # confidence and dead-ended even though the balance was in the database.
+    snapshot = load_snapshot(state.get("_workspace_id"))
+
     if not user_text:
-        return {"intent": Intent.UNKNOWN.value, "entities": {}, "_needs_clarification": True}
+        return {
+            "intent": Intent.UNKNOWN.value,
+            "entities": {},
+            "_needs_clarification": True,
+            "messages": [*state.get("messages", []), AIMessage(
+                content=compose_dead_end_reply(
+                    reason=DeadEndReason.EMPTY_MESSAGE,
+                    state=state, snapshot=snapshot))],
+        }
+
+    context_block = snapshot.render_for_prompt()
+    system = SYSTEM if not context_block else \
+        f"{SYSTEM}\n\nKONTEKS WORKSPACE:\n{context_block}"
 
     chain = _build_chain()
     try:
         decision: IntentDecision = chain.invoke([
-            SystemMessage(content=SYSTEM),
+            SystemMessage(content=system),
             *_history(state),
             HumanMessage(content=user_text),
         ])
@@ -222,6 +248,8 @@ def intent_node(state: AgentState) -> AgentState:
         # messages[-1] — without a message appended here, that's still the
         # user's own HumanMessage, so the reply silently echoes their input
         # back at them instead of surfacing that something actually broke.
+        # compose_dead_end_reply leans on the same model that just failed; it
+        # tries once and falls back to the canned sentence on its own.
         return {
             "intent": Intent.UNKNOWN.value,
             "entities": {},
@@ -229,9 +257,9 @@ def intent_node(state: AgentState) -> AgentState:
             "errors": [*state.get("errors", []),
                        {"node": "intent", "reason": str(exc)}],
             "messages": [*state.get("messages", []), AIMessage(
-                content="Maaf, saya lagi mengalami gangguan teknis dan belum "
-                        "bisa memproses pesan Anda. Coba kirim ulang sebentar "
-                        "lagi.")],
+                content=compose_dead_end_reply(
+                    reason=DeadEndReason.INTENT_LLM_ERROR,
+                    state=state, snapshot=snapshot))],
         }
 
     _record_audit(state, decision)
@@ -277,8 +305,15 @@ def intent_node(state: AgentState) -> AgentState:
     }
 
     if needs_clarification:
-        question = decision.clarification_question or \
-            "Bisa dijelaskan lagi tujuan Anda? Misal: alokasi dana, valuasi bisnis, atau review risiko."
-        update["messages"] = [*state.get("messages", []),
-                              AIMessage(content=question)]
+        # Gemini's own clarification_question used to be relayed verbatim,
+        # which made every stuck turn read the same because the prompt hands
+        # the model a ready-made example it copies. It is now just one input
+        # to a reply composed against this conversation and this workspace.
+        facts: dict[str, str] = {}
+        if decision.clarification_question:
+            facts["catatan_ambiguitas"] = decision.clarification_question
+        update["messages"] = [*state.get("messages", []), AIMessage(
+            content=compose_dead_end_reply(
+                reason=DeadEndReason.LOW_CONFIDENCE,
+                state=state, snapshot=snapshot, facts=facts))]
     return update
