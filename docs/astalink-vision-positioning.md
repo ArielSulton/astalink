@@ -12,7 +12,7 @@ AstaLink bukan aplikasi yang sekadar menjawab “saham apa yang harus dibeli”.
 
 Pemilik UMKM atau owner-operator merupakan use case yang kuat karena mereka menghadapi keputusan alokasi yang kompleks antara kas, operasional, pengembangan usaha, dan investasi. Namun, mereka bukan satu-satunya pasar AstaLink. Target yang lebih tepat ditentukan oleh kondisi keputusan finansial, bukan label pekerjaan.
 
-Arsitektur AI saat ini sudah kuat sebagai pipeline rekomendasi yang aman, dapat diaudit, dan terkendali. Kelemahannya adalah percakapan masih menjadi pintu masuk menuju graph yang relatif tetap. Arsitektur tujuan tetap menggunakan graph, tetapi menambahkan satu coach/supervisor sebagai pengendali keputusan, shared financial context yang bersifat temporal, serta specialist agents yang dipanggil secara selektif. Kalkulasi dan guardrail tetap deterministik.
+Arsitektur AI saat ini sudah kuat sebagai pipeline rekomendasi yang aman, dapat diaudit, dan terkendali. Kelemahannya adalah percakapan advisory masih menjadi pintu masuk menuju graph yang relatif tetap. Arsitektur tujuan tetap menggunakan graph, tetapi menambahkan satu coach/supervisor sebagai pengendali keputusan advisory, shared financial context yang bersifat temporal, serta specialist agents yang dipanggil secara selektif. POS Automation tetap menjadi ingestion plane terpisah yang mengambil semua input milik flow transaksi sebelum advisory fallthrough boleh masuk ke coach. Kalkulasi, routing transaksi, dan guardrail tetap deterministik.
 
 ## 1. Masalah yang Ingin Diselesaikan
 
@@ -109,6 +109,29 @@ AstaLink bukan:
 - pengganti penasihat keuangan berizin;
 - chatbot generik yang selalu menjawab dengan template edukasi.
 
+### 4.5 Peran POS Automation
+
+POS Automation adalah sebutan untuk fitur pencatatan pemasukan dan pengeluaran bisnis melalui teks chat, foto struk, atau media lain yang didukung. Fitur ini merupakan **ingestion plane**, bukan specialist agent di bawah coach.
+
+Tanggung jawab POS Automation:
+
+- mendeteksi apakah input merupakan transaksi;
+- mengekstrak nominal, jenis transaksi, deskripsi, dan bisnis terkait;
+- meminta pemilihan bisnis bila diperlukan;
+- meminta konfirmasi sebelum menyimpan;
+- menyimpan hanya transaksi yang sudah dikonfirmasi;
+- mempertahankan checkpoint dan resume flow sendiri.
+
+Financial coach merupakan **decision plane**. Coach boleh membaca transaksi berstatus `confirmed` sebagai konteks, tetapi tidak boleh membuat, mengonfirmasi, membatalkan, memindahkan, atau mengubah transaksi POS Automation.
+
+Boundary keduanya adalah confirmed transaction ledger:
+
+```text
+Input transaksi -> POS Automation -> konfirmasi -> confirmed ledger
+                                                    | read-only context
+Pertanyaan finansial -> Financial Coach ------------+
+```
+
 ## 5. Prinsip Pengalaman Pengguna
 
 ### 5.1 Pola respons utama
@@ -153,26 +176,26 @@ AstaLink memberi pemahaman, simulasi, rekomendasi, dan konsekuensi. Ia tidak men
 
 ## 6. Arsitektur AI Saat Ini
 
-Arsitektur saat ini bersifat graph-oriented dan sebagian besar mengikuti alur:
+Arsitektur saat ini bersifat graph-oriented. Pada tingkat channel ingress, POS Automation sudah dipisahkan dari advisory graph:
 
 ```text
-Pesan pengguna
-      ↓
-Intent classifier
-      ↓
- ┌────┴────────────────┐
-Q&A               Permintaan alokasi
-                         ↓
-                  Layer 0 allocation
-                         ↓
-             Market + Business + Risk
-                         ↓
-                     Optimizer
-                         ↓
-                Legal/compliance check
-                         ↓
-                      Report
+Pesan teks / foto / audio
+            |
+            v
+  Deterministic ingress router
+       +----+-------------+
+       |                  |
+       v                  v
+POS Automation      Advisory graph
+       |                  |
+       v                  v
+Capture/confirm     Intent classifier
+       |                  |
+       v                  v
+Confirmed ledger    Q&A atau allocation pipeline
 ```
+
+Di dalam advisory graph, alur alokasi tetap mengikuti Layer 0, fan-out market/business/risk, optimizer, legal/compliance check, lalu report.
 
 Kekuatan utamanya:
 
@@ -181,6 +204,7 @@ Kekuatan utamanya:
 - hard constraint dan veto deterministik;
 - specialist nodes untuk market, business, risk, optimizer, dan legal;
 - checkpoint, audit trail, serta approval gate;
+- transaction capture memakai graph dan thread terpisah dari advisory;
 - tidak melakukan eksekusi otomatis;
 - lebih mudah diuji dan direproduksi dibanding satu agent bebas.
 
@@ -198,29 +222,36 @@ Kelemahan utamanya:
 
 ## 7. Arsitektur AI yang Dituju
 
-Arsitektur tujuan tetap menggunakan graph. Perubahan utamanya adalah pusat kendali berpindah dari intent router statis ke coach/supervisor yang bekerja di atas shared financial context.
+Arsitektur tujuan tetap menggunakan graph. Perubahan utamanya adalah pusat kendali **di dalam advisory plane** berpindah dari intent router statis ke coach/supervisor yang bekerja di atas shared financial context. Deterministic ingress router dan POS Automation tetap berada di luar supervisor.
 
 ```text
-Pesan + conversation history + financial memory
-                         ↓
-                Financial Context Builder
-                         ↓
-                  Coach/Supervisor
-             ┌───────────┼───────────┐
-             ↓           ↓           ↓
-       Refleksikan   Tanya 1 hal   Panggil tool/
-       pemahaman     penentu       specialist
-             └───────────┼───────────┘
-                         ↓
-                 Readiness/Safety Gate
-                         ↓
-            Market + Business + Risk tools
-                         ↓
-                Optimizer deterministik
-                         ↓
-              Regulatory evidence check
-                         ↓
-                 Coach response composer
+Pesan teks / foto / audio
+            |
+            v
+  Deterministic ingress router
+       +----+------------------+
+       |                       |
+       v                       v
+POS Automation           Advisory plane
+       |                       |
+       v                       v
+Capture/confirm        Financial Context Builder
+       |                       |
+       v                       v
+Confirmed ledger        Coach/Supervisor
+       |               +-------+--------+
+       |               |       |        |
+       |               v       v        v
+       |           Refleksi   Tanya   Specialist
+       |               +-------+--------+
+       |                       |
+       +--------------> Readiness/Safety Gate
+                               |
+                               v
+                     Optimizer + compliance
+                               |
+                               v
+                     Coach response composer
 ```
 
 ### 7.1 Coach/supervisor
@@ -242,8 +273,9 @@ Specialist dipanggil secara selektif:
 - business analyst untuk kebutuhan dan kelayakan bisnis;
 - risk specialist untuk risiko portofolio dan kapasitas kerugian;
 - critic/devil’s advocate untuk menguji asumsi;
-- compliance checker untuk dukungan regulasi;
-- transaction capture untuk mencatat peristiwa keuangan.
+- compliance checker untuk dukungan regulasi.
+
+Transaction capture tidak ditempatkan sebagai specialist coach. Ia tetap merupakan ingestion workflow independen. Setelah konfirmasi, hasilnya tersedia sebagai read-only workspace context bagi coach.
 
 ### 7.3 Komponen deterministik
 
@@ -266,6 +298,9 @@ Prinsipnya:
 | Aspek | Arsitektur saat ini | Arsitektur yang dituju |
 | --- | --- | --- |
 | Pengendali alur | Intent classifier dan conditional edges | Coach/supervisor dan coaching policy |
+| Routing POS | Pre-routing deterministik sebelum advisory graph | Dipertahankan di luar supervisor sebagai ingestion plane |
+| Thread transaksi | Checkpoint terpisah dari advisory | Tetap terpisah; tidak boleh digabung dengan decision episode |
+| Akses transaksi | Snapshot membaca transaksi confirmed | Coach read-only; mutation hanya melalui capture graph |
 | Bentuk graph | Sebagian besar pipeline satu arah | Graph dinamis dengan ask, pause, resume, dan tool loop |
 | Konteks | Chat terakhir dan snapshot workspace | Decision context dan financial memory temporal |
 | Peran intent | Menentukan jalur utama | Menjadi salah satu sinyal untuk supervisor |
@@ -281,17 +316,18 @@ Prinsipnya:
 
 ## 9. Strategi Migrasi
 
-Arsitektur baru tidak memerlukan rewrite total. Komponen market, business, risk, optimizer, legal retrieval, checkpoint, audit, dan transaction capture dapat dipertahankan.
+Arsitektur baru tidak memerlukan rewrite total. Komponen market, business, risk, optimizer, legal retrieval, checkpoint, audit, dan transaction capture dapat dipertahankan. POS Automation bukan bagian yang dimigrasikan ke supervisor; yang berubah hanya bagaimana advisory graph memakai transaksi confirmed sebagai konteks.
 
 Migrasi dilakukan bertahap:
 
-1. memperbaiki readiness dan asumsi tersembunyi;
-2. menambahkan `DecisionContext` dan coach/supervisor sebelum routing lama;
-3. membuat intake percakapan dapat memperbarui state terstruktur;
-4. menambahkan memory temporal dan supersession;
-5. mengubah specialist nodes menjadi tools/subgraphs yang dipanggil selektif;
-6. memperbaiki semantik compliance dan respons akhir;
-7. mengevaluasi kualitas coaching dengan conversation scenarios.
+1. mengunci regression tests dan boundary POS Automation;
+2. memperbaiki readiness dan asumsi tersembunyi;
+3. menambahkan `DecisionContext` dan coach/supervisor setelah POS routing tetapi sebelum routing advisory lama;
+4. membuat intake percakapan dapat memperbarui state terstruktur;
+5. menambahkan memory temporal dan supersession;
+6. mengubah specialist nodes menjadi tools/subgraphs yang dipanggil selektif;
+7. memperbaiki semantik compliance dan respons akhir;
+8. mengevaluasi kualitas coaching dan kompatibilitas POS dengan conversation scenarios.
 
 Setiap tahap harus menghasilkan aplikasi yang tetap dapat digunakan dan diuji. Graph lama menjadi fallback selama jalur baru belum stabil.
 
@@ -321,6 +357,9 @@ Setiap tahap harus menghasilkan aplikasi yang tetap dapat digunakan dan diuji. G
 ### 10.4 Kualitas sistem
 
 - setiap keputusan dapat ditelusuri ke data dan tool yang digunakan;
+- teks transaksi, foto struk, dan audio transaksi tetap masuk capture graph sebelum coach;
+- transaksi pending atau dibatalkan tidak boleh menjadi financial memory;
+- coach hanya membaca transaksi confirmed dan tidak memiliki write path ke ledger;
 - specialist failure tidak menghapus konteks percakapan;
 - retry hanya dilakukan jika dapat mengubah hasil;
 - latency dan biaya diukur per jalur, bukan hanya per request.
@@ -348,3 +387,5 @@ Hipotesis tersebut tidak boleh ditulis sebagai fakta bisnis sampai didukung rise
 8. Compliance tidak dipresentasikan sebagai jaminan suitability atau keamanan.
 9. UMKM adalah use case utama, bukan batas pasar permanen.
 10. Arsitektur lama dimigrasikan secara inkremental, bukan diganti sekaligus.
+11. POS Automation tetap menjadi ingestion plane di luar coach/supervisor.
+12. Confirmed transaction ledger menjadi boundary read-only antara POS Automation dan financial coach.

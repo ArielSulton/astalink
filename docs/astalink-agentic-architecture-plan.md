@@ -4,7 +4,7 @@
 
 **Goal:** Mengembangkan graph AstaLink menjadi financial coach yang memahami konteks keputusan, bertanya hanya ketika diperlukan, dan memanggil specialist secara selektif tanpa mengganti deterministic engines yang sudah kuat.
 
-**Architecture:** Tambahkan `DecisionContext`, temporal financial memory, dan coach/supervisor sebelum routing yang ada. Coach memilih aksi melalui policy yang dapat diuji; market, business, risk, optimizer, dan compliance diperlakukan sebagai tools/subgraphs. Migrasi dilakukan bertahap dengan graph lama sebagai fallback sampai setiap fase lulus scenario tests.
+**Architecture:** Pertahankan deterministic ingress router dan POS Automation sebagai ingestion plane di luar advisory graph. Setelah pesan dipastikan bukan transaksi, tambahkan `DecisionContext`, temporal financial memory, dan coach/supervisor sebelum routing advisory yang ada. Coach memilih aksi melalui policy yang dapat diuji; market, business, risk, optimizer, dan compliance diperlakukan sebagai tools/subgraphs. Migrasi dilakukan bertahap dengan graph lama sebagai fallback sampai setiap fase lulus scenario tests dan POS regression tests.
 
 **Tech Stack:** Python 3.12, FastAPI, LangGraph, LangChain, Pydantic, Supabase/PostgreSQL, pytest, Gemini-compatible chat model, Next.js frontend yang sudah ada.
 
@@ -13,6 +13,10 @@
 ## Global Constraints
 
 - AstaLink tetap advisory-only; chat tidak boleh mengeksekusi order.
+- Semua input milik flow POS selalu dirutekan sebelum coach: business selection, transaction confirmation, teks transaksi, foto struk, dan audio transaksi. Kontrol composition gate yang flow-specific tetap menjadi input advisory dan tidak boleh salah diarahkan ke POS.
+- Checkpoint POS dan advisory tetap memakai thread id terpisah.
+- Coach hanya boleh membaca transaksi berstatus `confirmed`; ia tidak memiliki write path ke `business_transactions`.
+- Transaksi pending, ditolak, atau dibatalkan tidak boleh masuk decision context maupun temporal memory sebagai fakta.
 - Setiap angka finansial harus memiliki provenance: workspace data, user statement, verified evidence, estimate, atau explicit default.
 - Unknown tidak boleh diubah menjadi fakta atau profil moderat secara diam-diam.
 - Satu respons coaching hanya boleh meminta satu informasi yang paling menentukan.
@@ -21,15 +25,15 @@
 - Semua perubahan database wajib memiliki RLS sesuai kepemilikan workspace.
 - Jalur lama tetap tersedia sebagai fallback selama rollout.
 - Tidak menambah dependency baru kecuali kebutuhan tidak dapat dipenuhi stack saat ini.
-- Setiap task dimulai dengan failing test dan berakhir dengan test suite relevan yang lulus.
+- Setiap implementation task dimulai dengan failing test dan berakhir dengan test suite relevan yang lulus. Task 0 adalah characterization-test exception: test harus lulus pada arsitektur lama untuk mengunci boundary sebelum perubahan.
 
 ## Review Focus
 
+- Teks transaksi, struk, audio, dan jawaban konfirmasi POS harus tetap masuk POS Automation tanpa pernah diproses coach; kontrol advisory yang flow-specific harus tetap menyelesaikan flow advisory yang benar.
 - Rujukan nominal yang ambigu harus memakai transaksi yang benar atau meminta klarifikasi, tidak memilih nominal secara acak.
 - Fakta lama yang bertentangan dengan koreksi terbaru harus disupersede, bukan tetap memengaruhi keputusan.
 - Data readiness yang hilang harus mencegah rekomendasi presisi, bukan diam-diam memakai profil moderat.
 - Resume setelah interrupt harus mempertahankan decision episode dan tidak menjalankan specialist dua kali.
-- Kegagalan market, memory, atau compliance retrieval harus menghasilkan status terbatas yang jujur, bukan rekomendasi palsu atau retry loop identik.
 
 ---
 
@@ -52,6 +56,27 @@ Graph tetap diperlukan karena AstaLink membutuhkan:
 Multi-agent digunakan hanya ketika pembagian domain memberi manfaat nyata. Menambah agent tanpa memperbaiki state, memory, dan decision policy hanya menghasilkan pipeline yang lebih mahal.
 
 ## A2. Bentuk Graph
+
+Graph memiliki boundary luar yang tidak boleh dipindahkan ke supervisor:
+
+```text
+Channel input
+     |
+     v
+Deterministic ingress router
+  +--+-----------------------+
+  |                          |
+  v                          v
+POS Automation         Advisory graph START
+  |                          |
+  v                          v
+capture / confirm       coach/supervisor
+  |
+  v
+confirmed transaction ledger -- read-only --> financial context
+```
+
+`START` pada diagram berikut berarti awal **advisory graph**, bukan awal semua pesan dari web atau WhatsApp. Pending business selection, pending transaction confirmation, foto struk, audio transaksi, dan teks yang terdeteksi sebagai transaksi harus selesai dirutekan sebelum titik ini.
 
 ```text
 START
@@ -160,7 +185,7 @@ Policy harus deterministic sejauh memungkinkan. LLM membentuk kandidat konteks; 
 Urutan prioritas:
 
 1. Koreksi atau konflik konteks.
-2. Pending transaction/composition confirmation.
+2. Pending composition confirmation. Pending transaction tidak boleh mencapai policy karena sudah ditangani ingress router.
 3. Missing decisive readiness information.
 4. Hard veto atau kondisi tidak siap.
 5. Informational discussion.
@@ -173,6 +198,7 @@ Urutan prioritas:
 
 | Komponen | Bentuk | Tanggung jawab |
 | --- | --- | --- |
+| POS Automation | Deterministic pre-router + capture subgraph | Mengekstrak, meminta konfirmasi, dan menyimpan transaksi sebelum advisory |
 | Coach | LLM + deterministic policy | Memahami keputusan dan memilih next action |
 | Context builder | Structured LLM + validator | Mengekstrak candidate facts dan provenance |
 | Readiness | Deterministic | Dana darurat, utang, horizon, kepemilikan dana, kebutuhan likuiditas |
@@ -183,6 +209,8 @@ Urutan prioritas:
 | Optimizer | Deterministic | Bobot dan constraint solving |
 | Compliance | Retrieval + grader | Memeriksa dukungan regulasi yang relevan |
 | Response composer | LLM dengan schema | Pemahaman, arah, uncertainty, dan next step |
+
+POS Automation bukan tool yang bebas dipanggil coach. Satu-satunya arah data normal adalah `confirmed transaction ledger -> financial context`. Mutation ledger hanya dilakukan capture graph setelah konfirmasi pengguna.
 
 ## A8. Respons Akhir
 
@@ -202,6 +230,8 @@ Renderer menggabungkan field menjadi bahasa natural. `question` maksimal satu. U
 ## A9. Failure Model
 
 - **Context model gagal:** gunakan context terakhir, tandai tidak diperbarui, dan jangan menulis memory baru.
+- **Transaction detector tidak yakin:** jangan menyimpan candidate transaction sebagai memory. Gunakan capture clarification atau biarkan sebagai advisory tanpa mengklaim transaksi telah tercatat.
+- **Pending POS flow:** deflect semua pesan nonjawaban ke prompt POS yang sedang menunggu; jangan membuat decision episode baru.
 - **Memory store gagal:** lanjutkan turn memakai in-memory state; log dan tampilkan analisis tanpa mengklaim sudah mengingat.
 - **Market data gagal:** jangan memakai expected return default seolah data aktual; tampilkan eksplorasi tanpa rekomendasi presisi.
 - **Specialist gagal:** coach menyebut bagian analisis yang tidak tersedia dan tetap memakai hasil lain yang independen.
@@ -225,7 +255,7 @@ Fokus pertama adalah keputusan kas, bisnis, dan saham yang sudah berada dalam sc
 
 # Bagian B — Rencana Implementasi
 
-Rencana dibagi menjadi tiga fase yang masing-masing dapat dirilis dan dirollback secara terpisah. Jangan menjalankan fase berikutnya sebelum acceptance tests fase sebelumnya lulus.
+Rencana dibagi menjadi empat fase, dimulai dari Fase 0 untuk mengunci kompatibilitas POS Automation. Setiap fase dapat dirilis dan dirollback secara terpisah. Jangan menjalankan fase berikutnya sebelum acceptance tests fase sebelumnya lulus.
 
 ## Peta File
 
@@ -246,6 +276,7 @@ Rencana dibagi menjadi tiga fase yang masing-masing dapat dirilis dan dirollback
 - `backend/tests/test_coach_graph.py`.
 - `backend/tests/test_financial_memory.py`.
 - `backend/tests/test_readiness.py`.
+- `backend/tests/test_pos_advisory_boundary.py`.
 - `backend/tests/test_coach_scenarios.py`.
 
 **File yang dimodifikasi:**
@@ -259,8 +290,59 @@ Rencana dibagi menjadi tiga fase yang masing-masing dapat dirilis dan dirollback
 - `backend/app/agents/optimizer/node.py` — provenance untuk fallback assumptions.
 - `backend/app/agents/legal/schemas.py` dan `legal/node.py` — status `unavailable`.
 - `backend/app/agents/report.py` — coaching preface dan assumption disclosure.
-- `backend/app/api/v1/chat.py` — decision episode lifecycle.
-- test yang sudah ada untuk graph, intent, allocation, legal, report, dan chat.
+- `backend/app/api/v1/chat.py` — decision episode lifecycle setelah POS pre-routing.
+- `backend/app/api/v1/whatsapp.py` — memakai coach graph hanya pada advisory fallthrough; urutan POS tidak diubah.
+- test yang sudah ada untuk graph, intent, allocation, legal, report, chat, WhatsApp, dan transaction capture.
+
+## Fase 0 — Kunci Boundary POS Automation
+
+### Task 0: Contract Tests untuk Ingestion Plane dan Advisory Plane
+
+**Files:**
+- Create: `backend/tests/test_pos_advisory_boundary.py`
+- Reference: `backend/app/api/v1/chat.py:141-279`
+- Reference: `backend/app/api/v1/whatsapp.py:208-409`
+- Test: `backend/tests/test_transaction_capture_graph.py`
+- Test: `backend/tests/test_whatsapp_transaction_capture_routing.py`
+
+**Interfaces:**
+- Consumes: channel input, pending transaction checkpoint, `looks_like_transaction`, dan `capture_graph`.
+- Produces: invariant bahwa hanya advisory fallthrough yang boleh memanggil coach graph.
+
+- [ ] **Step 1: Tulis characterization tests sebelum production code berubah**
+
+```python
+def test_web_receipt_invokes_capture_never_advisory(client, mock_capture, mock_advisory):
+    response = post_receipt(client, amount=125_000)
+    assert response.status_code == 200
+    mock_capture.assert_called_once()
+    mock_advisory.assert_not_called()
+
+def test_confirmed_income_can_be_read_by_next_advisory_turn(client, confirmed_income):
+    response = post_text(client, "Dari uang tadi, saham mana?")
+    assert response.status_code == 200
+    assert advisory_snapshot(response).recent_transactions[0].amount == 125_000
+
+def test_cancelled_transaction_is_absent_from_confirmed_snapshot(client, pending_transaction):
+    post_text(client, "tidak")
+    assert load_snapshot(pending_transaction.workspace_id).recent_transactions == []
+```
+
+- [ ] **Step 2: Tambahkan parity cases untuk WhatsApp**
+
+Kasus wajib: text transaction, image receipt, audio transaction, business selection, `txn_ya`, `txn_tidak`, serta plain `ya/tidak` ketika composition gate dan transaction confirmation sama-sama pending.
+
+- [ ] **Step 3: Jalankan boundary tests pada graph lama**
+
+Run: `cd backend; python -m pytest tests/test_pos_advisory_boundary.py tests/test_transaction_capture_graph.py tests/test_whatsapp_transaction_capture_routing.py -q`
+Expected: PASS sebelum supervisor dibuat. Jika gagal, sesuaikan test dengan kontrak POS yang benar sebelum menyentuh supervisor; jangan memindahkan production routing ke coach.
+
+- [ ] **Step 4: Commit contract tests**
+
+```bash
+git add backend/tests/test_pos_advisory_boundary.py
+git commit -m "test(pos): lock transaction and advisory routing boundary"
+```
 
 ## Fase 1 — Correctness Sebelum Supervisor
 
@@ -636,10 +718,14 @@ git commit -m "feat(coach): add deterministic coaching policy"
 - Modify: `backend/app/agents/graph.py:36-178`
 - Modify: `backend/app/core/config.py`
 - Modify: `backend/app/api/v1/chat.py:266-322`
+- Modify: `backend/app/api/v1/whatsapp.py:391-414`
 - Test: `backend/tests/test_coach_graph.py`
 - Test: `backend/tests/test_graph_wiring.py`
+- Test: `backend/tests/test_pos_advisory_boundary.py`
+- Test: `backend/tests/test_whatsapp_transaction_capture_routing.py`
 
 **Interfaces:**
+- Consumes: hanya advisory fallthrough setelah POS routing selesai.
 - Produces nodes `coach_context`, `coach_policy`, `coach_ask` dan router `_route_after_coach`.
 - Feature flag: `FINANCIAL_COACH_GRAPH_ENABLED=false` secara default pada awal rollout.
 
@@ -654,15 +740,19 @@ def test_missing_decisive_context_ends_with_one_question():
 
 def test_ready_context_routes_to_existing_layer0():
     assert route_for(ready_stock_context) == "l0_allocation"
+
+def test_receipt_and_pending_transaction_never_reach_coach():
+    assert ingress_route(receipt_message) == "transaction_capture"
+    assert ingress_route(transaction_confirmation) == "transaction_resume"
 ```
 
 - [ ] **Step 2: Jalankan tests dan verifikasi gagal**
 
 Run: `cd backend; python -m pytest tests/test_coach_graph.py tests/test_graph_wiring.py -q`.
 
-- [ ] **Step 3: Tambahkan supervisor nodes sebelum routing lama**
+- [ ] **Step 3: Tambahkan supervisor nodes sebelum routing advisory lama**
 
-Ketika flag mati, gunakan graph lama tanpa perubahan perilaku. Ketika flag hidup, jalur menjadi `START → coach_context → n1_intent → coach_policy` lalu menuju node lama yang relevan.
+Ketika flag mati, gunakan graph lama tanpa perubahan perilaku. Ketika flag hidup, jalur advisory menjadi `START → coach_context → n1_intent → coach_policy` lalu menuju node lama yang relevan. Jangan memindahkan pending transaction handling, photo/audio handling, `has_transaction_shape`, atau `looks_like_transaction` ke dalam graph ini. Web dan WhatsApp harus memilih advisory graph hanya pada fallthrough yang sekarang memanggil `graph.invoke`.
 
 - [ ] **Step 4: Persist episode sebelum interrupt dan setelah completion**
 
@@ -670,13 +760,13 @@ Gunakan `_thread_id` dan `_workspace_id` yang sudah ada. Resume harus membaca ep
 
 - [ ] **Step 5: Jalankan graph, checkpoint, dan chat tests**
 
-Run: `cd backend; python -m pytest tests/test_coach_graph.py tests/test_graph_wiring.py tests/test_checkpointer.py tests/test_chat.py -q`
+Run: `cd backend; python -m pytest tests/test_coach_graph.py tests/test_graph_wiring.py tests/test_checkpointer.py tests/test_chat.py tests/test_pos_advisory_boundary.py tests/test_whatsapp_transaction_capture_routing.py -q`
 Expected: PASS pada flag on dan off.
 
 - [ ] **Step 6: Commit task**
 
 ```bash
-git add backend/app/agents/coach backend/app/agents/graph.py backend/app/core/config.py backend/app/api/v1/chat.py backend/tests
+git add backend/app/agents/coach backend/app/agents/graph.py backend/app/core/config.py backend/app/api/v1/chat.py backend/app/api/v1/whatsapp.py backend/tests
 git commit -m "feat(graph): add feature-flagged coach supervisor"
 ```
 
@@ -703,19 +793,26 @@ def test_chat_answer_is_stored_as_claimed_not_verified():
 
 def test_unrequested_field_cannot_be_overwritten():
     assert apply_allowed_updates(existing, malicious_updates).net_worth == existing.net_worth
+
+def test_transaction_message_without_pending_coach_question_is_not_profile_update():
+    updates = extract_updates("jual kopi 125 ribu", pending_field=None)
+    assert updates == []
+
+def test_cancelled_or_pending_transaction_is_not_memory_source():
+    assert propose_profile_updates(context_from_unconfirmed_transaction) == []
 ```
 
 - [ ] **Step 2: Implementasikan update allowlist**
 
-Hanya field yang sedang ditanyakan atau dikoreksi eksplisit boleh berubah. Verified value tidak boleh ditimpa claimed value tanpa menyimpan conflict observation.
+Hanya field yang sedang ditanyakan oleh coach atau dikoreksi eksplisit boleh berubah. Extractor wajib menerima `pending_field`; tanpa pending field, pesan bernominal tidak boleh dianggap sebagai jawaban profil. Verified value tidak boleh ditimpa claimed value tanpa menyimpan conflict observation.
 
 - [ ] **Step 3: Hubungkan update ke resume path**
 
-Setelah jawaban diterima: update decision episode, append observation, perbarui investor/business profile bila field termasuk schema, lalu jalankan ulang readiness dan policy.
+Setelah jawaban terhadap coach diterima: update decision episode, append observation, perbarui investor/business profile bila field termasuk schema, lalu jalankan ulang readiness dan policy. Data dari POS hanya boleh masuk sebagai konteks melalui snapshot transaksi `confirmed`; pending, rejected, dan cancelled transaction dilarang menjadi memory observation.
 
 - [ ] **Step 4: Jalankan tests**
 
-Run: `cd backend; python -m pytest tests/test_coach_profile_updates.py tests/test_composition_gate_resume.py tests/test_transaction_capture_resume.py -q`
+Run: `cd backend; python -m pytest tests/test_coach_profile_updates.py tests/test_composition_gate_resume.py tests/test_transaction_capture_resume.py tests/test_pos_advisory_boundary.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Commit task**
@@ -821,9 +918,11 @@ git commit -m "feat(coach): compose context-first financial guidance"
 - Modify: `backend/app/core/metrics.py`
 - Modify: `grafana/dashboards/ai-quality.json`
 - Test: `backend/tests/test_metrics.py`
+- Test: `backend/tests/test_pos_advisory_boundary.py`
+- Test: `backend/tests/test_whatsapp_transaction_capture_routing.py`
 
 **Interfaces:**
-- Produces metrics `coach_action_total`, `coach_question_total`, `readiness_block_total`, `context_conflict_total`, `memory_write_failure_total`, dan `specialist_call_total`.
+- Produces metrics `coach_action_total`, `coach_question_total`, `readiness_block_total`, `context_conflict_total`, `memory_write_failure_total`, `specialist_call_total`, dan `ingress_route_total{route="pos|advisory"}`.
 
 - [ ] **Step 1: Tulis scenario fixtures**
 
@@ -838,11 +937,18 @@ Wajib mencakup:
 6. Market data gagal → tidak ada precise allocation dari hidden defaults.
 7. Compliance retrieval kosong → report tetap jujur tanpa optimizer loop.
 8. Resume setelah restart → episode dan pending question tetap sama.
+9. Teks pemasukan bisnis → capture graph, coach tidak dipanggil.
+10. Foto struk web/WhatsApp → capture graph, coach tidak dipanggil.
+11. Audio transaksi WhatsApp → capture graph, coach tidak dipanggil.
+12. Pending transaction + `txn_ya/txn_tidak` → resume POS thread yang sama.
+13. Transaksi dibatalkan → tidak muncul pada snapshot atau temporal memory.
+14. Transaksi X confirmed → turn advisory berikutnya boleh membaca X secara read-only.
+15. Pending transaction dan composition gate bersamaan → button id menyelesaikan flow yang tepat.
 ```
 
 - [ ] **Step 2: Jalankan scenarios pada graph baru**
 
-Run: `cd backend; python -m pytest tests/test_coach_scenarios.py -q`
+Run: `cd backend; python -m pytest tests/test_coach_scenarios.py tests/test_pos_advisory_boundary.py tests/test_whatsapp_transaction_capture_routing.py -q`
 Expected: FAIL sebelum seluruh integrasi selesai.
 
 - [ ] **Step 3: Instrumentasikan action dan failure metrics**
@@ -851,7 +957,7 @@ Label hanya memakai enum bounded; jangan menaruh user id, nominal, message, atau
 
 - [ ] **Step 4: Perbarui dashboard AI quality**
 
-Tambahkan panel action mix, ask rate, readiness blocks, specialist calls per completed analysis, memory failures, dan context conflicts.
+Tambahkan panel action mix, ask rate, readiness blocks, specialist calls per completed analysis, memory failures, context conflicts, serta rasio ingress POS vs advisory. Jangan mengirim isi transaksi sebagai metric label.
 
 - [ ] **Step 5: Jalankan full backend suite**
 
@@ -860,29 +966,33 @@ Expected: seluruh suite PASS.
 
 - [ ] **Step 6: Jalankan smoke test container**
 
-Run: `docker compose exec backend python -m pytest tests/test_smoke.py tests/test_coach_scenarios.py -q`
+Run: `docker compose exec backend python -m pytest tests/test_smoke.py tests/test_coach_scenarios.py tests/test_pos_advisory_boundary.py tests/test_whatsapp_transaction_capture_routing.py -q`
 Expected: PASS dengan service dependencies aktif.
 
 - [ ] **Step 7: Commit task**
 
 ```bash
-git add backend/tests/test_coach_scenarios.py backend/app/core/metrics.py backend/tests/test_metrics.py grafana/dashboards/ai-quality.json
+git add backend/tests/test_coach_scenarios.py backend/tests/test_pos_advisory_boundary.py backend/app/core/metrics.py backend/tests/test_metrics.py grafana/dashboards/ai-quality.json
 git commit -m "test(coach): add financial coaching scenarios and quality metrics"
 ```
 
 ## Rollout dan Rollback
 
 1. Deploy dengan `FINANCIAL_COACH_GRAPH_ENABLED=false`.
-2. Jalankan scenario suite dan smoke test pada environment deployment.
-3. Aktifkan untuk internal/demo workspace melalui allowlist sebelum flag global.
-4. Bandingkan ask rate, completion, latency, specialist calls, dan failure rate dengan graph lama.
-5. Aktifkan bertahap untuk workspace tambahan.
-6. Rollback cukup mematikan flag; data decision episode dan observations tetap tersimpan tetapi tidak dibaca graph lama.
+2. Rekam baseline keberhasilan capture teks, foto, audio, business selection, confirmation, dan cancellation pada POS Automation.
+3. Jalankan scenario suite, POS boundary suite, WhatsApp routing suite, dan smoke test pada environment deployment.
+4. Aktifkan untuk internal/demo workspace melalui allowlist sebelum flag global.
+5. Bandingkan ask rate, completion, latency, specialist calls, failure rate, serta POS capture success dengan graph lama.
+6. Aktifkan bertahap untuk workspace tambahan.
+7. Rollback cukup mematikan flag; data decision episode dan observations tetap tersimpan tetapi tidak dibaca graph lama, sedangkan POS thread tetap berjalan tanpa migrasi.
 
 Kriteria menghentikan rollout:
 
 - rekomendasi keluar tanpa readiness yang cukup;
 - nominal atau sumber uang salah;
+- teks transaksi, foto struk, audio, atau jawaban konfirmasi mencapai coach;
+- POS capture success turun dibanding baseline;
+- transaksi pending, ditolak, atau dibatalkan muncul sebagai financial memory;
 - pertanyaan berulang setelah sudah dijawab;
 - specialist dipanggil dua kali setelah resume;
 - latency p95 atau error rate melampaui batas operasional yang disepakati sebelum rollout.
@@ -896,9 +1006,12 @@ Kriteria menghentikan rollout:
 - Koreksi pengguna menyupersede inference lama.
 - Missing decisive readiness menghasilkan satu pertanyaan, bukan rekomendasi.
 - Existing market, business, risk, optimizer, transaction capture, dan execution safety tests tetap lulus.
+- Web dan WhatsApp selalu merutekan POS sebelum advisory, baik saat feature flag mati maupun hidup.
+- Coach tidak memiliki write path ke `business_transactions` dan hanya membaca transaksi confirmed.
+- Pending, rejected, dan cancelled transaction tidak masuk decision context atau temporal memory sebagai fakta.
 - Report membedakan readiness, market analysis, dan regulatory evidence.
 - README diperbarui hanya setelah implementasi benar-benar selesai dan diverifikasi.
 
 ## Execution Boundary
 
-Dokumen ini adalah rencana implementasi, bukan persetujuan untuk menjalankannya. Sebelum Task 1 dimulai, pengguna perlu meninjau kedua dokumen, mengoreksi keputusan produk yang tidak sesuai, dan memilih metode eksekusi.
+Dokumen ini adalah rencana implementasi, bukan persetujuan untuk menjalankannya. Sebelum Task 0 dimulai, pengguna perlu meninjau kedua dokumen, mengoreksi keputusan produk yang tidak sesuai, dan memilih metode eksekusi.
