@@ -20,7 +20,9 @@ import re
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
+from app.agents.context_snapshot import load_snapshot
 from app.agents.market.node import build_ticker_snapshot
+from app.agents.reply_writer import DeadEndReason, compose_dead_end_reply
 from app.agents.state import AgentState
 from app.core.gemini import extract_text, get_chat_model
 from app.core.metrics import track_node_duration
@@ -164,10 +166,14 @@ def _history(state: AgentState) -> list[BaseMessage]:
 @track_node_duration("n8_qa")
 def qa_node(state: AgentState) -> AgentState:
     question = _last_human_text(state)
+    snapshot = load_snapshot(state.get("_workspace_id"))
+
     if not question:
         return {
-            "messages": [*state.get("messages", []),
-                         AIMessage(content="Maaf, saya tidak menangkap pertanyaannya. Bisa diulangi?")],
+            "messages": [*state.get("messages", []), AIMessage(
+                content=compose_dead_end_reply(
+                    reason=DeadEndReason.QA_NO_QUESTION,
+                    state=state, snapshot=snapshot))],
         }
 
     context_blocks = []
@@ -188,14 +194,17 @@ def qa_node(state: AgentState) -> AgentState:
             *_history(state),
             HumanMessage(content=prompt),
         ])
-        answer = extract_text(response.content).strip() or (
-            "Maaf, saya belum bisa menjawab pertanyaan itu. Coba tanyakan dengan cara lain."
-        )
+        answer = extract_text(response.content).strip() or compose_dead_end_reply(
+            reason=DeadEndReason.QA_EMPTY_ANSWER,
+            state=state, snapshot=snapshot,
+            facts={"pertanyaan": question})
     except Exception as exc:  # noqa: BLE001
         log.exception("qa_node: answer generation failed: %s", exc)
         return {
-            "messages": [*state.get("messages", []),
-                         AIMessage(content="Maaf, terjadi kendala saat menjawab. Silakan coba lagi.")],
+            "messages": [*state.get("messages", []), AIMessage(
+                content=compose_dead_end_reply(
+                    reason=DeadEndReason.QA_LLM_ERROR,
+                    state=state, snapshot=snapshot))],
             "errors": [*state.get("errors", []), {"node": "qa", "reason": str(exc)}],
         }
 

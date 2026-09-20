@@ -45,6 +45,12 @@ uv.lock
 /logs
 /data
 docs/
+# Keep the two agreed AstaLink product/architecture records versionable while
+# leaving other generated planning documents ignored.
+!docs/
+docs/*
+!docs/astalink-vision-positioning.md
+!docs/astalink-agentic-architecture-plan.md
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

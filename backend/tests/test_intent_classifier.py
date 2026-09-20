@@ -290,13 +290,21 @@ def test_intent_node_sets_clarification_when_low_confidence() -> None:
     fake_chain.invoke.return_value = fake_decision
 
     with patch("app.agents.intent.node._build_chain", return_value=fake_chain), \
-         patch("app.agents.intent.node._record_audit"):
+         patch("app.agents.intent.node._record_audit"), \
+         patch("app.agents.intent.node.load_snapshot"), \
+         patch("app.agents.intent.node.compose_dead_end_reply",
+               return_value="Boleh diperjelas sedikit?") as compose:
         update = intent_node(state)
 
     assert update["intent"] == Intent.UNKNOWN.value
     # clarification appended as an AI message so the channel layer (WhatsApp /
-    # web chat) can surface it
-    assert any(isinstance(m, AIMessage) and "tujuan" in m.content for m in update.get("messages", []))
+    # web chat) can surface it. The wording is composed rather than relayed
+    # verbatim now, so what matters is that the model's own note about what
+    # was unclear reaches the writer as a fact.
+    assert any(isinstance(m, AIMessage) and m.content.strip()
+               for m in update.get("messages", []))
+    assert compose.call_args.kwargs["facts"]["catatan_ambiguitas"] == \
+        "Apa tujuan investasi Anda?"
 
 
 def test_build_chain_pins_function_calling_for_sumopod(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -424,3 +432,77 @@ def test_intent_node_includes_prior_turns_so_follow_ups_have_context() -> None:
     assert "kenapa bisnis nya 0%?" in sent_texts[-1]
     assert any("Bisnis 0%" in t or "Tidak ada bisnis" in t for t in sent_texts[:-1]), \
         "prior AI turn explaining the 0% must be included for the classifier to see"
+
+
+def test_intent_node_puts_workspace_snapshot_in_the_prompt() -> None:
+    """The trigger case: "uang yang barusan masuk" is only resolvable if the
+    classifier can see the balance and the captured POS transaction. Before
+    this, N1 decided blind and bounced the user with "kurang paham"."""
+    from unittest.mock import MagicMock, patch
+
+    from langchain_core.messages import HumanMessage
+
+    from app.agents.context_snapshot import TransactionBrief, WorkspaceSnapshot
+    from app.agents.intent.node import intent_node
+    from app.agents.intents import Intent
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+    state["messages"] = [HumanMessage(content="uang yang barusan masuk ini enaknya ke mana?")]
+
+    snapshot = WorkspaceSnapshot(
+        cash_balance=12_400_000,
+        recent_transactions=[TransactionBrief(
+            occurred_at="2026-09-18T09:00:00+00:00", amount=4_100_000,
+            type="income", source="whatsapp_photo", business_name="Warung Kopi")],
+    )
+
+    chain = MagicMock()
+    chain.invoke.return_value = MagicMock(
+        intent=Intent.ALLOCATE_STOCKS, entities={"amount": 4_100_000},
+        confidence=0.82, clarification_question=None)
+
+    with patch("app.agents.intent.node.load_snapshot", return_value=snapshot), \
+         patch("app.agents.intent.node._build_chain", return_value=chain), \
+         patch("app.agents.intent.node._record_audit"):
+        update = intent_node(state)
+
+    sent = chain.invoke.call_args[0][0]
+    blob = "\n".join(str(m.content) for m in sent)
+    assert "Rp 12.400.000" in blob
+    assert "Rp 4.100.000" in blob
+    assert update["_needs_clarification"] is False
+
+
+def test_intent_node_low_confidence_reply_is_composed_not_canned() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from langchain_core.messages import HumanMessage
+
+    from app.agents.context_snapshot import WorkspaceSnapshot
+    from app.agents.intent.node import intent_node
+    from app.agents.intents import Intent
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["_workspace_id"] = "ws-1"
+    state["messages"] = [HumanMessage(content="hmm")]
+
+    chain = MagicMock()
+    chain.invoke.return_value = MagicMock(
+        intent=Intent.UNKNOWN, entities={}, confidence=0.2,
+        clarification_question="Maksudnya apa ya?")
+
+    with patch("app.agents.intent.node.load_snapshot",
+               return_value=WorkspaceSnapshot(cash_balance=12_400_000)), \
+         patch("app.agents.intent.node._build_chain", return_value=chain), \
+         patch("app.agents.intent.node._record_audit"), \
+         patch("app.agents.intent.node.compose_dead_end_reply",
+               return_value="Saldo Anda Rp 12.400.000. Mau dialokasikan?") as compose:
+        update = intent_node(state)
+
+    assert update["messages"][-1].content == "Saldo Anda Rp 12.400.000. Mau dialokasikan?"
+    kwargs = compose.call_args.kwargs
+    assert kwargs["reason"].value == "low_confidence"
+    assert "Maksudnya apa ya?" in str(kwargs["facts"])

@@ -15,7 +15,13 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 
+from app.agents.context_snapshot import (
+    WorkspaceSnapshot,
+    format_rupiah,
+    load_snapshot,
+)
 from app.agents.intents import Intent
+from app.agents.reply_writer import DeadEndReason, compose_dead_end_reply
 from app.agents.state import AgentState
 from app.core.metrics import track_node_duration
 from app.core.supabase_admin import get_admin_client
@@ -23,18 +29,11 @@ from app.core.wallet import get_workspace_balance
 
 log = logging.getLogger(__name__)
 
-PORTFOLIO_STATUS_MESSAGE = (
-    "Ringkasan posisi portofolio lewat chat belum tersedia. "
-    "Silakan buka halaman Asset View untuk melihat alokasi yang sudah disetujui, "
-    "atau halaman Transactions untuk riwayat eksekusi."
-)
-
-
 def _fmt_rp(value: float) -> str:
     return f"Rp {value:,.0f}".replace(",", ".")
 
 
-def _business_reply(state: AgentState) -> str:
+def _business_reply(state: AgentState, snapshot: WorkspaceSnapshot) -> str:
     val: dict[str, Any] | None = state.get("entities", {}).get("business_valuation")
     if val:
         lines = [
@@ -51,32 +50,23 @@ def _business_reply(state: AgentState) -> str:
 
     reasons = {e.get("reason") for e in state.get("errors", []) if e.get("node") == "business"}
     if "no_matching_business" in reasons:
-        return (
-            "Saya tidak menemukan bisnis yang cocok di workspace ini. "
-            "Tambahkan bisnis beserta catatan keuangannya lebih dulu di menu Bisnis Saya, "
-            "lalu minta valuasi lagi."
-        )
-    if "no_financial_records" in reasons:
-        return (
-            "Bisnisnya ketemu, tapi belum ada catatan keuangan (laba per tahun) untuk "
-            "dihitung. Lengkapi catatan keuangannya di menu Bisnis Saya, lalu coba lagi."
-        )
-    return (
-        "Maaf, valuasi bisnis belum bisa dihitung untuk permintaan ini. "
-        "Pastikan bisnis dan catatan keuangannya sudah terdaftar di menu Bisnis Saya."
-    )
+        reason = DeadEndReason.BUSINESS_NOT_FOUND
+    elif "no_financial_records" in reasons:
+        reason = DeadEndReason.BUSINESS_NO_RECORDS
+    else:
+        reason = DeadEndReason.BUSINESS_UNCOMPUTABLE
+    return compose_dead_end_reply(reason=reason, state=state, snapshot=snapshot)
 
 
-def _risk_reply(state: AgentState) -> str:
+def _risk_reply(state: AgentState, snapshot: WorkspaceSnapshot) -> str:
     assessment: dict[str, Any] | None = state.get("entities", {}).get("risk_metrics")
     metrics = (assessment or {}).get("metrics") or {}
     weights: dict[str, float] = (assessment or {}).get("suggested_weights") or {}
 
     if not weights or metrics.get("var_95") is None:
-        return (
-            "Review risiko membutuhkan minimal satu ticker dengan riwayat harga yang cukup. "
-            "Sebutkan sahamnya, misalnya: \"Review risiko portofolio dengan BBCA dan TLKM\"."
-        )
+        return compose_dead_end_reply(
+            reason=DeadEndReason.RISK_INSUFFICIENT_HISTORY,
+            state=state, snapshot=snapshot)
 
     tickers = ", ".join(t.replace(".JK", "") for t in weights)
     lines = [f"Hasil review risiko untuk {tickers}:"]
@@ -91,27 +81,28 @@ def _risk_reply(state: AgentState) -> str:
     return "\n".join(lines)
 
 
-def _portfolio_status_reply(state: AgentState) -> str:
+def _portfolio_status_reply(state: AgentState, snapshot: WorkspaceSnapshot) -> str:
     workspace_id = state.get("_workspace_id")
     balance = get_workspace_balance(get_admin_client(), workspace_id) if workspace_id else None
-    if balance is None:
-        return PORTFOLIO_STATUS_MESSAGE
-    return (
-        f"Saldo kas workspace Anda saat ini: {_fmt_rp(balance)}. "
-        "Ringkasan posisi/holdings lewat chat belum tersedia — silakan buka halaman "
-        "Asset View untuk melihat alokasi yang sudah disetujui, atau halaman "
-        "Transactions untuk riwayat eksekusi."
-    )
+    facts: dict[str, str] = {}
+    if balance is not None:
+        facts["saldo_kas"] = format_rupiah(balance)
+    facts["halaman_tersedia"] = (
+        "Asset View (alokasi yang sudah disetujui), Transactions (riwayat eksekusi)")
+    return compose_dead_end_reply(
+        reason=DeadEndReason.PORTFOLIO_STATUS_UNAVAILABLE,
+        state=state, snapshot=snapshot, facts=facts)
 
 
 @track_node_duration("n9_summary")
 def summary_node(state: AgentState) -> AgentState:
     intent = state.get("intent")
+    snapshot = load_snapshot(state.get("_workspace_id"))
     if intent == Intent.EVALUATE_BUSINESS.value:
-        reply = _business_reply(state)
+        reply = _business_reply(state, snapshot)
     elif intent == Intent.RISK_REVIEW.value:
-        reply = _risk_reply(state)
+        reply = _risk_reply(state, snapshot)
     else:  # PORTFOLIO_STATUS (and any future direct-summary intent)
-        reply = _portfolio_status_reply(state)
+        reply = _portfolio_status_reply(state, snapshot)
 
     return {"messages": [*state.get("messages", []), AIMessage(content=reply)]}

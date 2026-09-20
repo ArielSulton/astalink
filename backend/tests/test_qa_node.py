@@ -122,3 +122,46 @@ def test_qa_ignores_common_acronyms_in_regex_fallback() -> None:
         qa_node(state)
 
     mock_snap.assert_not_called()
+
+
+def test_qa_node_composes_reply_when_no_question_found() -> None:
+    from unittest.mock import patch
+
+    from app.agents.qa import qa_node
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["messages"] = []
+
+    with patch("app.agents.qa.load_snapshot") as load, \
+         patch("app.agents.qa.compose_dead_end_reply",
+               return_value="Pesannya belum kebaca. Mau tanya apa?") as compose:
+        update = qa_node(state)
+
+    load.assert_called_once()
+    assert update["messages"][-1].content == "Pesannya belum kebaca. Mau tanya apa?"
+    assert compose.call_args.kwargs["reason"].value == "qa_no_question"
+
+
+def test_qa_node_composes_reply_when_model_raises() -> None:
+    from unittest.mock import patch
+
+    from langchain_core.messages import HumanMessage
+
+    from app.agents.qa import qa_node
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["messages"] = [HumanMessage(content="apa itu RSI?")]
+
+    with patch("app.agents.qa.load_snapshot"), \
+         patch("app.agents.qa.get_chat_model", side_effect=RuntimeError("boom")), \
+         patch("app.agents.qa._regulation_context", return_value=""), \
+         patch("app.agents.qa._market_context", return_value=""), \
+         patch("app.agents.qa.compose_dead_end_reply",
+               return_value="Lagi ada kendala. Coba lagi sebentar?") as compose:
+        update = qa_node(state)
+
+    assert update["messages"][-1].content == "Lagi ada kendala. Coba lagi sebentar?"
+    assert compose.call_args.kwargs["reason"].value == "qa_llm_error"
+    assert update["errors"][-1]["node"] == "qa"
