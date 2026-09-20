@@ -62,6 +62,7 @@ The application should feel like a guided financial workspace:
 ### 3.2 Excluded
 
 - Rewriting the content or personality of chatbot responses.
+- Changing the current color theme, palette, color tokens, light/dark-mode behavior, or visual brand identity. New and moved components must reuse the existing theme variables and component variants.
 - Automatically creating a first workspace for a new account.
 - Changing investment recommendation methodology.
 - Adding new market, manipulation, or legal data sources.
@@ -383,5 +384,6 @@ The workstream is complete only when:
 - responsive patterns work at the agreed breakpoints;
 - all specified tests and checks pass;
 - user-facing UI and DTOs avoid internal architecture terms;
+- the existing color theme and theme tokens remain unchanged;
 - no obsolete duplicate terminal, navigation config, orphan route, commented-out implementation, or unused import/export remains in the changed scope;
 - product route documentation reflects the new journey.
