@@ -27,9 +27,9 @@ const COMPARISON_FEATURES = [
     { key: "legal", label: "Cek kepatuhan OJK otomatis, tersitasi", tiers: [false, true, true] },
     { key: "sandbox", label: "Portofolio sandbox", tiers: [true, true, true] },
   ]},
-  { category: "Dashboard & Kontrol", features: [
+  { category: "Beranda & Kontrol", features: [
     { key: "approval", label: "Persetujuan transaksi dengan PIN", tiers: [false, true, true] },
-    { key: "dashboard", label: "Dashboard holdings, approvals, transaksi, & berita", tiers: [false, true, true] },
+    { key: "dashboard", label: "Beranda kepemilikan, persetujuan, transaksi, & berita", tiers: [false, true, true] },
     { key: "credits", label: "Kredit chat lebih banyak", tiers: [false, true, true] },
   ]},
   { category: "Kemitraan", features: [
@@ -47,7 +47,7 @@ const FAQ = [
   },
   {
     q: "Apa yang membedakan paket Pro?",
-    a: "Pro menyediakan 100 kredit chat per bulan, analisis alokasi modal, cek kepatuhan OJK tersitasi, persetujuan PIN, dan dashboard lengkap.",
+    a: "Pro menyediakan 100 kredit chat per bulan, analisis alokasi modal, cek kepatuhan OJK tersitasi, persetujuan PIN, dan Beranda lengkap.",
   },
   {
     q: "Untuk siapa paket Komunitas & Partner?",
@@ -336,8 +336,8 @@ export default function PricingPage() {
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/#fitur" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Fitur</Link></li>
               <li><Link href="/pricing" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Harga</Link></li>
-              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dashboard</Link></li>
-              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Chatbot AI</Link></li>
+              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Beranda</Link></li>
+              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Tanya Asta</Link></li>
               <li><Link href="/news" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Berita Pasar</Link></li>
               <li><Link href="/legal-docs" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dokumen Legal</Link></li>
             </ul>

@@ -118,7 +118,7 @@ export default async function Home() {
                 href="/dashboard"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all duration-200"
               >
-                Dasbor
+                Beranda
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
@@ -189,7 +189,7 @@ export default async function Home() {
                     className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all duration-300"
                   >
                     <LayoutDashboard className="w-4 h-4" />
-                    Buka Dashboard
+                    Buka Beranda
                     <ArrowRight className="w-4 h-4" />
                   </Link>
                 ) : (
@@ -445,7 +445,7 @@ export default async function Home() {
             href={isLoggedIn ? "/dashboard" : "/signup"}
             className="inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-full bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-all duration-300"
           >
-            {isLoggedIn ? "Buka Dashboard" : "Buat Akun Gratis"}
+            {isLoggedIn ? "Buka Beranda" : "Buat Akun Gratis"}
             <ArrowRight className="w-5 h-5" />
           </Link>
           <p className="text-muted-foreground/60 text-xs mt-6 font-mono tracking-wide">
@@ -481,8 +481,8 @@ export default async function Home() {
               Menu
             </p>
             <ul className="space-y-2.5 text-sm">
-              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dasbor</Link></li>
-              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Chatbot AI</Link></li>
+              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Beranda</Link></li>
+              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Tanya Asta</Link></li>
               <li><Link href="/news" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Berita Pasar</Link></li>
               <li><Link href="/legal-docs" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dokumen Legal</Link></li>
               <li><Link href="/pricing" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Harga</Link></li>

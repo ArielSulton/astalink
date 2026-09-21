@@ -174,6 +174,10 @@ Setiap inferensi kebiasaan idealnya memiliki:
 
 AstaLink memberi pemahaman, simulasi, rekomendasi, dan konsekuensi. Ia tidak mengeksekusi transaksi langsung dari percakapan dan tidak menyamarkan rekomendasi sebagai keputusan final.
 
+### 5.5 Struktur perjalanan aplikasi
+
+Beranda terpandu di `/dashboard` merangkum kondisi, kesiapan, aktivitas terbaru, dan satu langkah berikutnya. Pasar & Grafik memiliki tujuan eksplorasi tersendiri di `/market`. Navigasi mengelompokkan perjalanan pengguna menjadi Catat & Kelola, Rencanakan, Eksplorasi, dan Portofolio agar fitur dikenali dari tujuan pengguna, bukan dari struktur teknologi internal.
+
 ## 6. Arsitektur AI Saat Ini
 
 Arsitektur saat ini bersifat graph-oriented. Pada tingkat channel ingress, POS Automation sudah dipisahkan dari advisory graph:

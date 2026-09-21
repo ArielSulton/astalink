@@ -50,6 +50,12 @@ AstaLink berjalan dalam mode **advisory-first**. Agent menyiapkan analisis dan r
 | Auditability | `audit_id`, event log, checkpoint workflow, metrik Prometheus, dan dashboard Grafana. |
 | Channels | Percakapan melalui aplikasi web dan WhatsApp. |
 
+### Pengalaman aplikasi
+
+- Beranda merangkum kondisi, kesiapan, aktivitas terbaru, dan satu langkah berikutnya.
+- Pasar & Grafik tersedia di `/market`; `/dashboard` adalah Beranda terpandu.
+- Navigasi mengikuti Catat & Kelola, Rencanakan, Eksplorasi, dan Portofolio.
+
 ## Arsitektur
 
 ```mermaid
