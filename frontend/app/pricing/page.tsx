@@ -88,7 +88,7 @@ export default function PricingPage() {
               <Image src="/logo_astalink.png" alt="Astalink" width={24} height={24} className="w-6 h-6 object-contain" />
             </div>
             <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-            <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+            <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-1">
@@ -318,7 +318,7 @@ export default function PricingPage() {
                 <Image src="/logo_astalink.png" alt="Astalink" width={28} height={28} className="w-7 h-7 object-contain" />
               </div>
               <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-              <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+              <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
             </div>
             <p className="text-sidebar-foreground/50 text-sm leading-relaxed">
               Platform analisis alokasi modal dengan AI multi-agen, cek regulasi berbasis dokumen,
@@ -330,7 +330,7 @@ export default function PricingPage() {
           </div>
 
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Produk
             </p>
             <ul className="space-y-2.5 text-sm">
@@ -344,7 +344,7 @@ export default function PricingPage() {
           </div>
 
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Perusahaan
             </p>
             <ul className="space-y-2.5 text-sm">

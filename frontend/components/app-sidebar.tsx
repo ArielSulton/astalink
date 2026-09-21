@@ -54,7 +54,7 @@ export function AppSidebar({
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-bold tracking-tight">Astalink</span>
-                <span className="truncate font-mono text-[10px] font-black uppercase tracking-widest text-chart-2">
+                <span className="truncate font-mono text-[10px] font-extrabold uppercase tracking-widest text-chart-2">
                   AI
                 </span>
               </div>

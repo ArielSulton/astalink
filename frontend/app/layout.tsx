@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
-import { Oxanium, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 
-const oxanium = Oxanium({subsets:['latin'],variable:'--font-sans'});
+// Plus Jakarta Sans is a text face built for UI, unlike the display face it
+// replaced: it stays legible at the small sizes most of this product uses.
+// Its heaviest weight is 800, so the UI uses font-extrabold rather than
+// font-black — 900 would only be synthesised by the browser.
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
 // globals.css maps --font-mono to --font-geist-mono, but nothing loaded that
 // variable — every "tabular numbers" price/percent in the UI was silently
 // falling back to Oxanium instead of a real monospace face. JetBrains Mono
@@ -47,7 +54,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" data-scroll-behavior="smooth" className={cn("font-sans dark", oxanium.variable, jetbrainsMono.variable)}>
+    <html lang="id" data-scroll-behavior="smooth" className={cn("font-sans dark", plusJakartaSans.variable, jetbrainsMono.variable)}>
       <body>
         {children}
         <Toaster />

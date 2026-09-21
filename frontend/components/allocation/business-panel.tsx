@@ -33,7 +33,7 @@ export function VetoPanel({ flags }: { flags: VetoFlag[] }) {
         >
           <ShieldAlert className={cn("h-4 w-4 mt-0.5 shrink-0", f.hard ? "text-destructive" : "text-amber-400")} />
           <div>
-            <p className={cn("text-[10px] font-black font-mono uppercase tracking-wider", f.hard ? "text-destructive" : "text-amber-400")}>
+            <p className={cn("text-[10px] font-extrabold font-mono uppercase tracking-wider", f.hard ? "text-destructive" : "text-amber-400")}>
               {f.hard ? "VETO KERAS" : "PERINGATAN"} · {f.code}
             </p>
             <p className="text-xs text-foreground mt-0.5">{f.reason}</p>
@@ -87,7 +87,7 @@ export function BusinessPanel({ layer0 }: { layer0: Layer0Result }) {
 
       {layer0.rejected_reasons.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5">
-          <p className="text-[10px] font-black font-mono uppercase tracking-wider text-destructive mb-1">
+          <p className="text-[10px] font-extrabold font-mono uppercase tracking-wider text-destructive mb-1">
             Hard reject (STEP 2)
           </p>
           <ul className="space-y-0.5 pl-4 list-disc text-xs text-foreground">

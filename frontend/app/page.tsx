@@ -90,7 +90,7 @@ export default async function Home() {
               <Image src="/logo_astalink.png" alt="Astalink" width={24} height={24} className="w-6 h-6 object-contain" />
             </div>
             <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-            <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+            <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
           </Link>
 
           {/* Center links — pill hover */}
@@ -245,7 +245,7 @@ export default async function Home() {
                   <div className="px-5 py-4 border-b border-white/[0.07] flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-chart-2/15 border border-chart-2/30 flex items-center justify-center">
-                        <span className="text-chart-2 text-[9px] font-black font-mono">AI</span>
+                        <span className="text-chart-2 text-[9px] font-extrabold font-mono">AI</span>
                       </div>
                       <div>
                         <div className="text-[#fafafa] font-semibold text-[13px] leading-none">Rekomendasi AI</div>
@@ -464,7 +464,7 @@ export default async function Home() {
                 <Image src="/logo_astalink.png" alt="Astalink" width={28} height={28} className="w-7 h-7 object-contain" />
               </div>
               <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-              <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+              <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
             </div>
             <p className="text-sidebar-foreground/50 text-sm leading-relaxed">
               Platform investasi saham IDX dengan AI multi-agen, kepatuhan OJK otomatis,
@@ -477,7 +477,7 @@ export default async function Home() {
 
           {/* Menu */}
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Menu
             </p>
             <ul className="space-y-2.5 text-sm">
@@ -491,7 +491,7 @@ export default async function Home() {
 
           {/* Akun */}
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Akun
             </p>
             <ul className="space-y-2.5 text-sm">
