@@ -20,39 +20,21 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
-import { api } from "@/lib/api-client";
 import {
   ASTA_ACTION,
   isJourneyRouteActive,
   visibleDesktopSections,
 } from "@/lib/journey-navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export function AppSidebar({
   pendingApprovals = 0,
+  isAdmin = false,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   pendingApprovals?: number;
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = React.useState(false);
-
-  React.useEffect(() => {
-    (async () => {
-      const sb = createClient();
-      const {
-        data: { session },
-      } = await sb.auth.getSession();
-      if (!session) return;
-      try {
-        const me = await api.getMe(session.access_token);
-        setIsAdmin(me.is_admin);
-      } catch {
-        // Fail closed: admin-only navigation remains hidden.
-      }
-    })();
-  }, []);
-
   const sections = visibleDesktopSections(isAdmin);
 
   return (
@@ -129,7 +111,7 @@ export function AppSidebar({
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser />
+        <NavUser isAdmin={isAdmin} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
