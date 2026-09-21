@@ -21,7 +21,7 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-geist-mono",
 });
 
-const SITE_URL = "https://astalink.my.id";
+const SITE_URL = "https://astalink.id";
 const SITE_TITLE = "Astalink AI — Investasi IDX Berbasis AI";
 const SITE_DESCRIPTION =
   "Platform investasi saham IDX dengan AI multi-agen, kepatuhan OJK otomatis, dan kontrol penuh di tangan kamu.";

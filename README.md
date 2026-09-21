@@ -6,7 +6,7 @@
   <p><strong>Platform investasi saham IDX dengan analisis multi-agent,<br />pemeriksaan regulasi, dan kontrol penuh di tangan pengguna.</strong></p>
 
   <p>
-    <a href="https://astalink.my.id">Website</a>
+    <a href="https://astalink.id">Website</a>
     ·
     <a href="#quick-start">Quick start</a>
     ·

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://astalink.my.id";
+const SITE_URL = "https://astalink.id";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

@@ -19,6 +19,6 @@ export default function robots(): MetadataRoute.Robots {
         "/auth/callback",
       ],
     },
-    sitemap: "https://astalink.my.id/sitemap.xml",
+    sitemap: "https://astalink.id/sitemap.xml",
   };
 }
