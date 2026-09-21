@@ -15,9 +15,10 @@ const STATUS_LABELS: Record<
 };
 
 const GAP_LABELS: Record<string, string> = {
-  "current_state.stage": "Tahap dan pendapatan bisnis",
-  "capital_need.breakdown": "Rincian kebutuhan modal",
-  "deal_structure.instrument": "Bentuk imbalan investasi",
+  monthly_expenses: "Pengeluaran bulanan",
+  emergency_fund: "Dana darurat saat ini",
+  capital_is_borrowed: "Asal modal investasi",
+  horizon_months: "Kapan dana ini dibutuhkan",
 };
 
 const BLOCKER_LABELS: Record<string, string> = {
@@ -37,13 +38,14 @@ export function ReadinessCard({
   onRetry: () => void;
 }) {
   const gaps = [
-    ...summary.decisive_gaps.map(
-      (gap) => GAP_LABELS[gap] ?? "Informasi kesiapan tambahan",
-    ),
-    ...summary.blocker_codes.map(
-      (blocker) =>
-        BLOCKER_LABELS[blocker] ?? "Batas keamanan perlu ditinjau",
-    ),
+    ...summary.decisive_gaps.map((gap) => ({
+      id: `gap:${gap}`,
+      label: GAP_LABELS[gap] ?? "Informasi kesiapan tambahan",
+    })),
+    ...summary.blocker_codes.map((blocker) => ({
+      id: `blocker:${blocker}`,
+      label: BLOCKER_LABELS[blocker] ?? "Batas keamanan perlu ditinjau",
+    })),
   ];
 
   return (
@@ -75,9 +77,9 @@ export function ReadinessCard({
       ) : gaps.length > 0 ? (
         <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
           {gaps.slice(0, 3).map((gap) => (
-            <li key={gap} className="flex gap-2">
+            <li key={gap.id} className="flex gap-2">
               <span aria-hidden="true">•</span>
-              <span>{gap}</span>
+              <span>{gap.label}</span>
             </li>
           ))}
         </ul>
