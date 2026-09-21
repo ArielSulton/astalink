@@ -25,6 +25,62 @@ export interface ApprovalDetail {
   legal_citations: { source: string; pasal: string | null; ayat: string | null; span: string }[];
 }
 
+export type JourneySectionState = "ready" | "empty" | "stale" | "error";
+
+export interface JourneyFinancialMetric {
+  key: "cash_balance" | "business_revenue" | "portfolio_value";
+  label: string;
+  value: number | null;
+  unit: "IDR";
+  state: JourneySectionState;
+  as_of: string | null;
+  source: "workspace" | "business_financial_records" | "portfolio";
+  change_text: string | null;
+}
+
+export interface JourneyHomeResponse {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_type: "personal" | "business";
+  generated_at: string;
+  financial_snapshot: JourneyFinancialMetric[];
+  readiness_summary: {
+    status: "ready" | "needs_input" | "not_ready" | "unavailable";
+    decisive_gaps: string[];
+    blocker_codes: string[];
+    continuation_href: string;
+  };
+  next_action: {
+    kind: string;
+    title: string;
+    rationale: string;
+    href: string;
+    rule_id: string;
+  };
+  allocation_preview: {
+    cash: number;
+    stocks: number;
+    business: number;
+    confidence_label: "terbatas" | "cukup" | "kuat";
+    as_of: string;
+    data_gaps: string[];
+  } | null;
+  recent_activity: {
+    id: string;
+    kind: string;
+    title: string;
+    amount: number | null;
+    status: string;
+    occurred_at: string;
+    href: string;
+  }[];
+  pending_approvals_count: number;
+  section_health: Record<
+    string,
+    { state: JourneySectionState; message: string | null }
+  >;
+}
+
 export interface AuditSummary {
   audit_id: string;
   intent: string | null;
@@ -463,6 +519,15 @@ async function jsonFetch<T>(path: string, init?: RequestInit, accessToken?: stri
 }
 
 export const api = {
+  getJourneyHome: (
+    workspaceId: string,
+    token: string,
+  ): Promise<JourneyHomeResponse> =>
+    jsonFetch<JourneyHomeResponse>(
+      `/api/v1/journey/home?workspace_id=${encodeURIComponent(workspaceId)}`,
+      { method: "GET" },
+      token,
+    ),
   listApprovals: (workspaceId: string, token: string) =>
     jsonFetch<{ approvals: ApprovalSummary[] }>(
       `/api/v1/approvals?workspace_id=${workspaceId}`, { method: "GET" }, token,

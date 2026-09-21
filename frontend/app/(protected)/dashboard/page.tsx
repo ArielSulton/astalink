@@ -1,5 +1,5 @@
-import { MarketTerminal } from "@/components/terminal/market-terminal";
+import { HomePage } from "@/components/home/home-page";
 
 export default function DashboardPage() {
-  return <MarketTerminal />;
+  return <HomePage />;
 }
