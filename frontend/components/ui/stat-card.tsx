@@ -7,9 +7,17 @@ interface StatCardProps {
   icon?: LucideIcon;
   hint?: string;
   className?: string;
+  valueClassName?: string;
 }
 
-export function StatCard({ label, value, icon: Icon, hint, className }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  icon: Icon,
+  hint,
+  className,
+  valueClassName,
+}: StatCardProps) {
   return (
     <div className={cn("rounded-xl bg-card p-5 ring-1 ring-foreground/10", className)}>
       <div className="flex items-center justify-between mb-2">
@@ -22,7 +30,9 @@ export function StatCard({ label, value, icon: Icon, hint, className }: StatCard
           </div>
         )}
       </div>
-      <p className="text-2xl font-bold text-foreground font-mono leading-none">{value}</p>
+      <p className={cn("text-2xl font-bold text-foreground font-mono leading-none", valueClassName)}>
+        {value}
+      </p>
       {hint && <p className="text-[10px] text-muted-foreground/70 font-mono mt-2">{hint}</p>}
     </div>
   );

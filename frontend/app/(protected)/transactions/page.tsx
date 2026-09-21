@@ -3,14 +3,12 @@
 import { Receipt } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import {
-  TransactionView,
-  type TransactionItem,
-} from "@/components/transactions/transaction-view";
+import { TransactionExplorer } from "@/components/transactions/transaction-explorer";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useWorkspace } from "@/components/workspace-context";
 import { createClient } from "@/lib/supabase/client";
+import type { TransactionItem } from "@/lib/transactions/types";
 
 export default function TransactionsPage() {
   const { workspaceId } = useWorkspace();
@@ -46,7 +44,7 @@ export default function TransactionsPage() {
   }, [workspaceId]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl bg-background p-4 text-foreground sm:p-6 lg:p-8">
+    <main className="mx-auto min-h-screen max-w-7xl bg-background p-4 text-foreground sm:p-6 lg:p-8">
       <PageHeader
         eyebrow="Eksekusi & Alokasi"
         title="Riwayat Transaksi"
@@ -73,11 +71,7 @@ export default function TransactionsPage() {
         </EmptyState>
       )}
 
-      {workspaceId && items.length > 0 && (
-        <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
-          <TransactionView items={items} />
-        </div>
-      )}
+      {workspaceId && items.length > 0 && <TransactionExplorer items={items} />}
     </main>
   );
 }
