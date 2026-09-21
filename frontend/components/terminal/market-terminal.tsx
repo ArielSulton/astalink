@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import { BusinessConditionPanel } from "./business-condition-panel";
 import { ChartToolbar } from "./chart-toolbar";
 import { MainChartArea } from "./main-chart-area";
+import { MobileWatchlistSheet } from "./mobile-watchlist-sheet";
 import { SubplotTabs } from "./subplot-tabs";
 import { TerminalHeader } from "./terminal-header";
 import { WatchlistSidebar } from "./watchlist-sidebar";
@@ -22,7 +23,6 @@ const DEFAULT_WATCHLIST = ["BBCA.JK", "TLKM.JK", "ASII.JK", "BBRI.JK"];
 
 export function MarketTerminal() {
   const { workspaceId } = useWorkspace();
-  const [cashBalance, setCashBalance] = useState<number | null>(null);
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
 
   // Watchlist (sidebar summaries) + selection
@@ -132,7 +132,7 @@ export function MarketTerminal() {
     };
   }, [selectedTicker, config.period, config.interval]);
 
-  // Portfolio + cash + workspace name
+  // Workspace name
   useEffect(() => {
     if (!workspaceId) return;
     const sb = createClient();
@@ -142,12 +142,12 @@ export function MarketTerminal() {
       } = await sb.auth.getSession();
       if (!session) return;
       try {
-        const [portfolio, workspace] = await Promise.all([
-          api.getPortfolio(workspaceId, session.access_token),
-          sb.from("workspaces").select("name").eq("id", workspaceId).single(),
-        ]);
+        const workspace = await sb
+          .from("workspaces")
+          .select("name")
+          .eq("id", workspaceId)
+          .single();
         setWorkspaceName(workspace.data?.name ?? null);
-        setCashBalance(portfolio.cash_balance);
       } catch {
         /* noop */
       }
@@ -184,19 +184,29 @@ export function MarketTerminal() {
       <h1 className="sr-only">Pasar &amp; Grafik</h1>
 
       {/* Row 2: Terminal header */}
-      <TerminalHeader cashBalance={cashBalance} workspaceName={workspaceName} />
+      <TerminalHeader workspaceName={workspaceName} />
 
       {/* Row 3: Terminal (sidebar + chart) */}
       <div className="grid min-h-0 grid-cols-[auto_1fr] border-b border-border">
-        <WatchlistSidebar
-          watchlist={watchlist}
-          selectedTicker={selectedTicker}
-          onSelect={setSelectedTicker}
-          collapsed={collapsed}
-          onToggle={() => setCollapsed(!collapsed)}
-          loading={marketLoading}
-        />
-        <main className="flex min-w-0 flex-col">
+        <div className="hidden lg:block">
+          <WatchlistSidebar
+            watchlist={watchlist}
+            selectedTicker={selectedTicker}
+            onSelect={setSelectedTicker}
+            collapsed={collapsed}
+            onToggle={() => setCollapsed(!collapsed)}
+            loading={marketLoading}
+          />
+        </div>
+        <main aria-label="Grafik pasar" className="flex min-w-0 flex-col">
+          <MobileWatchlistSheet
+            watchlist={watchlist}
+            selectedTicker={selectedTicker}
+            onSelect={setSelectedTicker}
+            collapsed={collapsed}
+            onToggle={() => setCollapsed(!collapsed)}
+            loading={marketLoading}
+          />
           <ChartToolbar
             ticker={selectedTicker}
             symLabel={selectedSym}
@@ -210,7 +220,7 @@ export function MarketTerminal() {
             onScaleChange={setScale}
             onExport={() => undefined}
           />
-          <div className="flex-1 space-y-3 p-4">
+          <div className="flex-1 space-y-3 p-3 sm:p-4">
             <MainChartArea
               data={chartData}
               indicators={indicators}

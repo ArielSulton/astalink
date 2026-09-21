@@ -31,6 +31,12 @@ function idr(n: number | null | undefined): string {
   return "Rp " + n.toLocaleString("id-ID", { maximumFractionDigits: 0 });
 }
 
+function confidenceLabel(value: Layer0Result["confidence_label"]): string {
+  if (value === "HIGH") return "kuat";
+  if (value === "MEDIUM") return "cukup";
+  return "terbatas";
+}
+
 function extractTickers(text: string): string[] {
   const matches = text.match(/\b[A-Z]{4}\b/g) || [];
   const validCommon = new Set([
@@ -585,7 +591,7 @@ export default function ChatbotPage() {
           </div>
 
           {/* Mobile room switcher */}
-          <div className="flex md:hidden items-center gap-2">
+          <div className="flex items-center gap-2 lg:hidden">
             <select
               value={activeId ?? ""}
               onChange={(e) => {
@@ -610,7 +616,7 @@ export default function ChatbotPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-6 sm:px-6">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
               <div className="w-14 h-14 rounded-2xl bg-card border border-border flex items-center justify-center mb-2">
@@ -654,11 +660,11 @@ export default function ChatbotPage() {
             return (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "user" ? (
-                  <div className="max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap bg-primary text-primary-foreground rounded-tr-none">
+                  <div className="max-w-[90%] rounded-2xl rounded-tr-none bg-primary px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-primary-foreground sm:max-w-[75%]">
                     {m.content}
                   </div>
                 ) : (
-                  <div className="max-w-[85%] flex flex-col items-start gap-2">
+                  <div className="flex max-w-[95%] flex-col items-start gap-2 sm:max-w-[85%]">
                     <div className="w-full px-4 py-3 rounded-2xl text-sm leading-relaxed bg-glass text-foreground border border-border rounded-tl-none">
                       <ChatMarkdown content={m.content} />
                     </div>
@@ -671,7 +677,7 @@ export default function ChatbotPage() {
                             Kas vs Saham vs Bisnis
                           </p>
                           <span className="px-2 py-0.5 rounded border text-[10px] font-bold font-mono text-muted-foreground border-border">
-                            CONFIDENCE: {m.layer0Result.confidence_label} ({m.layer0Result.confidence}/100)
+                            Keyakinan: {confidenceLabel(m.layer0Result.confidence_label)} ({m.layer0Result.confidence}/100)
                           </span>
                         </div>
                         <AllocationBar allocation={m.layer0Result.allocation} />
@@ -679,7 +685,7 @@ export default function ChatbotPage() {
                           <p className="text-xs text-muted-foreground">
                             Bisnis yang dievaluasi: <strong className="text-foreground">{m.layer0Result.business_name}</strong>
                             {" · "}skor bisnis{" "}
-                            <strong className="text-foreground">{m.layer0Result.business_score ?? "UNKNOWN"}</strong>
+                            <strong className="text-foreground">{m.layer0Result.business_score ?? "Belum tersedia"}</strong>
                             {" vs "}skor saham{" "}
                             <strong className="text-foreground">{m.layer0Result.stock_score ?? "—"}</strong>
                           </p>
@@ -877,7 +883,7 @@ export default function ChatbotPage() {
         </div>
 
         {/* Input */}
-        <div className="px-6 py-4 border-t border-border bg-card/40 shrink-0">
+        <div className="shrink-0 border-t border-border bg-card/40 px-3 py-4 sm:px-6">
           {pendingPhoto && (
             <div className="flex items-center gap-2 max-w-4xl mx-auto mb-2 px-1">
               <span className="text-xs text-muted-foreground truncate">📎 {pendingPhoto.name}</span>
@@ -935,7 +941,7 @@ export default function ChatbotPage() {
       </div>
 
       {/* Rooms sidebar (desktop) */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-l border-border bg-card/30">
+      <aside className="hidden w-64 shrink-0 flex-col border-l border-border bg-card/30 lg:flex">
         <div className="p-3 border-b border-border">
           <button
             onClick={newRoom}

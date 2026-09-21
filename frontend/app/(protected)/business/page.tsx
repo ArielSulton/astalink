@@ -21,19 +21,30 @@ export default function BusinessListPage() {
 
   useEffect(() => {
     if (!workspaceId) return;
-    setLoading(true);
-    (async () => {
-      try {
-        const sb = createClient();
-        const { data: { session } } = await sb.auth.getSession();
-        if (!session) return;
-        setBusinesses(await api.listBusinesses(workspaceId, session.access_token));
-      } catch {
-        toast.error("Gagal memuat daftar bisnis.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    let stale = false;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      (async () => {
+        try {
+          const sb = createClient();
+          const { data: { session } } = await sb.auth.getSession();
+          if (!session || stale) return;
+          const result = await api.listBusinesses(
+            workspaceId,
+            session.access_token,
+          );
+          if (!stale) setBusinesses(result);
+        } catch {
+          if (!stale) toast.error("Gagal memuat daftar bisnis.");
+        } finally {
+          if (!stale) setLoading(false);
+        }
+      })();
+    }, 0);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
   }, [workspaceId]);
 
   async function handleCreate() {
@@ -66,7 +77,7 @@ export default function BusinessListPage() {
   }
 
   return (
-    <div className="p-8 space-y-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground">
+    <div className="mx-auto min-h-screen w-full max-w-4xl space-y-8 bg-background p-4 text-foreground sm:p-6 lg:p-8">
       <PageHeader eyebrow="Bisnis Saya" title="Daftar Bisnis" />
 
       <section className="space-y-3">
@@ -107,7 +118,7 @@ export default function BusinessListPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-foreground font-semibold truncate leading-tight">{b.name}</p>
-                  <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground font-medium">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] font-medium text-muted-foreground">
                     {b.industry && (
                       <span className="px-1.5 py-0.5 rounded bg-secondary border border-border font-mono text-[9px] font-bold uppercase tracking-wider text-foreground">
                         {b.industry}
@@ -143,7 +154,7 @@ export default function BusinessListPage() {
               className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-chart-2 focus:ring-1 focus:ring-chart-2/20 transition-all duration-200"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Industri (opsional)</label>
               <input
@@ -166,7 +177,7 @@ export default function BusinessListPage() {
           <button
             onClick={handleCreate}
             disabled={!name.trim() || creating}
-            className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed disabled:shadow-none transition-all duration-200 flex items-center justify-center gap-2"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-all duration-200 hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
           >
             <Plus className="h-4 w-4" />
             {creating ? "Menambahkan…" : "Tambah Bisnis"}

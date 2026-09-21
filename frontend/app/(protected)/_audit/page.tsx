@@ -19,9 +19,6 @@ export default function AuditTrail() {
     if (!workspaceId) return;
     // Guard against out-of-order responses when switching workspaces fast.
     let stale = false;
-    setItems([]);
-    setLoading(true);
-    setFetchError(null);
     const fetchData = async () => {
       try {
         const sb = createClient();
@@ -35,8 +32,16 @@ export default function AuditTrail() {
         if (!stale) setLoading(false);
       }
     };
-    fetchData();
-    return () => { stale = true; };
+    const timer = window.setTimeout(() => {
+      setItems([]);
+      setLoading(true);
+      setFetchError(null);
+      void fetchData();
+    }, 0);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
   }, [workspaceId]);
 
   return (

@@ -28,10 +28,15 @@ export function useTimeframe(defaultValue: Timeframe = "1M") {
   const [timeframe, setTimeframeState] = useState<Timeframe>(defaultValue);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(KEY) as Timeframe | null;
-      if (saved && TIMEFRAMES.some((t) => t.value === saved)) setTimeframeState(saved);
-    } catch {}
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(KEY) as Timeframe | null;
+        if (saved && TIMEFRAMES.some((item) => item.value === saved)) {
+          setTimeframeState(saved);
+        }
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const setTimeframe = useCallback((v: Timeframe) => {

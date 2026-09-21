@@ -35,18 +35,18 @@ export default function ApprovalsInbox() {
   }, [workspaceId]);
 
   return (
-    <main className="p-8 max-w-4xl mx-auto bg-background min-h-screen text-foreground">
+    <main className="mx-auto min-h-screen max-w-4xl bg-background p-4 text-foreground sm:p-6 lg:p-8">
       <PageHeader eyebrow="Kotak Verifikasi" title="Menunggu Persetujuan" className="mb-8" />
 
       {!workspaceId && (
         <EmptyState icon={FileCheck2} title="Pilih Workspace">
-          Pilih workspace untuk melihat daftar approval yang tertunda.
+          Pilih workspace untuk melihat daftar persetujuan yang tertunda.
         </EmptyState>
       )}
 
       {workspaceId && items.length === 0 && (
         <EmptyState icon={FileCheck2} title="Kotak Masuk Kosong">
-          Tidak ada approval yang tertunda untuk workspace ini.
+          Tidak ada persetujuan yang tertunda untuk workspace ini.
         </EmptyState>
       )}
 
@@ -63,7 +63,7 @@ export default function ApprovalsInbox() {
             return (
               <li
                 key={it.audit_id}
-                className="flex items-center justify-between p-4 bg-card rounded-xl ring-1 ring-foreground/10 hover:ring-chart-2/30 hover:bg-chart-2/[0.04] transition-all duration-200 group"
+                className="group flex flex-col items-stretch justify-between gap-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-all duration-200 hover:bg-chart-2/[0.04] hover:ring-chart-2/30 sm:flex-row sm:items-center"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className="w-10 h-10 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center shrink-0">
@@ -80,7 +80,7 @@ export default function ApprovalsInbox() {
                 </div>
                 <Link
                   href={`/approvals/${it.audit_id}`}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-all duration-200"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground transition-all duration-200 hover:bg-primary/90"
                 >
                   Tinjau
                   <ArrowRight className="w-3.5 h-3.5" />

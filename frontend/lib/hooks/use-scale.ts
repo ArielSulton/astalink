@@ -5,10 +5,13 @@ export type Scale = "linear" | "log";
 export function useScale(defaultValue: Scale = "linear") {
   const [scale, setScaleState] = useState<Scale>(defaultValue);
   useEffect(() => {
-    try {
-      const s = localStorage.getItem(KEY) as Scale | null;
-      if (s === "linear" || s === "log") setScaleState(s);
-    } catch {}
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(KEY) as Scale | null;
+        if (saved === "linear" || saved === "log") setScaleState(saved);
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
   const setScale = useCallback((v: Scale) => {
     setScaleState(v);
