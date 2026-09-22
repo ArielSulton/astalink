@@ -82,7 +82,7 @@ export function StockVerdictCard({ verdict }: { verdict: StockVerdict }) {
 
         {/* Invalidation condition — first-class, not a footnote */}
         <div className="rounded border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-          <p className="text-[10px] font-black font-mono uppercase tracking-wider text-amber-400 mb-0.5">
+          <p className="text-[10px] font-extrabold font-mono uppercase tracking-wider text-amber-400 mb-0.5">
             Kondisi pembatalan tesis
           </p>
           <p className="text-xs text-foreground">{verdict.invalidation_condition || "—"}</p>

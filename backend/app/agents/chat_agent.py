@@ -6,7 +6,9 @@ formats the pipeline's final AgentState into one conversational reply;
 it holds no graph of its own."""
 from __future__ import annotations
 
+from app.agents.context_snapshot import load_snapshot
 from app.agents.intents import Intent
+from app.agents.reply_writer import DeadEndReason, compose_dead_end_reply
 from app.agents.report import build_allocation_report, build_composition_summary
 from app.agents.state import AgentState, LegalStatus, UserApproval
 
@@ -74,12 +76,12 @@ def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
 
     optimizer_errors = {e.get("reason") for e in state.get("errors", []) if e.get("node") == "optimizer"}
     if "no_tickers" in optimizer_errors:
-        return (
-            "Untuk kasih rekomendasi alokasi, saya perlu tahu saham yang ingin Anda "
-            "pertimbangkan. Sebutkan ticker-nya, misalnya: \"alokasikan 20 juta ke BBCA "
-            "dan TLKM\". Belum ada ide? Cek halaman Market News di dashboard untuk "
-            "referensi saham yang sedang tren."
-        )
+        return compose_dead_end_reply(
+            reason=DeadEndReason.OPTIMIZER_NO_TICKERS,
+            state=state,
+            snapshot=load_snapshot(state.get("_workspace_id")),
+            facts={"halaman_referensi":
+                   "Market News di dashboard, untuk saham yang sedang tren"})
 
     informational = (
         Intent.EXPLAIN.value,
@@ -124,5 +126,8 @@ def build_chat_reply(state: AgentState, *, style: str = "plain") -> str:
     if messages:
         return _last_text(messages)
 
-    return "Maaf, saya tidak dapat memproses permintaan ini."
+    return compose_dead_end_reply(
+        reason=DeadEndReason.CHAT_GENERIC_FAILURE,
+        state=state,
+        snapshot=load_snapshot(state.get("_workspace_id")))
 

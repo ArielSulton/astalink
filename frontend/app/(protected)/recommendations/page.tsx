@@ -15,7 +15,7 @@ function reasonChips(item: RecommendationItem): string[] {
   const chips: string[] = [];
   if (item.content_score >= 50) chips.push("Tren teknikal positif");
   if (item.user_score >= 50) chips.push("Cocok dengan profil portofolio Anda");
-  if (chips.length === 0) chips.push("Skor gabungan tertinggi di antara kandidat yang tersedia");
+  if (chips.length === 0) chips.push("Skor tertinggi di antara pilihan yang tersedia");
   return chips;
 }
 
@@ -45,18 +45,20 @@ export default function RecommendationsPage() {
   }, [workspaceId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   const topItems = data?.items.slice(0, TOP_N) ?? [];
   const restItems = data?.items.slice(TOP_N) ?? [];
 
   return (
-    <div className="p-8 space-y-6 max-w-6xl w-full mx-auto bg-background min-h-screen text-foreground">
+    <div className="mx-auto min-h-screen w-full max-w-6xl space-y-6 bg-background p-4 text-foreground sm:p-6 lg:p-8">
       <PageHeader
-        eyebrow="AI Rekomendasi"
-        title="Saham Layak Dibeli"
+        eyebrow="Eksplorasi"
+        title="Ide Investasi"
         className="border-b border-border pb-5"
       />
 
@@ -92,7 +94,7 @@ export default function RecommendationsPage() {
                 <div key={item.ticker} className="space-y-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider">
-                      #{item.rank} · Skor Hybrid {item.hybrid_score.toFixed(0)}/100
+                      #{item.rank} · Skor gabungan {item.hybrid_score.toFixed(0)}/100
                     </span>
                   </div>
                   <ul className="px-1 text-xs text-muted-foreground space-y-0.5">
@@ -119,14 +121,44 @@ export default function RecommendationsPage() {
                   Kandidat Lainnya
                 </h2>
               </div>
-              <div className="overflow-x-auto">
+              <div className="space-y-3 p-3 lg:hidden">
+                {restItems.map((item) => (
+                  <article
+                    key={item.ticker}
+                    className="rounded-xl border border-border bg-card p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-mono text-base font-bold text-foreground">
+                          {item.ticker}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {item.sector}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-border bg-secondary px-2.5 py-1 font-mono text-xs text-muted-foreground">
+                        #{item.rank}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+                      <span className="text-xs text-muted-foreground">
+                        Skor gabungan
+                      </span>
+                      <span className="font-mono text-sm font-bold tabular-nums text-foreground">
+                        {item.hybrid_score.toFixed(0)}/100
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-secondary/40 text-left text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">
                       <th className="px-5 py-3">Peringkat</th>
                       <th className="px-4 py-3">Saham</th>
                       <th className="px-4 py-3">Sektor</th>
-                      <th className="px-4 py-3 text-right">Skor Hybrid</th>
+                      <th className="px-4 py-3 text-right">Skor Gabungan</th>
                     </tr>
                   </thead>
                   <tbody>

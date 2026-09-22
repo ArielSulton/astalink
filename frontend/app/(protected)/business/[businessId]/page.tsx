@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Building2, ClipboardList, Coins, TrendingUp } from "lucide-react";
@@ -22,7 +22,7 @@ export default function BusinessDetailPage() {
   const [profit, setProfit] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const sb = createClient();
       const { data: { session } } = await sb.auth.getSession();
@@ -34,9 +34,14 @@ export default function BusinessDetailPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [businessId]);
 
-  useEffect(() => { load(); }, [businessId]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   async function handleAddRecord() {
     const year = parseInt(periodYear, 10);

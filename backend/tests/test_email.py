@@ -13,13 +13,13 @@ def test_render_template_replaces_placeholder(tmp_path, monkeypatch) -> None:
 
 
 def test_send_email_calls_resend_with_correct_params(monkeypatch) -> None:
-    monkeypatch.setattr("app.core.email.settings.RESEND_FROM_EMAIL", "noreply@astalink.my.id")
+    monkeypatch.setattr("app.core.email.settings.RESEND_FROM_EMAIL", "noreply@astalink.id")
 
     with patch("app.core.email.resend") as mock_resend:
         send_email("user@example.com", "Test Subject", "<p>Hi</p>")
 
     mock_resend.Emails.send.assert_called_once_with({
-        "from": "noreply@astalink.my.id",
+        "from": "noreply@astalink.id",
         "to": "user@example.com",
         "subject": "Test Subject",
         "html": "<p>Hi</p>",
@@ -35,4 +35,4 @@ def test_resend_from_email_defaults_to_verified_domain() -> None:
     """
     from app.core.config import Settings
 
-    assert Settings.model_fields["RESEND_FROM_EMAIL"].default == "noreply@astalink.my.id"
+    assert Settings.model_fields["RESEND_FROM_EMAIL"].default == "noreply@astalink.id"

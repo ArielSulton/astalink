@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronsUpDownIcon, KeyRoundIcon, LogOutIcon, SettingsIcon } from "lucide-react";
+import {
+  ChevronsUpDownIcon,
+  KeyRoundIcon,
+  LogOutIcon,
+  ScaleIcon,
+  SettingsIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -23,7 +29,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-export function NavUser() {
+export function NavUser({
+  variant = "sidebar",
+  isAdmin = false,
+}: {
+  variant?: "sidebar" | "header";
+  isAdmin?: boolean;
+}) {
   const router = useRouter();
   const { isMobile } = useSidebar();
   const [email, setEmail] = useState<string | null>(null);
@@ -49,31 +61,10 @@ export function NavUser() {
     router.refresh();
   }
 
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
-            }
-          >
-            <Avatar>
-              <AvatarFallback className="bg-chart-2/15 text-chart-2 font-bold">
-                {initial}
-              </AvatarFallback>
-            </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{name}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {email ?? "…"}
-              </span>
-            </div>
-            <ChevronsUpDownIcon className="ml-auto size-4" />
-          </DropdownMenuTrigger>
+  const menu = (
           <DropdownMenuContent
             className="w-fit min-w-56"
-            side={isMobile ? "bottom" : "right"}
+            side={variant === "header" || isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={4}
           >
@@ -104,6 +95,12 @@ export function NavUser() {
                 <KeyRoundIcon />
                 PIN Persetujuan
               </DropdownMenuItem>
+              {isAdmin && (
+                <DropdownMenuItem onClick={() => router.push("/legal-docs")}>
+                  <ScaleIcon />
+                  Dokumen Regulasi
+                </DropdownMenuItem>
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
@@ -111,6 +108,56 @@ export function NavUser() {
               Keluar
             </DropdownMenuItem>
           </DropdownMenuContent>
+  );
+
+  // The header variant is the only account surface on mobile: the sidebar that
+  // holds the sidebar variant has no trigger below the `lg` breakpoint.
+  if (variant === "header") {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Menu akun"
+              className="inline-flex size-11 items-center justify-center rounded-full aria-expanded:bg-muted"
+            />
+          }
+        >
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-chart-2/15 text-chart-2 font-bold">
+              {initial}
+            </AvatarFallback>
+          </Avatar>
+        </DropdownMenuTrigger>
+        {menu}
+      </DropdownMenu>
+    );
+  }
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
+            }
+          >
+            <Avatar>
+              <AvatarFallback className="bg-chart-2/15 text-chart-2 font-bold">
+                {initial}
+              </AvatarFallback>
+            </Avatar>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">{name}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {email ?? "…"}
+              </span>
+            </div>
+            <ChevronsUpDownIcon className="ml-auto size-4" />
+          </DropdownMenuTrigger>
+          {menu}
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>

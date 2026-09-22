@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 
 export default function SettingsPage() {
   return (
-    <div className="p-8 max-w-4xl w-full mx-auto bg-background min-h-screen text-foreground space-y-6">
+    <div className="mx-auto min-h-screen w-full max-w-4xl space-y-6 bg-background p-4 text-foreground sm:p-6 lg:p-8">
       <PageHeader eyebrow="Preferensi" title="Pengaturan" />
 
       <Link href="/settings/pin">
@@ -19,7 +19,7 @@ export default function SettingsPage() {
               <p className="text-muted-foreground text-xs mt-0.5">Atur PIN untuk mengkonfirmasi otorisasi transaksi portofolio</p>
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
+          <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-foreground" />
         </div>
       </Link>
 
@@ -34,7 +34,7 @@ export default function SettingsPage() {
               <p className="text-muted-foreground text-xs mt-0.5">Hubungkan nomor WhatsApp untuk chat dengan AstaLink bot</p>
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
+          <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-foreground" />
         </div>
       </Link>
 

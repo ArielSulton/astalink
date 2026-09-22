@@ -59,7 +59,7 @@ class Settings(BaseSettings):
 
     # Resend (transactional email — signup confirmation, password reset)
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "noreply@astalink.my.id"  # must be a verified domain in Resend
+    RESEND_FROM_EMAIL: str = "noreply@astalink.id"  # must be a verified domain in Resend
 
     # WhatsApp Business API (Meta Cloud API)
     WHATSAPP_VERIFY_TOKEN: str = ""        # used during webhook subscription

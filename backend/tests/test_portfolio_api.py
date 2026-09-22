@@ -71,7 +71,7 @@ def test_get_portfolio_marks_to_market(client: TestClient) -> None:
     )
     with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
          patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
-         patch("app.api.v1.portfolio._last_price", return_value=10000):
+         patch("app.core.portfolio_read.fetch_last_price", return_value=10000):
         resp = client.get("/api/v1/portfolio?workspace_id=ws-1",
                           headers={"Authorization": "Bearer x"})
     assert resp.status_code == 200
@@ -90,7 +90,7 @@ def test_get_portfolio_price_unavailable_is_null_not_zero(client: TestClient) ->
     )
     with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
          patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
-         patch("app.api.v1.portfolio._last_price", return_value=None):
+         patch("app.core.portfolio_read.fetch_last_price", return_value=None):
         resp = client.get("/api/v1/portfolio?workspace_id=ws-1",
                           headers={"Authorization": "Bearer x"})
     body = resp.json()
@@ -104,7 +104,7 @@ def test_buy_requires_pin(client: TestClient) -> None:
     admin = _fake_admin(owned=True, balance=1_000_000_000)
     with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
          patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
-         patch("app.api.v1.portfolio._last_price", return_value=10000):
+         patch("app.api.v1.portfolio.fetch_last_price", return_value=10000):
         resp = client.post("/api/v1/portfolio/buy?workspace_id=ws-1",
                            json={"ticker": "BBCA", "amount": 1_000_000},
                            headers={"Authorization": "Bearer x"})
@@ -117,7 +117,7 @@ def test_buy_success_with_pin(client: TestClient) -> None:
     with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
          patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
          patch("app.api.v1.portfolio.verify_user_pin", return_value=None), \
-         patch("app.api.v1.portfolio._last_price", return_value=10000):
+         patch("app.api.v1.portfolio.fetch_last_price", return_value=10000):
         resp = client.post("/api/v1/portfolio/buy?workspace_id=ws-1",
                            json={"ticker": "BBCA", "amount": 1_000_000, "pin": "123456"},
                            headers={"Authorization": "Bearer x"})
@@ -140,7 +140,7 @@ def test_ai_recommended_buy_closes_audit_after_pin(client: TestClient) -> None:
     with patch("app.api.deps.verify_token", return_value={"sub": user_id}), \
          patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
          patch("app.api.v1.portfolio.verify_user_pin", return_value=None), \
-         patch("app.api.v1.portfolio._last_price", return_value=10000):
+         patch("app.api.v1.portfolio.fetch_last_price", return_value=10000):
         resp = client.post(
             "/api/v1/portfolio/buy?workspace_id=ws-1",
             json={
@@ -193,7 +193,7 @@ def test_sell_rejects_insufficient_quantity(client: TestClient) -> None:
     with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
          patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
          patch("app.api.v1.portfolio.verify_user_pin", return_value=None), \
-         patch("app.api.v1.portfolio._last_price", return_value=10000):
+         patch("app.api.v1.portfolio.fetch_last_price", return_value=10000):
         resp = client.post("/api/v1/portfolio/BBCA/sell?workspace_id=ws-1",
                            json={"quantity": 200, "pin": "123456"},
                            headers={"Authorization": "Bearer x"})
@@ -208,7 +208,7 @@ def test_sell_success_books_realized_pnl(client: TestClient) -> None:
     with patch("app.api.deps.verify_token", return_value={"sub": str(uuid.uuid4())}), \
          patch("app.api.v1.portfolio.get_admin_client", return_value=admin), \
          patch("app.api.v1.portfolio.verify_user_pin", return_value=None), \
-         patch("app.api.v1.portfolio._last_price", return_value=10000):
+         patch("app.api.v1.portfolio.fetch_last_price", return_value=10000):
         resp = client.post("/api/v1/portfolio/BBCA/sell?workspace_id=ws-1",
                            json={"quantity": 40, "pin": "123456"},
                            headers={"Authorization": "Bearer x"})

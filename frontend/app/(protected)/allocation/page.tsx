@@ -18,15 +18,21 @@ import { api, type AnalyzeResponse, type Business } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 
 const TIER_LABELS: Record<string, { label: string; cls: string }> = {
-  insufficient: { label: "INSUFFICIENT", cls: "text-destructive border-destructive/40" },
-  partial: { label: "PARTIAL", cls: "text-amber-400 border-amber-500/40" },
-  ok: { label: "OK", cls: "text-chart-2 border-chart-2/40" },
+  insufficient: { label: "Terbatas", cls: "text-destructive border-destructive/40" },
+  partial: { label: "Cukup", cls: "text-amber-400 border-amber-500/40" },
+  ok: { label: "Lengkap", cls: "text-chart-2 border-chart-2/40" },
 };
 
 const CONFIDENCE_CLS: Record<string, string> = {
   LOW: "text-destructive border-destructive/40",
   MEDIUM: "text-amber-400 border-amber-500/40",
   HIGH: "text-chart-2 border-chart-2/40",
+};
+
+const CONFIDENCE_LABELS: Record<string, string> = {
+  LOW: "terbatas",
+  MEDIUM: "cukup",
+  HIGH: "kuat",
 };
 
 async function getToken(): Promise<string | null> {
@@ -77,23 +83,23 @@ export default function AllocationPage() {
   const tier = layer0 ? TIER_LABELS[layer0.completeness_tier] : null;
 
   return (
-    <div className="space-y-6 p-6">
-      <PageHeader eyebrow="Layer 0 — Gerbang Kelayakan" title="Alokasi Modal">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <PageHeader eyebrow="Rencana Dana" title="Rencana Dana">
         <div className="flex items-center gap-2 flex-wrap">
           <select
             value={businessId}
             onChange={(e) => setBusinessId(e.target.value)}
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+            className="min-h-11 rounded-md border border-border bg-background px-2 text-sm"
           >
             <option value="">Tanpa bisnis (saham vs kas saja)</option>
             {businesses.map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
-          <Button variant="outline" render={<Link href="/allocation/investor" />}>
+          <Button className="min-h-11" variant="outline" render={<Link href="/allocation/investor" />}>
             Profil Investor
           </Button>
-          <Button onClick={analyze} disabled={loading}>
+          <Button className="min-h-11" onClick={analyze} disabled={loading}>
             <RefreshCw className={cn("h-4 w-4 mr-1", loading && "animate-spin")} />
             Analisis
           </Button>
@@ -102,9 +108,8 @@ export default function AllocationPage() {
 
       {!result && !loading && (
         <EmptyState icon={ClipboardList} title="Belum ada analisis">
-          Pilih bisnis (opsional) lalu jalankan analisis. Layer 0 memutuskan dulu
-          apakah uang ini layak masuk saham atau bisnis sama sekali — sebelum satu
-          saham pun dianalisis.
+          Pilih bisnis (opsional) lalu jalankan analisis. Kesiapan finansial
+          dinilai lebih dulu sebelum pembagian dana dan pilihan saham disusun.
         </EmptyState>
       )}
       {loading && <Skeleton className="h-64 w-full" />}
@@ -162,27 +167,27 @@ export default function AllocationPage() {
                 <CardTitle className="text-base">Alokasi yang disarankan</CardTitle>
                 <div className="flex items-center gap-2">
                   <span className={cn("px-2 py-0.5 rounded border text-[10px] font-bold font-mono", CONFIDENCE_CLS[layer0.confidence_label])}>
-                    CONFIDENCE: {layer0.confidence_label} ({layer0.confidence}/100)
+                    Keyakinan: {CONFIDENCE_LABELS[layer0.confidence_label] ?? "terbatas"} ({layer0.confidence}/100)
                   </span>
                   {layer0.business_id && tier && (
                     <span className={cn("px-2 py-0.5 rounded border text-[10px] font-bold font-mono", tier.cls)}>
-                      DATA BISNIS: {(layer0.completeness * 100).toFixed(0)}% · {tier.label}
+                      Data bisnis: {(layer0.completeness * 100).toFixed(0)}% · {tier.label}
                     </span>
                   )}
                 </div>
               </div>
               {layer0.completeness_tier === "partial" && (
                 <p className="text-[11px] text-amber-400">
-                  Confidence dibatasi maksimal 50/100 karena kelengkapan data bisnis 40–70%.
+                  Tingkat keyakinan dibatasi karena data bisnis belum lengkap.
                 </p>
               )}
             </CardHeader>
             <CardContent className="space-y-4">
               <AllocationBar allocation={layer0.allocation} />
               <div className="flex gap-4 text-[11px] font-mono text-muted-foreground flex-wrap">
-                <span>Skor bisnis: <b className={cn("text-foreground", layer0.business_score === null && "text-destructive")}>{layer0.business_score ?? "UNKNOWN"}</b></span>
+                <span>Skor bisnis: <b className={cn("text-foreground", layer0.business_score === null && "text-destructive")}>{layer0.business_score ?? "Belum tersedia"}</b></span>
                 <span>Skor saham: <b className="text-foreground">{layer0.stock_score ?? "—"}</b></span>
-                <span>Baseline (obligasi/indeks): <b className="text-foreground">{layer0.baseline_score ?? "—"}</b> — selalu tersedia</span>
+                <span>Pembanding obligasi/indeks: <b className="text-foreground">{layer0.baseline_score ?? "—"}</b></span>
               </div>
             </CardContent>
           </Card>
@@ -235,7 +240,7 @@ export default function AllocationPage() {
           {/* ------------- View 3: stock detail — gated by Layer 0 ------------- */}
           <div>
             <h2 className="text-sm font-bold font-mono uppercase tracking-wider text-muted-foreground mb-2">
-              Layer 1 — Stock Engine
+              Pilihan investasi
             </h2>
             {layer0.allocation.stocks === 0 || !result?.stock_engine ? (
               <Card className="border-dashed opacity-80">
@@ -245,8 +250,8 @@ export default function AllocationPage() {
                     <p className="text-sm font-medium">Analisis saham tidak dijalankan</p>
                     <p className="text-xs text-muted-foreground">
                       {layer0.allocation.stocks === 0
-                        ? "Layer 0 mengalokasikan 0% ke saham — tidak ada rekomendasi saham untuk dijelajahi, itu memang keputusannya."
-                        : "Mesin saham tidak mengembalikan hasil."}
+                        ? "Rencana saat ini mengalokasikan 0% ke saham, sehingga belum ada pilihan saham untuk dijelajahi."
+                        : "Pilihan saham belum tersedia."}
                     </p>
                   </div>
                 </CardContent>
@@ -272,8 +277,8 @@ export default function AllocationPage() {
       )}
 
       <p className="text-[10px] text-muted-foreground border-t border-border pt-3">
-        AstaLink adalah alat riset, bukan nasihat investasi. Keputusan dan risikonya milik Anda.
-        Semua bobot & ambang adalah placeholder yang belum terkalibrasi backtest.
+        AstaLink membantu menyusun pilihan berbasis data. Tinjau alasan dan
+        risikonya sebelum mengambil keputusan investasi.
       </p>
     </div>
   );

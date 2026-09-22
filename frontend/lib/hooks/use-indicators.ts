@@ -36,13 +36,18 @@ export function useIndicators(defaultValue: IndicatorId[] = DEFAULT_INDICATORS) 
   const [indicators, setIndicatorsState] = useState<IndicatorId[]>(defaultValue);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(KEY);
-      if (saved) {
-        const parsed: IndicatorId[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) setIndicatorsState(parsed);
-      }
-    } catch {}
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(KEY);
+        if (saved) {
+          const parsed: IndicatorId[] = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setIndicatorsState(parsed);
+          }
+        }
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const setIndicators = useCallback((v: IndicatorId[]) => {

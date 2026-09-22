@@ -16,8 +16,6 @@ export default function AuditDetailPage() {
 
   useEffect(() => {
     let stale = false;
-    setDetail(null);
-    setFetchError(null);
     const load = async () => {
       try {
         const sb = createClient();
@@ -30,8 +28,15 @@ export default function AuditDetailPage() {
         if (!stale) setFetchError(e instanceof Error ? e.message : "Gagal memuat");
       }
     };
-    load();
-    return () => { stale = true; };
+    const timer = window.setTimeout(() => {
+      setDetail(null);
+      setFetchError(null);
+      void load();
+    }, 0);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
   }, [auditId]);
 
   if (fetchError) {

@@ -55,7 +55,7 @@ services:
       - NEWS_API_KEY=${NEWS_API_KEY}
       # Resend
       - RESEND_API_KEY=${RESEND_API_KEY}
-      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@astalink.my.id}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-noreply@astalink.id}
       # Admin role
       - ADMIN_EMAILS=${ADMIN_EMAILS:-[]}
       # App

@@ -24,7 +24,7 @@ export default function LoginPage() {
                   </div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-foreground font-bold tracking-tight">Astalink</span>
-                    <span className="text-chart-2 text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+                    <span className="text-chart-2 text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
                   </div>
                 </div>
                 <h1 className="text-2xl font-bold">Selamat datang kembali</h1>

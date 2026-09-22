@@ -9,7 +9,6 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { cn } from "@/lib/utils";
 
 const TOOLTIP_STYLE = {
   background: "rgba(23, 23, 23, 0.97)",
@@ -57,21 +56,32 @@ export function BusinessConditionPanel() {
 
   // 2. When a business is selected, fetch its valuation.
   useEffect(() => {
-    if (!selectedId) { setValuation(null); return; }
     let cancelled = false;
-    setValuation(null);
-    (async () => {
-      const sb = createClient();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
-      try {
-        const v = await api.getBusinessValuation(selectedId, session.access_token);
-        if (!cancelled) setValuation(v);
-      } catch {
-        if (!cancelled) setValuation(null);
+    const timer = window.setTimeout(() => {
+      if (!selectedId) {
+        setValuation(null);
+        return;
       }
-    })();
-    return () => { cancelled = true; };
+      setValuation(null);
+      (async () => {
+        const sb = createClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return;
+        try {
+          const result = await api.getBusinessValuation(
+            selectedId,
+            session.access_token,
+          );
+          if (!cancelled) setValuation(result);
+        } catch {
+          if (!cancelled) setValuation(null);
+        }
+      })();
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [selectedId]);
 
   // Loading state

@@ -8,10 +8,13 @@ const OPTIONS: ChartType[] = ["candle", "line", "area", "heikin-ashi"];
 export function useChartType(defaultValue: ChartType = "candle") {
   const [chartType, setChartTypeState] = useState<ChartType>(defaultValue);
   useEffect(() => {
-    try {
-      const s = localStorage.getItem(KEY) as ChartType | null;
-      if (s && OPTIONS.includes(s)) setChartTypeState(s);
-    } catch {}
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(KEY) as ChartType | null;
+        if (saved && OPTIONS.includes(saved)) setChartTypeState(saved);
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
   const setChartType = useCallback((v: ChartType) => {
     setChartTypeState(v);

@@ -27,9 +27,9 @@ const COMPARISON_FEATURES = [
     { key: "legal", label: "Cek kepatuhan OJK otomatis, tersitasi", tiers: [false, true, true] },
     { key: "sandbox", label: "Portofolio sandbox", tiers: [true, true, true] },
   ]},
-  { category: "Dashboard & Kontrol", features: [
+  { category: "Beranda & Kontrol", features: [
     { key: "approval", label: "Persetujuan transaksi dengan PIN", tiers: [false, true, true] },
-    { key: "dashboard", label: "Dashboard holdings, approvals, transaksi, & berita", tiers: [false, true, true] },
+    { key: "dashboard", label: "Beranda kepemilikan, persetujuan, transaksi, & berita", tiers: [false, true, true] },
     { key: "credits", label: "Kredit chat lebih banyak", tiers: [false, true, true] },
   ]},
   { category: "Kemitraan", features: [
@@ -47,7 +47,7 @@ const FAQ = [
   },
   {
     q: "Apa yang membedakan paket Pro?",
-    a: "Pro menyediakan 100 kredit chat per bulan, analisis alokasi modal, cek kepatuhan OJK tersitasi, persetujuan PIN, dan dashboard lengkap.",
+    a: "Pro menyediakan 100 kredit chat per bulan, analisis alokasi modal, cek kepatuhan OJK tersitasi, persetujuan PIN, dan Beranda lengkap.",
   },
   {
     q: "Untuk siapa paket Komunitas & Partner?",
@@ -88,7 +88,7 @@ export default function PricingPage() {
               <Image src="/logo_astalink.png" alt="Astalink" width={24} height={24} className="w-6 h-6 object-contain" />
             </div>
             <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-            <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+            <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-1">
@@ -318,7 +318,7 @@ export default function PricingPage() {
                 <Image src="/logo_astalink.png" alt="Astalink" width={28} height={28} className="w-7 h-7 object-contain" />
               </div>
               <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-              <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+              <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
             </div>
             <p className="text-sidebar-foreground/50 text-sm leading-relaxed">
               Platform analisis alokasi modal dengan AI multi-agen, cek regulasi berbasis dokumen,
@@ -330,21 +330,21 @@ export default function PricingPage() {
           </div>
 
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Produk
             </p>
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/#fitur" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Fitur</Link></li>
               <li><Link href="/pricing" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Harga</Link></li>
-              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dashboard</Link></li>
-              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Chatbot AI</Link></li>
+              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Beranda</Link></li>
+              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Tanya Asta</Link></li>
               <li><Link href="/news" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Berita Pasar</Link></li>
               <li><Link href="/legal-docs" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dokumen Legal</Link></li>
             </ul>
           </div>
 
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Perusahaan
             </p>
             <ul className="space-y-2.5 text-sm">

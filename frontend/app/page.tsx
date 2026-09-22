@@ -90,7 +90,7 @@ export default async function Home() {
               <Image src="/logo_astalink.png" alt="Astalink" width={24} height={24} className="w-6 h-6 object-contain" />
             </div>
             <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-            <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+            <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
           </Link>
 
           {/* Center links — pill hover */}
@@ -118,7 +118,7 @@ export default async function Home() {
                 href="/dashboard"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all duration-200"
               >
-                Dasbor
+                Beranda
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
@@ -189,7 +189,7 @@ export default async function Home() {
                     className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all duration-300"
                   >
                     <LayoutDashboard className="w-4 h-4" />
-                    Buka Dashboard
+                    Buka Beranda
                     <ArrowRight className="w-4 h-4" />
                   </Link>
                 ) : (
@@ -245,7 +245,7 @@ export default async function Home() {
                   <div className="px-5 py-4 border-b border-white/[0.07] flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-chart-2/15 border border-chart-2/30 flex items-center justify-center">
-                        <span className="text-chart-2 text-[9px] font-black font-mono">AI</span>
+                        <span className="text-chart-2 text-[9px] font-extrabold font-mono">AI</span>
                       </div>
                       <div>
                         <div className="text-[#fafafa] font-semibold text-[13px] leading-none">Rekomendasi AI</div>
@@ -445,7 +445,7 @@ export default async function Home() {
             href={isLoggedIn ? "/dashboard" : "/signup"}
             className="inline-flex items-center justify-center gap-2.5 px-10 py-4 rounded-full bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-all duration-300"
           >
-            {isLoggedIn ? "Buka Dashboard" : "Buat Akun Gratis"}
+            {isLoggedIn ? "Buka Beranda" : "Buat Akun Gratis"}
             <ArrowRight className="w-5 h-5" />
           </Link>
           <p className="text-muted-foreground/60 text-xs mt-6 font-mono tracking-wide">
@@ -464,7 +464,7 @@ export default async function Home() {
                 <Image src="/logo_astalink.png" alt="Astalink" width={28} height={28} className="w-7 h-7 object-contain" />
               </div>
               <span className="text-sidebar-foreground font-bold text-sm tracking-tight">Astalink</span>
-              <span className="text-sidebar-primary text-[9px] font-mono font-black uppercase tracking-widest">AI</span>
+              <span className="text-sidebar-primary text-[9px] font-mono font-extrabold uppercase tracking-widest">AI</span>
             </div>
             <p className="text-sidebar-foreground/50 text-sm leading-relaxed">
               Platform investasi saham IDX dengan AI multi-agen, kepatuhan OJK otomatis,
@@ -477,12 +477,12 @@ export default async function Home() {
 
           {/* Menu */}
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Menu
             </p>
             <ul className="space-y-2.5 text-sm">
-              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dasbor</Link></li>
-              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Chatbot AI</Link></li>
+              <li><Link href="/dashboard" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Beranda</Link></li>
+              <li><Link href="/chatbot" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Tanya Asta</Link></li>
               <li><Link href="/news" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Berita Pasar</Link></li>
               <li><Link href="/legal-docs" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Dokumen Legal</Link></li>
               <li><Link href="/pricing" className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">Harga</Link></li>
@@ -491,7 +491,7 @@ export default async function Home() {
 
           {/* Akun */}
           <div>
-            <p className="text-sidebar-foreground/40 text-[10px] font-black font-mono uppercase tracking-[0.18em] mb-4">
+            <p className="text-sidebar-foreground/40 text-[10px] font-extrabold font-mono uppercase tracking-[0.18em] mb-4">
               Akun
             </p>
             <ul className="space-y-2.5 text-sm">

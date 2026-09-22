@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export interface WorkspaceRecord {
@@ -23,12 +23,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
 
-  function setWorkspaceId(id: string) {
+  const setWorkspaceId = useCallback((id: string) => {
     setWorkspaceIdState(id);
     localStorage.setItem(LAST_WORKSPACE_KEY, id);
-  }
+  }, []);
 
-  function refreshWorkspaces(autoSelect: boolean) {
+  const refreshWorkspaces = useCallback((autoSelect: boolean) => {
     const sb = createClient();
     sb.from("workspaces").select("id,name,type").then(({ data }) => {
       const list = (data as WorkspaceRecord[]) || [];
@@ -42,9 +42,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setWorkspaceId(remembered ? remembered.id : list[0].id);
       }
     });
-  }
+  }, [setWorkspaceId, workspaceId]);
 
-  useEffect(() => { refreshWorkspaces(true); }, []);
+  useEffect(() => {
+    refreshWorkspaces(true);
+  }, [refreshWorkspaces]);
 
   return (
     <WorkspaceContext.Provider value={{ workspaceId, setWorkspaceId, workspaces, refreshWorkspaces }}>

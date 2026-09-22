@@ -155,3 +155,21 @@ def test_composition_rejected_relays_cancellation_message_not_a_report() -> None
 
 
 
+
+
+def test_build_chat_reply_composes_no_tickers_message() -> None:
+    from unittest.mock import patch
+
+    from app.agents.chat_agent import build_chat_reply
+    from app.agents.state import new_state
+
+    state = new_state()
+    state["errors"] = [{"node": "optimizer", "reason": "no_tickers"}]
+
+    with patch("app.agents.chat_agent.load_snapshot"), \
+         patch("app.agents.chat_agent.compose_dead_end_reply",
+               return_value="Sahamnya belum disebut. Mau mulai dari BBCA?") as compose:
+        reply = build_chat_reply(state)
+
+    assert reply == "Sahamnya belum disebut. Mau mulai dari BBCA?"
+    assert compose.call_args.kwargs["reason"].value == "optimizer_no_tickers"
