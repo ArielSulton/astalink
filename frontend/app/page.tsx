@@ -53,7 +53,6 @@ const CARD_CHECKS = [
 
 const TRUST_CHIPS = [
   { label: "AI Multi-Agen", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
-  { label: "OJK Verified", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
   { label: "Human-in-the-Loop", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
   { label: "PIN Konfirmasi", cls: "border-chart-2/40 bg-chart-2/[0.08] text-chart-2" },
 ] as const;
@@ -157,7 +156,7 @@ export default async function Home() {
               <div className="flex flex-wrap items-center gap-2.5 mb-8">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-chart-2/30 bg-chart-2/[0.07] text-chart-2 text-[11px] font-semibold uppercase tracking-[0.15em]">
                   <span className="w-1.5 h-1.5 rounded-full bg-chart-2 animate-pulse" />
-                  Teregulasi OJK
+                  Pertimbangan regulasi
                 </span>
                 <span className="text-muted-foreground/60 text-[11px] font-mono">× IDX Compliance</span>
               </div>
