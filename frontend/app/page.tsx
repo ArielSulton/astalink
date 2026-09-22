@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Brain, LayoutDashboard, ShieldCheck, UserCheck } from "lucide-react";
+import { PartnershipCredit } from "@/components/marketing/partnership-credit";
 import { createClient } from "@/lib/supabase/server";
 
 const IDX_TICKERS = [
@@ -502,6 +503,8 @@ export default async function Home() {
         </div>
 
         {/* Bottom bar */}
+        <PartnershipCredit />
+
         <div className="border-t border-sidebar-border">
           <div className="mx-auto max-w-6xl px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-3">
             <p className="text-sidebar-foreground/40 text-xs">

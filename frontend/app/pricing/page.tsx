@@ -16,6 +16,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import { PartnershipCredit } from "@/components/marketing/partnership-credit";
 import { PricingCards } from "@/components/pricing/pricing-cards";
 
 const PRICING_TIER_NAMES = ["Gratis", "Pro", "Partner"] as const;
@@ -355,6 +356,8 @@ export default function PricingPage() {
             </ul>
           </div>
         </div>
+
+        <PartnershipCredit />
 
         <div className="border-t border-sidebar-border">
           <div className="mx-auto max-w-6xl px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-3">
