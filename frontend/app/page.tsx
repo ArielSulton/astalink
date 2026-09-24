@@ -171,7 +171,7 @@ export default async function Home() {
                       "linear-gradient(130deg, oklch(0.723 0.219 149.579) 0%, oklch(0.871 0.15 154.449) 100%)",
                   }}
                 >
-                  Kenali potensi aset anda
+                  Kenali potensi<br />aset anda
                 </span>
                 <span className="block">Semudah membalas pesan.</span>
               </h1>
