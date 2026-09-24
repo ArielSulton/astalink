@@ -171,9 +171,9 @@ export default async function Home() {
                       "linear-gradient(130deg, oklch(0.723 0.219 149.579) 0%, oklch(0.871 0.15 154.449) 100%)",
                   }}
                 >
-                  AI yang menganalisis.
+                  Kenali potensi aset anda
                 </span>
-                <span className="block">Kamu yang memutuskan.</span>
+                <span className="block">Semudah membalas pesan.</span>
               </h1>
 
               <p className="text-muted-foreground text-base md:text-[1.0625rem] leading-relaxed mb-10 max-w-[480px]">
