@@ -7,6 +7,7 @@ services:
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - NEXT_PUBLIC_BACKEND_URL=http://localhost:${BACKEND_PORT:-8000}
+      - MAINTENANCE_MODE=${MAINTENANCE_MODE:-false}
       - WATCHPACK_POLLING=true
     volumes:
       - ./frontend:/app

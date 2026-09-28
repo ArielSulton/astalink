@@ -3,7 +3,7 @@ import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 
 // jsdom ships no matchMedia, which every component behind useIsMobile needs.
-if (!window.matchMedia) {
+if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = (query: string) =>
     ({
       matches: false,
