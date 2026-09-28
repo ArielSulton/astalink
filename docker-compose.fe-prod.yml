@@ -12,6 +12,7 @@ services:
         NEXT_PUBLIC_BACKEND_URL: http://localhost:${BACKEND_PORT:-8000}
     environment:
       NODE_ENV: production
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-false}
     # Drop the dev bind mounts (./frontend:/app, node_modules, .next) so they
     # don't shadow the compiled standalone image.
     volumes: !reset []

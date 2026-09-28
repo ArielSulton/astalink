@@ -9,6 +9,7 @@ services:
         NEXT_PUBLIC_BACKEND_URL: ${PROD_DOMAIN}
     environment:
       - NODE_ENV=production
+      - MAINTENANCE_MODE=${MAINTENANCE_MODE:-false}
     networks:
       - dokploy-network
     labels:
@@ -16,6 +17,7 @@ services:
       - "traefik.http.routers.astalink-fe.rule=Host(`${PROD_DOMAIN_HOST}`)"
       - "traefik.http.routers.astalink-fe.entrypoints=websecure"
       - "traefik.http.routers.astalink-fe.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.astalink-fe.priority=${FRONTEND_ROUTER_PRIORITY:-1}"
       - "traefik.http.services.astalink-fe.loadbalancer.server.port=3000"
       - "traefik.docker.network=dokploy-network"
     restart: unless-stopped
